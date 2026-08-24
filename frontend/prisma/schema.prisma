@@ -10,6 +10,11 @@ datasource db {
 
 model User {
   id                String    @id @default(cuid())
+  // Every user has an email — even phone-only signups (Jurali Phase 6).
+  // auth.ts's TokenPayload/Context require `email: string` (protected,
+  // not modified for this), so phone signups get a synthetic
+  // non-deliverable placeholder (`<phone>@phone.jurali.local`) instead of
+  // making this column nullable. Never used to actually send mail.
   email             String    @unique
   // Nullable: OAuth-only users (e.g. signed up with Google) never set a
   // password. Email/password signup still requires it; the auth route
@@ -23,6 +28,12 @@ model User {
   name              String?
   // Optional avatar URL — populated from OAuth profile on first sign-in.
   avatarUrl         String?
+  // Jurali Phase 6 — phone + password auth (see /api/auth/phone-signup).
+  // Real E.164 phone, unique, null for email/OAuth-only accounts.
+  phone             String?   @unique
+  // Shop name collected at phone signup (Inscription.jsx); null for
+  // email/OAuth accounts that never went through that flow.
+  shopName          String?
   // App-wide role. USER is the default; ADMIN unlocks /admin back-office;
   // SUPERADMIN can promote/demote other admins. Bootstrap an initial
   // SUPERADMIN via `pnpm db:make-superadmin <email>` (see scripts).

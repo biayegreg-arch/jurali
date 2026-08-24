@@ -459,9 +459,29 @@ these they actually ask for.
 - Phase 0.1 (auth strategy) — **re-decided 2026-08-24**: phone + password
   (c-revised), following `Inscription.jsx` over the PRD's OTP prose.
 - Phase 5 (missing PRD screens) — **partially done 2026-08-24**: Fiche
-  client + Paramètres shipped (uncommitted, pending user "commit").
-  Inscription and Page Premium deferred — they need Phase 6/7 backend
-  first (user chose to sequence this way rather than build backend
-  ahead of its phase). See `.planning/banani/STATUS.md`.
+  client + Paramètres shipped, committed `eab4b15`. Inscription and Page
+  Premium deferred — Inscription is now unblocked (Phase 6 backend
+  shipped, see below); Page Premium still waits on Phase 7. See
+  `.planning/banani/STATUS.md`.
+- Phase 6 (auth: phone + password) — **done 2026-08-24**, uncommitted
+  (pending user "commit"). `User.email` was kept required rather than
+  made optional as originally planned — see the "Email nullable?"
+  decision below. `/api/auth/phone-signup` and `/api/auth/phone-login`
+  built, TDD (13 tests), verified end-to-end against the dev DB. The
+  `Inscription.jsx` screen itself is still pending (Phase 5 backlog).
+  - **Decision (2026-08-24): `User.email` stays required.** The
+    original Phase 6 plan called for making it optional. Implementation
+    surfaced a conflict: `auth.ts`'s `TokenPayload`/`Context` (both
+    protected files) require `email: string`. Rather than modify those
+    protected files, phone-only accounts get a synthetic,
+    non-deliverable placeholder email (`<phone>@phone.jurali.local`) —
+    confirmed with the user before editing the schema.
+  - **Divergence from email signup:** phone-signup is NOT
+    enumeration-resistant (409 `PHONE_ALREADY_EXISTS` on a duplicate
+    phone, not email signup's identical-201 pattern) — this was already
+    the plan's own wording ("find-or-fail on existing phone") from the
+    A.5/A.7 analysis of `Inscription.jsx`.
+  - phone-login skips the `emailVerifiedAt` check entirely (no email is
+    ever collected for phone accounts, so there's nothing to verify).
 - Phase 7 pricing — **decided 2026-08-24**: monthly-only V1, annual +
   trial deferred.
