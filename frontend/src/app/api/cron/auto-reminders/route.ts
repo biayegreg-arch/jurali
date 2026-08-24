@@ -1,0 +1,105 @@
+// POST /api/cron/auto-reminders — Jurali Phase 9. Scans Premium accounts
+// with `User.autoReminderEnabled` on for clients whose oldest unpaid debt
+// has aged 7+ days with no reminder sent since, and creates an in-app
+// Notification for each (Phase 8's manual `wa.me` button still does the
+// actual sending — see `lib/server/jurali/auto-reminder.ts` for why a
+// truly silent auto-send isn't possible without the WhatsApp Business API).
+//
+// Only scans users who are BOTH opted in AND currently Premium — mirrors
+// Phase 8's `POST /api/clients/[id]/remind` gate, since surfacing "send a
+// reminder" to a free-tier user whose button is grayed out is pointless.
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 30;
+
+import 'server-only';
+import { NextResponse, type NextRequest } from 'next/server';
+import { verifyCronSecret } from '@/lib/server/cron/auth';
+import { withLease } from '@/lib/server/leader-lease';
+import { prisma } from '@/lib/server/prisma';
+import { redis } from '@/lib/server/redis';
+import { createLogger } from '@/lib/server/logger';
+import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { computeClientBalance, oldestUnpaidDebtDate } from '@/lib/server/jurali/balance';
+import { isDueForAutoReminder } from '@/lib/server/jurali/auto-reminder';
+import { createNotification } from '@/lib/server/notifications';
+import { autoReminderDue } from '@/lib/server/notifications/templates';
+
+const log = createLogger();
+const LEASE_TTL_MS = 60_000;
+
+export async function POST(req: NextRequest): Promise<NextResponse> {
+  const fail = verifyCronSecret(req);
+  if (fail) return fail;
+
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    let usersScanned = 0;
+    let clientsScanned = 0;
+    let notified = 0;
+
+    await withLease(redis ?? undefined, 'auto-reminders', LEASE_TTL_MS, async () => {
+      const now = new Date();
+      const users = await prisma.user.findMany({
+        where: {
+          autoReminderEnabled: true,
+          subscription: { status: 'ACTIVE', renewsAt: { gt: now } },
+        },
+        select: {
+          id: true,
+          clients: {
+            select: {
+              id: true,
+              firstName: true,
+              phone: true,
+              lastReminderSentAt: true,
+              transactions: { select: { type: true, amountFcfa: true, createdAt: true } },
+            },
+          },
+        },
+      });
+      usersScanned = users.length;
+
+      for (const user of users) {
+        for (const client of user.clients) {
+          clientsScanned += 1;
+          const transactions = client.transactions.map((t) => ({
+            ...t,
+            type: t.type as 'DEBT' | 'PAYMENT',
+          }));
+          const due = isDueForAutoReminder(
+            {
+              phone: client.phone,
+              balanceFcfa: computeClientBalance(transactions),
+              oldestUnpaidDebtDate: oldestUnpaidDebtDate(transactions),
+              lastReminderSentAt: client.lastReminderSentAt,
+            },
+            now,
+          );
+          if (!due) continue;
+
+          const debtDate = oldestUnpaidDebtDate(transactions);
+          if (!debtDate) continue; // narrows for TS; `due` already guarantees this
+
+          await createNotification(
+            prisma,
+            autoReminderDue(user.id, client.id, client.firstName, debtDate),
+          );
+          notified += 1;
+        }
+      }
+
+      log.info('auto-reminders tick', {
+        usersScanned,
+        clientsScanned,
+        notified,
+        requestId: ctx.requestId,
+      });
+    });
+
+    return NextResponse.json(
+      { ok: true, usersScanned, clientsScanned, notified },
+      { headers: { 'x-request-id': ctx.requestId } },
+    );
+  });
+}

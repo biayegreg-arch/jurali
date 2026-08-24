@@ -593,3 +593,47 @@ these they actually ask for.
     correctly-interpolated `wa.me` URL + stamped timestamp, confirmed via
     a follow-up GET → 409 `NOTHING_OWED` after an offsetting payment.
     Test data cleaned up, dev server stopped.
+- Phase 9 (partial: auto-reminders + PDF export) — **done 2026-08-24**,
+  uncommitted (pending user "commit"). User picked 2 of the 4 backlog
+  items via AskUserQuestion (bulk contact selection, SMS channel, and
+  response tracking remain backlog). See `.planning/banani/phase9.md`.
+  - **Auto-reminders cannot silently send** — only the paid WhatsApp
+    Business API can, already ruled out (A.3). Asked the user how
+    "automatique" should surface instead; chose **in-app notification**
+    (reusing the starter's existing generic `Notification` system) over
+    a dedicated list page. `User.autoReminderEnabled` (default **false**
+    — existing users never consented) gates a new hourly
+    `POST /api/cron/auto-reminders` that flags clients whose oldest
+    unpaid debt is 7+ days old with no reminder sent since
+    (`lib/server/jurali/auto-reminder.ts`, TDD). Deliberately NOT folded
+    into `NotificationPreferences.prefs` — that JSON's D-10 contract is
+    "missing ⇒ enabled" (opt-out channel preference), the inverse of
+    what a default-off business-logic gate needs — got its own
+    `GET/PATCH /api/settings/auto-reminders` instead.
+  - `TopBar`'s bell icon — a static, inert decoration since Phase 4 — is
+    now wired for real (unread badge, links to a new `/notifications`
+    list). Settings gained a real "Notifications & Rappels" section
+    (entirely omitted in Phase 5 for lack of backend), Premium-gated the
+    same way as Phase 8's reminder card.
+  - `vercel.json` now declares 7 crons; `vercel-json-shape.test.ts`'s
+    hardcoded counts bumped 6 → 7 (not a protected file).
+  - **PDF export**: `jspdf` added — client-side generation only, no
+    server route (Vercel-serverless-first, no Puppeteer). Fiche client
+    gets an "Exporter PDF" button (Premium-gated like Phase 8's reminder
+    card) building a full transaction-history PDF via
+    `lib/jurali-pdf.ts` (TDD — jsPDF runs fine under plain Node, so the
+    actual document construction is tested).
+  - `GET /api/auth/me` extended with `shopName` (needed by both the
+    reminder body and the PDF header).
+  - TDD throughout (9 + 8 + 6 + 7 new tests). Verified end-to-end against
+    the dev DB: toggle on → backdated 9-day-old debt (direct Prisma
+    insert, since the API always stamps `now()`) → Premium activated →
+    cron run twice (second run confirms dedup — DB row count stays 1) →
+    correct notification title/body/clientId → mark-read → count drops
+    to 0. **Explicitly not verified**: the client-only interactive
+    pieces (toggle visual state, PDF button's gated appearance, the
+    actual click → download flow) — every page here is `'use client'`
+    and renders empty on a bare curl fetch until hydration runs, and no
+    browser-automation tool is available in this environment. Typecheck/
+    lint/build all pass, which rules out compile errors but not runtime
+    UI correctness — flagged rather than glossed over.

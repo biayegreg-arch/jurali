@@ -16,6 +16,8 @@ export interface User {
   hasPassword: boolean;
   /** Provider names already linked, e.g. ['google']. Empty for pure email/password accounts. */
   linkedProviders: string[];
+  /** Shop name collected at phone signup (Jurali Phase 6); null for email/OAuth accounts. */
+  shopName: string | null;
 }
 
 interface AuthContextValue {

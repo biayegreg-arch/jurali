@@ -12,13 +12,19 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { useApi } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSection';
+
+interface SubscriptionData {
+  isActive: boolean;
+}
 
 export default function SettingsPage() {
   const user = useUser();
   const { refresh, logout } = useAuth();
   const { toast } = useToast();
+  const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -208,6 +214,8 @@ export default function SettingsPage() {
           </button>
         </SettingsSection>
 
+        <AutoReminderSection isPremium={subscription?.isActive ?? false} />
+
         <SettingsSection title="Langue & Devise">
           <SettingsRow icon="globe" label="Langue" value="Français" />
           <SettingsRow icon="credit-card" label="Devise" value="FCFA" last />
@@ -219,5 +227,79 @@ export default function SettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+function AutoReminderSection({ isPremium }: { isPremium: boolean }) {
+  const { data, loading } = useApi<{ enabled: boolean }>('/api/settings/auto-reminders', {
+    skip: !isPremium,
+  });
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [saving, setSaving] = useState(false);
+  const current = enabled ?? data?.enabled ?? false;
+
+  async function toggle() {
+    if (saving) return;
+    const next = !current;
+    setEnabled(next);
+    setSaving(true);
+    try {
+      await api('/api/settings/auto-reminders', { method: 'PATCH', body: { enabled: next } });
+    } catch {
+      setEnabled(!next); // revert on failure
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <SettingsSection title="Notifications & Rappels">
+      {isPremium ? (
+        <div className="flex items-center gap-4 px-5 py-4">
+          <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+            <Icon i="message-circle" size={18} className="text-primary" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-headings font-bold text-sm text-foreground">
+              Rappels WhatsApp automatiques
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">
+              Te notifie dès qu’une dette dépasse 7 jours sans rappel envoyé
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={current}
+            disabled={loading || saving}
+            onClick={toggle}
+            className={`relative w-11 h-6 rounded-full flex-shrink-0 transition-colors disabled:opacity-50 ${
+              current ? 'bg-primary' : 'bg-muted'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 w-5 h-5 rounded-full bg-background transition-transform ${
+                current ? 'translate-x-[22px]' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </div>
+      ) : (
+        <Link href="/premium" className="flex items-center gap-4 px-5 py-4">
+          <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+            <Icon i="message-circle" size={18} className="text-muted-foreground" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-headings font-bold text-sm text-muted-foreground">
+              Rappels WhatsApp automatiques
+            </div>
+            <div className="text-xs text-muted-foreground mt-0.5">Réservé à Premium</div>
+          </div>
+          <span className="bg-accent text-accent-foreground font-headings font-bold text-xs px-2.5 py-1 rounded-lg flex-shrink-0">
+            Premium
+          </span>
+        </Link>
+      )}
+    </SettingsSection>
   );
 }

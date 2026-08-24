@@ -34,6 +34,13 @@ model User {
   // Shop name collected at phone signup (Inscription.jsx); null for
   // email/OAuth accounts that never went through that flow.
   shopName          String?
+  // Phase 9 — global opt-in for the auto-reminder cron (Parametres.jsx's
+  // "Rappels WhatsApp automatiques"). Defaults false: existing users never
+  // consented to this, and the cron only takes effect for Premium accounts
+  // anyway (mirrors Phase 8's manual-reminder gate). Sending is never
+  // silent — this only creates an in-app Notification; the boutiquier
+  // still taps to open the wa.me link (see auto-reminder.ts).
+  autoReminderEnabled Boolean @default(false)
   // App-wide role. USER is the default; ADMIN unlocks /admin back-office;
   // SUPERADMIN can promote/demote other admins. Bootstrap an initial
   // SUPERADMIN via `pnpm db:make-superadmin <email>` (see scripts).

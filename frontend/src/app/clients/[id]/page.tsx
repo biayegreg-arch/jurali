@@ -13,6 +13,7 @@ import { DebtHistoryRow } from '@/components/jurali/DebtHistoryRow';
 import { formatDateFr } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
 import { computeDebtStatuses, type DebtTransaction } from '@/lib/server/jurali/balance';
+import { downloadClientHistoryPdf } from '@/lib/jurali-pdf';
 
 interface ClientTransaction {
   id: string;
@@ -82,6 +83,7 @@ export default function ClientFichePage() {
         <ClientFicheBody
           client={client}
           isPremium={subscription?.isActive ?? false}
+          shopName={user.shopName}
           onReminderSent={refresh}
         />
       )}
@@ -92,10 +94,12 @@ export default function ClientFichePage() {
 function ClientFicheBody({
   client,
   isPremium,
+  shopName,
   onReminderSent,
 }: {
   client: ClientDetail;
   isPremium: boolean;
+  shopName: string | null;
   onReminderSent: () => void;
 }) {
   const debtStatuses = computeDebtStatuses(
@@ -196,6 +200,8 @@ function ClientFicheBody({
         </div>
       </div>
 
+      <ExportPdfButton client={client} isPremium={isPremium} shopName={shopName} />
+
       <Link
         href={`/debts/new?clientId=${client.id}`}
         className="flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-4 rounded-xl"
@@ -286,6 +292,39 @@ function ReminderCard({
         {sending ? 'Ouverture…' : 'Envoyer WhatsApp'}
       </button>
     </div>
+  );
+}
+
+function ExportPdfButton({
+  client,
+  isPremium,
+  shopName,
+}: {
+  client: ClientDetail;
+  isPremium: boolean;
+  shopName: string | null;
+}) {
+  if (!isPremium) {
+    return (
+      <Link
+        href="/premium"
+        className="flex items-center justify-center gap-2 bg-background border border-border text-muted-foreground font-headings font-bold text-sm py-3.5 rounded-xl"
+      >
+        <Icon i="download" size={18} />
+        Exporter PDF — réservé à Premium
+      </Link>
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => downloadClientHistoryPdf(client, shopName)}
+      className="flex items-center justify-center gap-2 bg-background border border-border text-foreground font-headings font-bold text-sm py-3.5 rounded-xl"
+    >
+      <Icon i="download" size={18} />
+      Exporter PDF
+    </button>
   );
 }
 

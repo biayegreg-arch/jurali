@@ -2,9 +2,11 @@
 // the Dashboard and Liste des débiteurs screens — identical in both Banani
 // sources (JuraliDashboard.jsx / DashboardAll.jsx), extracted here rather
 // than duplicated.
+import Link from 'next/link';
 import { Icon } from './Icon';
 import { SummaryStat } from './SummaryStat';
 import { formatPrice } from '@/lib/utils';
+import { useApi } from '@/lib/useApi';
 
 export interface TopBarProps {
   email: string;
@@ -32,9 +34,7 @@ export function TopBar({
           <div className="font-headings font-bold text-xl text-primary-foreground">{email}</div>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center opacity-60">
-            <Icon i="bell" size={16} className="text-primary" />
-          </div>
+          <NotificationBell />
           <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
             <span className="font-headings font-bold text-sm text-secondary-foreground">
               {email.charAt(0).toUpperCase()}
@@ -57,5 +57,24 @@ export function TopBar({
         />
       </div>
     </div>
+  );
+}
+
+function NotificationBell() {
+  const { data } = useApi<{ count: number }>('/api/notifications/count');
+  const count = data?.count ?? 0;
+
+  return (
+    <Link
+      href="/notifications"
+      className="relative w-8 h-8 rounded-lg bg-secondary flex items-center justify-center"
+    >
+      <Icon i="bell" size={16} className="text-primary" />
+      {count > 0 && (
+        <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent text-accent-foreground text-[10px] font-headings font-bold flex items-center justify-center">
+          {count > 9 ? '9+' : count}
+        </span>
+      )}
+    </Link>
   );
 }

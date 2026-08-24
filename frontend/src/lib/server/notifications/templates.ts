@@ -50,3 +50,27 @@ export function paymentReceived(
     dedupeKey: `payment-received:${orderId}`,
   };
 }
+
+/**
+ * Jurali Phase 9 — auto-reminder cron detected a client 7+ days overdue
+ * with no reminder sent since. `dedupeKey` is keyed off the debt's own
+ * aging date (not a timestamp) so it fires once per "new oldest overdue
+ * debt", not once per cron tick — see `lib/server/jurali/auto-reminder.ts`.
+ * The notification is informational only; sending the WhatsApp message is
+ * still a manual `wa.me` tap (Phase 8) — `data.clientId` deep-links there.
+ */
+export function autoReminderDue(
+  userId: string,
+  clientId: string,
+  clientFirstName: string,
+  oldestUnpaidDebtDate: Date,
+): CreateNotificationInput {
+  return {
+    userId,
+    type: 'AUTO_REMINDER_DUE',
+    title: 'Rappel à envoyer',
+    body: `${clientFirstName} a une dette de plus de 7 jours sans rappel. Envoie-lui un message WhatsApp.`,
+    data: { clientId },
+    dedupeKey: `auto-reminder:${clientId}:${oldestUnpaidDebtDate.toISOString().slice(0, 10)}`,
+  };
+}
