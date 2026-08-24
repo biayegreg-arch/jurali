@@ -453,10 +453,13 @@ these they actually ask for.
 
 - Phase 1 (domain model) — **done**, committed `c7264ba`.
 - Phase 2 (`/api/clients` + `/api/transactions`) — **done**, committed `17b0ea4`.
-- Phase 3 (dashboard endpoint) — next up, unblocked, no open decisions.
+- Phase 3 (dashboard endpoint) — **done**, committed `0c4e06d`.
+- Phase 4 (reproduce Dashboard, Liste des débiteurs, Nouvelle dette,
+  Paiement reçu) — **done**, uncommitted (pending user "commit"). See
+  `.planning/banani/STATUS.md`.
 - Phase 0.1 (auth strategy) — **re-decided 2026-08-24**: phone + password
   (c-revised), following `Inscription.jsx` over the PRD's OTP prose.
 - Phase 5 (missing PRD screens) — **unblocked 2026-08-24**, all 4 screens
-  now in hand.
+  now in hand, next up.
 - Phase 7 pricing — **decided 2026-08-24**: monthly-only V1, annual +
   trial deferred.

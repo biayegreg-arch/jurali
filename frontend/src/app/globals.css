@@ -1,1 +1,47 @@
 @import 'tailwindcss';
+
+/* Jurali design tokens, ported from the "Carnet Jurali" Banani flow
+   (see docs/superpowers/plans/2026-08-24-jurali-roadmap.md A.6). Tailwind
+   v4 generates utilities (bg-primary, text-danger, rounded-lg, …) directly
+   from these prefixed custom properties: color, radius, font, text. */
+@theme {
+  --color-background: #f5f0e8;
+  --color-foreground: #1a1a1a;
+  --color-border: #d6cdb8;
+  --color-input: #ede8dc;
+  --color-primary: #1e5c3a;
+  --color-primary-foreground: #f5f0e8;
+  --color-secondary: #c8dcc0;
+  --color-secondary-foreground: #1e5c3a;
+  --color-muted: #ddd8cc;
+  --color-muted-foreground: #7a7260;
+  --color-accent: #e8a020;
+  --color-accent-foreground: #1a1a1a;
+  --color-danger: #c0392b;
+  --color-danger-foreground: #ffffff;
+  --color-surface: #edeae0;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 20px;
+  --radius: var(--radius-sm);
+
+  --font-body: var(--font-dm-sans), 'DM Sans', sans-serif;
+  --font-headings: var(--font-space-grotesk), 'Space Grotesk', sans-serif;
+
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 40px;
+  --text-5xl: 52px;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}

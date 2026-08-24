@@ -1,193 +1,115 @@
-// Default welcome page for the izi kit starter.
-//
-// Replace this file with your real homepage as soon as you're oriented.
-// This file exists so a fresh fork shows something useful at `/` instead of a
-// blank page — it's a server component that reads env at request time and
-// shows which optional providers are configured.
-//
-// Design-swappable: uses minimal Tailwind utilities; rip the JSX out and write
-// your own homepage. The starter ships no UI components by design.
+'use client';
 
-export const runtime = 'nodejs';
+// Jurali dashboard — PRD 3.2 (Accueil / Tableau de bord). Reproduces
+// Banani's JuraliDashboard.jsx; see .planning/banani/dashboard.md for the
+// full translation notes and confirmed decisions.
+import Link from 'next/link';
+import { useUser } from '@/contexts/AuthContext';
+import { useApi } from '@/lib/useApi';
+import { Icon } from '@/components/jurali/Icon';
+import { TopBar } from '@/components/jurali/TopBar';
+import { DebtorRow } from '@/components/jurali/DebtorRow';
+import { toDebtorRowProps } from '@/lib/jurali-format';
+import type { ClientSummary } from '@/lib/server/jurali/clients';
 
-function ConfigRow({ label, ok, hint }: { label: string; ok: boolean; hint: string }) {
-  return (
-    <li className="flex flex-wrap items-center gap-2 py-1.5">
-      <span aria-hidden className={ok ? 'text-emerald-600' : 'text-amber-500'}>
-        {ok ? '✅' : '⚠️ '}
-      </span>
-      <span className="font-mono text-sm">{label}</span>
-      <span className="text-xs text-gray-500">— {hint}</span>
-    </li>
-  );
+interface DashboardData {
+  totalDueFcfa: number;
+  debtorCount: number;
+  overdueDueFcfa: number;
+  overdueDebtorCount: number;
+  recoveredThisMonthFcfa: number;
 }
 
-export default function Home() {
-  const env = process.env;
+export default function DashboardPage() {
+  const user = useUser();
+  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
+    skip: !user,
+  });
+  const { data: clients, loading: clientsLoading } = useApi<{ items: ClientSummary[] }>(
+    '/api/clients?sort=activity&order=desc&limit=5',
+    { skip: !user },
+  );
 
-  const required = [
-    { label: 'DATABASE_URL', ok: !!env.DATABASE_URL, hint: 'Postgres (required)' },
-    { label: 'JWT_SECRET', ok: !!env.JWT_SECRET, hint: 'Auth signing key (required)' },
-  ];
+  if (!user) return null;
 
-  const recommended = [
-    { label: 'ENCRYPTION_KEY', ok: !!env.ENCRYPTION_KEY, hint: 'AES-256-GCM (recommended)' },
-    { label: 'CRON_SECRET', ok: !!env.CRON_SECRET, hint: 'Vercel Cron Bearer (recommended)' },
-    { label: 'DIRECT_URL', ok: !!env.DIRECT_URL, hint: 'For prisma migrate deploy' },
-  ];
-
-  const optional = [
-    {
-      label: 'UPSTASH_REDIS_REST_URL',
-      ok: !!env.UPSTASH_REDIS_REST_URL,
-      hint: 'Redis (rate limit, queue, lockout)',
-    },
-    {
-      label: 'GOOGLE_CLIENT_ID',
-      ok: !!env.GOOGLE_CLIENT_ID,
-      hint: 'Sign in with Google (OAuth)',
-    },
-    { label: 'RESEND_API_KEY', ok: !!env.RESEND_API_KEY, hint: 'Email sender' },
-    { label: 'EMAIL_FROM', ok: !!env.EMAIL_FROM, hint: 'Verified sender address' },
-    {
-      label: 'CLOUDINARY_CLOUD_NAME',
-      ok: !!env.CLOUDINARY_CLOUD_NAME,
-      hint: 'Cloudinary file / media storage',
-    },
-    { label: 'BICTORYS_API_KEY', ok: !!env.BICTORYS_API_KEY, hint: 'Mobile money payments' },
-    { label: 'SENTRY_DSN', ok: !!env.SENTRY_DSN, hint: 'Error reporting + traces' },
-  ];
+  const recentClients = clients?.items ?? [];
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12 font-sans text-gray-900">
-      <header>
-        <h1 className="text-3xl font-bold tracking-tight">izi kit</h1>
-        <p className="mt-2 text-gray-600">
-          Headless Next.js 16 starter — auth, payments, admin, webhooks, cron.
-          <br />
-          You&rsquo;re seeing this default page because{' '}
-          <code className="rounded bg-gray-100 px-1.5 py-0.5 text-sm">
-            frontend/src/app/page.tsx
-          </code>{' '}
-          hasn&rsquo;t been replaced yet.
-        </p>
-      </header>
+    <div className="min-h-dvh bg-background font-body flex flex-col">
+      <TopBar
+        email={user.email}
+        totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
+        debtorCount={dashboard?.debtorCount ?? 0}
+        overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
+        overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
+        loading={dashboardLoading}
+      />
 
-      {/* ─── Beginner: what to type next ───────────────────────────────── */}
-      <section className="mt-10 rounded-lg border border-emerald-200 bg-emerald-50 p-5">
-        <h2 className="text-lg font-semibold text-emerald-900">
-          👋 New here? Open this project in Claude Code and type:
-        </h2>
-        <pre className="mt-3 overflow-x-auto rounded bg-white p-3 text-sm">/setup-kit</pre>
-        <p className="mt-3 text-sm text-emerald-900">
-          The <code>/setup-kit</code> skill audits your environment, installs what it can (pnpm via
-          Corepack, secrets), and walks you through plugging a <strong>Neon Postgres</strong>{' '}
-          connection string — the kit is tuned for Neon&rsquo;s serverless behavior (other Postgres
-          providers work but need user-side tuning). Then just{' '}
-          <strong>describe what you want to build to Claude</strong> (in French or English). The 40
-          routes (auth, payments, admin, webhooks, cron, uploads) are already wired — you only talk
-          about your product, not the plumbing. See <code>WORKFLOW.md</code> for the full
-          vibe-coding flow.
-        </p>
-      </section>
+      {/* Search bar — navigates to the full client list (search happens there) */}
+      <Link href="/clients" className="px-4 pt-4 pb-2 block">
+        <div className="flex items-center gap-2 bg-input border border-border rounded-xl px-3 py-2.5">
+          <Icon i="search" size={16} className="text-muted-foreground flex-shrink-0" />
+          <span className="text-sm text-muted-foreground">Chercher un client...</span>
+        </div>
+      </Link>
 
-      {/* ─── Live backend probes ──────────────────────────────────────── */}
-      <section className="mt-10">
-        <h2 className="text-xl font-semibold">Backend status</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Live JSON probes — open these in a new tab to confirm everything is up.
-        </p>
-        <ul className="mt-3 space-y-1">
-          <li>
-            <a
-              href="/api/health"
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 underline"
-            >
-              /api/health
-            </a>{' '}
-            <span className="text-xs text-gray-500">— liveness (always responds)</span>
-          </li>
-          <li>
-            <a
-              href="/api/readyz"
-              target="_blank"
-              rel="noreferrer"
-              className="text-blue-600 underline"
-            >
-              /api/readyz
-            </a>{' '}
-            <span className="text-xs text-gray-500">
-              — readiness (DB + Redis probes, 503 if either is down)
-            </span>
-          </li>
-        </ul>
-      </section>
+      {/* Filter chips — navigate to the full list; month filters deferred (Phase 9, see debtor-list.md) */}
+      <div className="flex gap-2 px-4 py-2">
+        <Link
+          href="/clients"
+          className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg"
+        >
+          Tous
+        </Link>
+        <Link
+          href="/clients?filter=overdue"
+          className="bg-surface border border-border text-foreground text-xs px-3 py-1.5 rounded-lg"
+        >
+          En retard
+        </Link>
+      </div>
 
-      {/* ─── Provider configuration ───────────────────────────────────── */}
-      <section className="mt-10">
-        <h2 className="text-xl font-semibold">Provider configuration</h2>
-        <p className="mt-1 text-sm text-gray-600">
-          Read at request time from <code>process.env</code>. Optional providers are inert when
-          absent — the corresponding routes 404 silently and the rest of the app keeps working.
-        </p>
+      <div className="flex items-center justify-between px-4 pt-3 pb-1">
+        <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
+          Débiteurs
+        </div>
+        <Link href="/clients?sort=amount" className="text-xs text-muted-foreground">
+          Trier par montant
+        </Link>
+      </div>
 
-        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-gray-500">
-          Required (app refuses to boot without these)
-        </h3>
-        <ul>
-          {required.map((row) => (
-            <ConfigRow key={row.label} {...row} />
-          ))}
-        </ul>
+      <div className="mx-4 bg-background border border-border rounded-xl overflow-hidden">
+        {clientsLoading ? (
+          <div className="px-4 py-6 text-sm text-muted-foreground">Chargement…</div>
+        ) : recentClients.length === 0 ? (
+          <div className="px-4 py-6 text-sm text-muted-foreground">
+            Aucun client pour l&rsquo;instant — ajoute ton premier client en enregistrant une dette.
+          </div>
+        ) : (
+          recentClients.map((c, i) => <DebtorRow key={c.id} {...toDebtorRowProps(c, i)} />)
+        )}
+      </div>
 
-        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-gray-500">
-          Recommended (app boots, but breaks at first use)
-        </h3>
-        <ul>
-          {recommended.map((row) => (
-            <ConfigRow key={row.label} {...row} />
-          ))}
-        </ul>
-
-        <h3 className="mt-5 text-sm font-semibold uppercase tracking-wide text-gray-500">
-          Optional providers
-        </h3>
-        <ul>
-          {optional.map((row) => (
-            <ConfigRow key={row.label} {...row} />
-          ))}
-        </ul>
-      </section>
-
-      {/* ─── What's shipped ───────────────────────────────────────────── */}
-      <section className="mt-10">
-        <h2 className="text-xl font-semibold">What this starter ships</h2>
-        <ul className="mt-3 list-inside list-disc space-y-1 text-sm">
-          <li>
-            API routes under <code>/api/*</code> — auth, OAuth, admin, payments, uploads, webhooks,
-            5 cron handlers
-          </li>
-          <li>Prisma schema + versioned migrations (Postgres / Neon)</li>
-          <li>Vitest unit test suite covering the protected libs</li>
-          <li>CI pipeline: format / lint / typecheck / test / build / audit</li>
-          <li>
-            Cloud-only by design — bring your own Postgres (Neon free tier), no local containers
-          </li>
-        </ul>
-        <p className="mt-3 text-sm text-gray-600">
-          Full architecture overview in{' '}
-          <code className="rounded bg-gray-100 px-1.5 py-0.5">CLAUDE.md</code>; public surface in{' '}
-          <code className="rounded bg-gray-100 px-1.5 py-0.5">README.md</code>.
-        </p>
-      </section>
-
-      <footer className="mt-12 border-t border-gray-200 pt-6 text-xs text-gray-500">
-        Replace this page in{' '}
-        <code className="rounded bg-gray-100 px-1.5 py-0.5">frontend/src/app/page.tsx</code> when
-        you&rsquo;re ready.
-      </footer>
-    </main>
+      {/* PRD 3.2/§4: 2 always-visible large action buttons (P0). Banani's
+          mockup only shows "Nouvelle dette" + an inert Statistiques icon
+          (no screen designed for that, Phase 9) — "Paiement reçu" replaces
+          it here since the PRD explicitly requires both. */}
+      <div className="px-4 pt-4 pb-8 flex gap-3">
+        <Link
+          href="/debts/new"
+          className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-4 rounded-xl"
+        >
+          <Icon i="plus" size={20} />
+          Nouvelle dette
+        </Link>
+        <Link
+          href="/payments/new"
+          className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-base py-4 rounded-xl"
+        >
+          <Icon i="check" size={20} />
+          Paiement reçu
+        </Link>
+      </div>
+    </div>
   );
 }
