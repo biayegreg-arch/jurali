@@ -7,12 +7,15 @@ const update = vi.fn();
 const orderFindFirst = vi.fn();
 const orderUpdate = vi.fn();
 const outboxCreate = vi.fn();
+const subscriptionFindFirst = vi.fn();
+const subscriptionUpdate = vi.fn();
 
 const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) =>
   fn({
     webhookLog: { findUnique, create, update },
     order: { findFirst: orderFindFirst, update: orderUpdate },
     outboxEvent: { create: outboxCreate },
+    subscription: { findFirst: subscriptionFindFirst, update: subscriptionUpdate },
   }),
 );
 
@@ -31,6 +34,8 @@ beforeEach(() => {
   orderFindFirst.mockReset();
   orderUpdate.mockReset();
   outboxCreate.mockReset();
+  subscriptionFindFirst.mockReset();
+  subscriptionUpdate.mockReset();
 });
 
 afterEach(() => {
@@ -115,5 +120,62 @@ describe('POST /api/webhooks/bictorys', () => {
     const mod = (await import('./route')) as { runtime?: string; dynamic?: string };
     expect(mod.runtime).toBe('nodejs');
     expect(mod.dynamic).toBe('force-dynamic');
+  });
+
+  describe('Phase 7 — Subscription correlation (no matching Order)', () => {
+    it('onPaid activates a Subscription found by providerChargeId', async () => {
+      findUnique.mockResolvedValueOnce(null);
+      orderFindFirst.mockResolvedValueOnce(null);
+      subscriptionFindFirst.mockResolvedValueOnce({ id: 'sub_1' });
+      const { POST } = await import('./route');
+      const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(subscriptionUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'sub_1' },
+          data: expect.objectContaining({ status: 'ACTIVE' }),
+        }),
+      );
+      // No outbox emit for subscription events (see route.ts comment).
+      expect(outboxCreate).not.toHaveBeenCalled();
+    });
+
+    it('onFailed marks a Subscription FAILED found by providerChargeId', async () => {
+      findUnique.mockResolvedValueOnce(null);
+      orderFindFirst.mockResolvedValueOnce(null);
+      subscriptionFindFirst.mockResolvedValueOnce({ id: 'sub_2' });
+      const { POST } = await import('./route');
+      const { req } = bictorysFixtureRequest({ status: 'failed' });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(subscriptionUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'sub_2' }, data: { status: 'FAILED' } }),
+      );
+    });
+
+    it('onRefunded marks a Subscription CANCELED found by providerChargeId', async () => {
+      findUnique.mockResolvedValueOnce(null);
+      orderFindFirst.mockResolvedValueOnce(null);
+      subscriptionFindFirst.mockResolvedValueOnce({ id: 'sub_3' });
+      const { POST } = await import('./route');
+      const { req } = bictorysFixtureRequest({ status: 'refunded' });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(subscriptionUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: 'sub_3' }, data: { status: 'CANCELED' } }),
+      );
+    });
+
+    it('unknown charge (neither Order nor Subscription) drops silently — 200', async () => {
+      findUnique.mockResolvedValueOnce(null);
+      orderFindFirst.mockResolvedValueOnce(null);
+      subscriptionFindFirst.mockResolvedValueOnce(null);
+      const { POST } = await import('./route');
+      const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(subscriptionUpdate).not.toHaveBeenCalled();
+    });
   });
 });

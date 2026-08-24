@@ -21,6 +21,15 @@
  *     closures invariant).
  *
  * Phase 5 / Plan 05-02. WH-01 + WH-02.
+ *
+ * Phase 7 — also correlates `Subscription.providerChargeId` when no Order
+ * matches (Premium checkout reuses the same PaymentProvider.charge() flow,
+ * see /api/subscriptions). No new outbox `kind` is emitted for subscription
+ * events — same reasoning as onRefunded below: the kind→handler switch
+ * lives inside the PROTECTED outbox/dispatcher.ts, so a new kind would
+ * require editing it. Subscription "active" is a live renewsAt computation
+ * (lib/server/subscriptions/guards.ts) — the frontend polls GET
+ * /api/subscriptions rather than needing a push notification here.
  */
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -30,6 +39,7 @@ import { createWebhookHandler } from '@/lib/server/webhook/handler';
 import { bictorysWebhookProvider } from '@/lib/server/webhook/bictorys';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { prisma } from '@/lib/server/prisma';
+import { SUBSCRIPTION_PERIOD_DAYS } from '@/lib/server/subscriptions/guards';
 
 export const POST = createWebhookHandler({
   prisma,
@@ -42,7 +52,21 @@ export const POST = createWebhookHandler({
     const order = await tx.order.findFirst({
       where: { providerChargeId: externalRef },
     });
-    if (!order) return {}; // unknown charge — log + drop (no DB row to update)
+    if (!order) {
+      // Phase 7 — not an Order charge; try Subscription (Premium checkout).
+      const subscription = await tx.subscription.findFirst({
+        where: { providerChargeId: externalRef },
+      });
+      if (!subscription) return {}; // unknown charge — log + drop
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: {
+          status: 'ACTIVE',
+          renewsAt: new Date(Date.now() + SUBSCRIPTION_PERIOD_DAYS * 24 * 60 * 60 * 1000),
+        },
+      });
+      return {};
+    }
 
     const paymentMethod = payload.payment_method ? String(payload.payment_method) : null;
 
@@ -90,7 +114,20 @@ export const POST = createWebhookHandler({
     const order = await tx.order.findFirst({
       where: { providerChargeId: externalRef },
     });
-    if (!order) return {};
+    if (!order) {
+      // Phase 7 — a refunded Premium charge means the subscription should
+      // not remain active; CANCELED (not FAILED — the checkout succeeded,
+      // it was reversed after the fact).
+      const subscription = await tx.subscription.findFirst({
+        where: { providerChargeId: externalRef },
+      });
+      if (!subscription) return {};
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: { status: 'CANCELED' },
+      });
+      return {};
+    }
     await tx.order.update({
       where: { id: order.id },
       data: { status: 'REFUNDED' },
@@ -107,7 +144,18 @@ export const POST = createWebhookHandler({
     const order = await tx.order.findFirst({
       where: { providerChargeId: externalRef },
     });
-    if (!order) return {};
+    if (!order) {
+      // Phase 7 — a failed Premium charge attempt.
+      const subscription = await tx.subscription.findFirst({
+        where: { providerChargeId: externalRef },
+      });
+      if (!subscription) return {};
+      await tx.subscription.update({
+        where: { id: subscription.id },
+        data: { status: 'FAILED' },
+      });
+      return {};
+    }
     await tx.order.update({
       where: { id: order.id },
       data: { status: 'FAILED' },

@@ -458,18 +458,17 @@ these they actually ask for.
   Paiement reçu) — **done**, committed `52bce00`.
 - Phase 0.1 (auth strategy) — **re-decided 2026-08-24**: phone + password
   (c-revised), following `Inscription.jsx` over the PRD's OTP prose.
-- Phase 5 (missing PRD screens) — **3/4 done 2026-08-24**: Fiche client
-  + Paramètres (`eab4b15`), Inscription (`/signup`, uncommitted, pending
-  user "commit") plus a companion `/login` page (no Banani source, built
-  fresh — needed so `useUser()`'s app-wide redirect target and
-  Inscription's own "Se connecter" link both resolve to something real).
-  Page Premium still waits on Phase 7. See `.planning/banani/STATUS.md`.
-- Phase 6 (auth: phone + password) — **done 2026-08-24**, uncommitted
-  (pending user "commit"). `User.email` was kept required rather than
-  made optional as originally planned — see the "Email nullable?"
-  decision below. `/api/auth/phone-signup` and `/api/auth/phone-login`
-  built, TDD (13 tests), verified end-to-end against the dev DB. The
-  `Inscription.jsx` screen itself is still pending (Phase 5 backlog).
+- Phase 5 (missing PRD screens) — **done 2026-08-24**: Fiche client +
+  Paramètres (`eab4b15`), Inscription + companion `/login` (`098bcbc`,
+  no Banani source for `/login` — needed so `useUser()`'s app-wide
+  redirect target and Inscription's own "Se connecter" link both
+  resolve to something real), Page Premium + companions `/premium/
+  {success,failed}` (Phase 7, see below). See `.planning/banani/STATUS.md`.
+- Phase 6 (auth: phone + password) — **done 2026-08-24**, committed
+  `a45777b`. `User.email` was kept required rather than made optional as
+  originally planned — see the "Email nullable?" decision below.
+  `/api/auth/phone-signup` and `/api/auth/phone-login` built, TDD (13
+  tests), verified end-to-end against the dev DB.
   - **Decision (2026-08-24): `User.email` stays required.** The
     original Phase 6 plan called for making it optional. Implementation
     surfaced a conflict: `auth.ts`'s `TokenPayload`/`Context` (both
@@ -484,5 +483,35 @@ these they actually ask for.
     A.5/A.7 analysis of `Inscription.jsx`.
   - phone-login skips the `emailVerifiedAt` check entirely (no email is
     ever collected for phone accounts, so there's nothing to verify).
-- Phase 7 pricing — **decided 2026-08-24**: monthly-only V1, annual +
-  trial deferred.
+- Phase 7 (Premium subscription) — **done 2026-08-24**, uncommitted
+  (pending user "commit"). Pricing **decided 2026-08-24**: monthly-only
+  V1, annual + trial deferred (dropped from the built `/premium` page
+  too — see `.planning/banani/page-premium.md`).
+  - `Subscription` model added (`ownerId @unique` — one row reused
+    across renewals, not a row-per-period ledger). "Active" is always a
+    live `status === 'ACTIVE' && renewsAt > now` computation
+    (`lib/server/subscriptions/guards.ts`), never trusted from `status`
+    alone — no expiration cron needed to keep the free-tier gate correct.
+  - `GET/POST /api/subscriptions` reuses the Orders' CircuitBreaker +
+    lazy-provider-init + PUBLIC_URL fail-closed pattern, but replay
+    protection comes from `ownerId`'s uniqueness rather than a
+    client-supplied Idempotency-Key header (Subscription is one
+    reused row, not one row per purchase attempt like Order).
+  - **Divergence from the original plan's "`kind: 'subscription_paid'`
+    case":** that phrasing doesn't map to anything real — the webhook
+    factory's `kind` (`paid`/`refunded`/`failed`) is provider-reported,
+    not domain-specific. The actual fix: `/api/webhooks/bictorys`'s
+    existing `onPaid`/`onFailed`/`onRefunded` handlers now ALSO check
+    `Subscription.providerChargeId` when no `Order` matches — no new
+    outbox event kind needed (would require editing the PROTECTED
+    `outbox/dispatcher.ts`; skipped for subscription events, same
+    reasoning already established there for refund notifications).
+  - `POST /api/clients`'s 10-client free-tier cap now waives for a user
+    with `isSubscriptionActive(subscription) === true`.
+  - TDD throughout (8 guard tests, 13 `/api/subscriptions` tests, 4 new
+    webhook-correlation tests, 2 new clients-gate tests). Verified
+    end-to-end against the dev DB: signup → 10-client cap → 409 →
+    Subscription activated (simulating the webhook, since
+    `BICTORYS_*` is unconfigured in this dev environment) → cap
+    bypassed → `ALREADY_SUBSCRIBED` on re-checkout → all 3 `/premium*`
+    pages render cleanly.

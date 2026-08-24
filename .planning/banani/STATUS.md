@@ -10,12 +10,13 @@ Last updated: 2026-08-24
 - [x] `fiche-client` — `frontend/src/app/clients/[id]/page.tsx` — plan: `fiche-client.md` — commit: `eab4b15`
 - [x] `parametres` — `frontend/src/app/settings/page.tsx` (restyle, same route) — plan: `parametres.md` — commit: `eab4b15`
 - [x] `inscription` — `frontend/src/app/signup/page.tsx` + companion `frontend/src/app/login/page.tsx` (no Banani source, built fresh) — plan: `inscription.md` — commit: pending
+- [x] `page-premium` — `frontend/src/app/premium/page.tsx` + companions `frontend/src/app/premium/{success,failed}/page.tsx` (no Banani source, built fresh) — plan: `page-premium.md` — commit: pending
 
 ## In progress
 (none)
 
 ## Pending (seen in Banani, not yet fetched/planned for implementation)
-- `page-premium` (`PagePremium.jsx`) — Phase 7 — blocked on Phase 7 backend (`Subscription` model, Bictorys checkout)
+(none — all 8 screens from the Banani flow are now built)
 - Desktop variants (`DashboardDesktopWithMonthPicker`, `DebtorListDesktop`,
   `NewDebtDesktop`, `PaymentReceivedDesktop`) — reference only for now,
   informing responsive decisions in the 4 in-progress plans above; not

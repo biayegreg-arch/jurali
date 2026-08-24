@@ -11,9 +11,8 @@
 // scale benefit (YAGNI).
 //
 // POST: creates a client. Enforces the PRD §4/§6 free-tier cap (10 clients)
-// with a stable 409 CLIENT_LIMIT_REACHED code — Phase 7 will gate this
-// behind an active Subscription; today every user is on the free tier since
-// no Subscription model exists yet.
+// with a stable 409 CLIENT_LIMIT_REACHED code — waived for a user with an
+// active Premium Subscription (Phase 7, `isSubscriptionActive`).
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -25,6 +24,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { listClientSummaries } from '@/lib/server/jurali/clients';
 import { zPhone } from '@/lib/server/zod-helpers';
+import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
 
 const CLIENT_FREE_TIER_LIMIT = 10;
 const Q_MAX_LEN = 200;
@@ -96,13 +96,18 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const existingCount = await prisma.client.count({ where: { ownerId: auth.user.sub } });
     if (existingCount >= CLIENT_FREE_TIER_LIMIT) {
-      return NextResponse.json(
-        {
-          error: 'CLIENT_LIMIT_REACHED',
-          message: `Free tier is limited to ${CLIENT_FREE_TIER_LIMIT} clients.`,
-        },
-        { status: 409, headers: { 'x-request-id': ctx.requestId } },
-      );
+      const subscription = await prisma.subscription.findUnique({
+        where: { ownerId: auth.user.sub },
+      });
+      if (!isSubscriptionActive(subscription)) {
+        return NextResponse.json(
+          {
+            error: 'CLIENT_LIMIT_REACHED',
+            message: `Free tier is limited to ${CLIENT_FREE_TIER_LIMIT} clients.`,
+          },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
     }
 
     const client = await prisma.client.create({

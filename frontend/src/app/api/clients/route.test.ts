@@ -170,4 +170,33 @@ describe('POST /api/clients', () => {
     expect(json.error).toBe('CLIENT_LIMIT_REACHED');
     expect(prismaMock.client.create).not.toHaveBeenCalled();
   });
+
+  it('Phase 7 — waives the free-tier cap for an active Premium subscription', async () => {
+    prismaMock.client.count.mockResolvedValue(10);
+    prismaMock.subscription.findUnique.mockResolvedValue({
+      status: 'ACTIVE',
+      renewsAt: new Date(Date.now() + 30 * 86_400_000),
+    } as never);
+    prismaMock.client.create.mockResolvedValue(
+      client({ id: 'client-11', firstName: 'Onzième Client' }) as never,
+    );
+
+    const res = await POST(makePost({ firstName: 'Onzième Client' }));
+
+    expect(res.status).toBe(201);
+    expect(prismaMock.client.create).toHaveBeenCalled();
+  });
+
+  it('Phase 7 — still 409s at the cap when the subscription has lapsed (renewsAt passed)', async () => {
+    prismaMock.client.count.mockResolvedValue(10);
+    prismaMock.subscription.findUnique.mockResolvedValue({
+      status: 'ACTIVE',
+      renewsAt: new Date(Date.now() - 86_400_000),
+    } as never);
+
+    const res = await POST(makePost({ firstName: 'Onzième Client' }));
+
+    expect(res.status).toBe(409);
+    expect(prismaMock.client.create).not.toHaveBeenCalled();
+  });
 });

@@ -55,6 +55,7 @@ model User {
   adminActions      AdminAction[]
   clients           Client[]
   transactions      Transaction[]
+  subscription      Subscription?
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -384,4 +385,35 @@ model Transaction {
 
   @@index([clientId, createdAt])
   @@index([ownerId, createdAt])
+}
+
+// Jurali Phase 7 — Premium subscription (PRD §4/§6, US-06). Monthly-only
+// V1 (Phase 0.3 decision): one row per user, reused across renewals rather
+// than a row-per-billing-period ledger — "active" is always a live
+// computation (`status === 'ACTIVE' && renewsAt > now`, see
+// lib/server/jurali/subscription.ts), never trusted from `status` alone,
+// so no expiration cron is needed to keep the free-tier gate correct.
+// Field naming mirrors `Order` (providerChargeId/paymentUrl) since checkout
+// reuses the same PaymentProvider.charge() flow.
+model Subscription {
+  id     String @id @default(cuid())
+  ownerId String @unique
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  status   String    @default("PENDING") // PENDING | ACTIVE | CANCELED | EXPIRED | FAILED
+  renewsAt DateTime? // set to now()+30d when the webhook confirms payment
+
+  planAmountFcfa Int @default(2500) // PRD §6 monthly price, snapshotted per checkout
+
+  // Provider reference — same shape as Order, since checkout reuses
+  // PaymentProvider.charge(). Unique per row: one in-flight/last checkout
+  // at a time (this row is reused across renewals, not created fresh).
+  provider         String? // e.g. "bictorys"
+  providerChargeId String? @unique
+  paymentUrl       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ownerId])
 }
