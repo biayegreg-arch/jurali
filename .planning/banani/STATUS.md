@@ -1,6 +1,6 @@
 # Banani implementation status
 
-Last updated: 2026-08-25
+Last updated: 2026-08-25 (Google sign-in button)
 
 ## Done
 - [x] `dashboard` — `frontend/src/app/dashboard/page.tsx` (moved from `/` — see `landing-page.md`) — plan: `dashboard.md` — commit: `52bce00` (move: pending)
@@ -14,7 +14,8 @@ Last updated: 2026-08-25
 - [x] `landing-page` — `frontend/src/app/page.tsx` (new home; Dashboard moved to `/dashboard`) — plan: `landing-page.md` — commit: `87f2bb3`
 - [x] `phase8-reminder` — no new Banani screen; wires up the reminder card already placed on `fiche-client` (Phase 5) — `frontend/src/app/api/clients/[id]/remind/route.ts` + `clients/[id]/page.tsx` — plan: `phase8-reminder.md` — commit: `ae55c70`
 - [x] `phase9` (partial — auto-reminders + PDF export only) — no new Banani screens; user picked 2 of 4 backlog items — `frontend/src/app/api/cron/auto-reminders/`, `api/settings/auto-reminders/`, `app/notifications/page.tsx`, `lib/jurali-pdf.ts` — plan: `phase9.md` — commit: `263ccab`
-- [x] `phase9` (month-picker) — no new Banani screen fetch (reused prior `MonthPickerView` reference); Dashboard-only, scopes 2 new stat cards — `frontend/src/lib/server/jurali/month-range.ts`, `components/jurali/MonthPicker.tsx`, `api/dashboard/route.ts` (additive), `dashboard/page.tsx` — plan: `phase9.md` § Month-picker — commit: pending
+- [x] `phase9` (month-picker) — no new Banani screen fetch (reused prior `MonthPickerView` reference); Dashboard-only, scopes 2 new stat cards — `frontend/src/lib/server/jurali/month-range.ts`, `components/jurali/MonthPicker.tsx`, `api/dashboard/route.ts` (additive), `dashboard/page.tsx` — plan: `phase9.md` § Month-picker — commit: `9ec2575`
+- [x] `inscription` (Google sign-in button) — no new Banani screen; user requested connecting Google OAuth to actually test login — `components/jurali/GoogleIcon.tsx`, `GoogleSignInButton.tsx`, wired into `signup/page.tsx` + `login/page.tsx` — plan: `inscription.md` § Google Sign-in button — commit: pending
 
 ## In progress
 (none)

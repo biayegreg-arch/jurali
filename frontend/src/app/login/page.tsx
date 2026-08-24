@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
+import { GoogleSignInButton } from '@/components/jurali/GoogleSignInButton';
 
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Numéro ou mot de passe incorrect.',
@@ -134,7 +135,9 @@ export default function LoginPage() {
           <div className="flex-1 h-px bg-border" />
         </div>
 
-        <div className="text-center text-sm text-muted-foreground">
+        <GoogleSignInButton next="/dashboard" />
+
+        <div className="text-center text-sm text-muted-foreground mt-5">
           Pas encore de compte ?{' '}
           <Link href="/signup" className="text-primary font-bold">
             Créer un compte

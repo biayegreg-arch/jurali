@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
+import { GoogleSignInButton } from '@/components/jurali/GoogleSignInButton';
 
 const ERROR_MESSAGES: Record<string, string> = {
   PHONE_ALREADY_EXISTS: 'Ce numéro est déjà utilisé — connecte-toi plutôt.',
@@ -276,7 +277,9 @@ export default function SignupPage() {
             <div className="flex-1 h-px bg-border" />
           </div>
 
-          <div className="text-center text-sm text-muted-foreground">
+          <GoogleSignInButton next="/dashboard" />
+
+          <div className="text-center text-sm text-muted-foreground mt-5">
             Déjà un compte ?{' '}
             <Link href="/login" className="text-primary font-bold">
               Se connecter
