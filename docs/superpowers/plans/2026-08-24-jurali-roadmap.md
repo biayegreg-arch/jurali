@@ -61,19 +61,14 @@ Deduplicated:
 | 12 | Télécharger le PDF (`DownloadPDF`, `PDFDownloaded`) | 5. Export PDF/Excel (Premium, P2) | Nothing |
 | 13 | *(missing from the fetch)* signup/OTP, fiche client, paramètres, page Premium | 3.1, 3.6, 3.7, 3.8 | Nothing |
 
-### A.2 — Screens the PRD requires that Banani did NOT return
+### A.2 — Screens the PRD requires that Banani did NOT return (RESOLVED 2026-08-24)
 
-These 4 screens are core to the PRD (3.1, 3.6, 3.7, 3.8) but weren't in the
-selection you pulled:
-- **3.1 Bienvenue / Inscription** (téléphone + code SMS)
-- **3.6 Fiche client** (historique complet, solde, actions rapides) — this
-  is arguably the single most-used screen after the dashboard
-- **3.7 Paramètres / Mon compte**
-- **3.8 Page d'abonnement Premium**
-
-Either they don't exist yet in the Banani flow, or they exist but weren't
-selected. **Action before Phase 4/6/7 below: go select them in Banani and
-re-run the import.**
+~~These 4 screens are core to the PRD (3.1, 3.6, 3.7, 3.8) but weren't in the
+selection you pulled~~ — a second Banani batch (8 screens: `Inscription`,
+`FicheClient`, `Parametres`, `PagePremium` + 4 desktop variants of
+already-covered screens) closed this gap. See A.7 below — closing this gap
+opened a bigger one: the actual designs contradict several PRD statements,
+most importantly auth (A.5 is now **reopened**, not resolved).
 
 ### A.3 — Banani screens that go BEYOND the PRD's stated V1 scope
 
@@ -108,7 +103,7 @@ none of them are usable as-is for Jurali's actual feature set. This is
 expected (the starter is domain-agnostic by design) but means Part B below
 is 100% new code, not adaptation.
 
-### A.5 — The one real architectural collision: auth
+### A.5 — The one real architectural collision: auth (REOPENED 2026-08-24 — see A.7)
 
 - **PRD** (3.1, US-08): phone number + SMS OTP code, **no password, no
   email**, session persists indefinitely.
@@ -117,9 +112,19 @@ is 100% new code, not adaptation.
   required, signup is email+password with an 8-char verification code sent
   presumably via email (Resend), refresh/access JWT pair, CSRF, the whole
   enumeration-resistant flow.
+- **Banani's actual `Inscription.jsx` design** (A.7): neither of the above.
+  A classic form — Nom complet, Téléphone (`+221`, labelled "utilisé pour
+  les rappels WhatsApp", i.e. NOT the login credential), Nom de la boutique,
+  **Mot de passe** (masked `••••••••`), terms checkbox, "Créer mon compte",
+  "Déjà un compte ? Se connecter". `Parametres.jsx`'s Sécurité section also
+  has a "Mot de passe — dernière modification il y a 3 mois" row. The
+  designer built password auth with phone as a profile/contact field, not
+  as the OTP-verified login identifier the PRD's prose describes.
 
-This can't be silently reconciled — it's a product decision. See "Decision
-needed" below before Phase 6 is planned in detail.
+Phase 0's "option (c), Africa's Talking OTP" decision was made from the PRD
+text alone, before this screen existed in the fetched set. It's now
+contradicted by the actual design. **Re-decide before Phase 6 starts** —
+see the amendment decision below.
 
 ### A.6 — Design tokens to adopt (from Banani's `sharedFiles`)
 
@@ -150,6 +155,35 @@ translation passthrough — both need real implementations in the codebase
 (`lucide-react` + a trivial identity `t()` since V1 is French-only, per
 CLAUDE.md's "don't build unneeded abstraction").
 
+### A.7 — Amendment (2026-08-24, second Banani batch: 8 screens)
+
+You selected `Inscription`, `FicheClient`, `Parametres`, `PagePremium` (the
+4 screens A.2 flagged as missing) plus 4 desktop variants of already-covered
+screens (`DashboardDesktopWithMonthPicker`, `DebtorListDesktop`,
+`NewDebtDesktop`, `PaymentReceivedDesktop`). This closes A.2, but the actual
+content diverges from the PRD in more places than just auth:
+
+| Design element | Where | PRD says | Divergence |
+|---|---|---|---|
+| Password field | `Inscription`, `Parametres` | No password (3.1, US-08) | See A.5 — needs a decision |
+| **Automatic** WhatsApp reminder, 7 days after debt creation, toggle right on the Nouvelle-dette form + a recurring "Prochain rappel" card on the fiche client | `NewDebtDesktop`, `FicheClient`, `Parametres` ("Rappels WhatsApp automatiques — Envoyer un rappel 7 jours après la dette") | US-07: **manual**, one button, one client, boutiquier-triggered | Phase 0's "PRD-thin reminders" decision assumed manual-only; this is a scheduled/cron feature (closer to Phase 9's scope than Phase 8's) |
+| `address` field on client (`Médina, Dakar`), "Cliente depuis jan. 2023", "Fidèle" loyalty badge | `FicheClient` | Not in PRD; `Client` model (Phase 1) has no address | Small schema addition if wanted — not blocking, can default to null/hidden |
+| Per-debt `Statut` column (Payée / En retard) in the history table, "Marquer les dettes en retard comme payées" bulk action | `FicheClient`, `DebtorListDesktop` | PRD only describes an aggregate solde, no per-debt status | Phase 1's FIFO balance model (global aging) still answers "is this client overdue"; a per-row Payée/En retard status is a display derivation (is this specific debt older than the client's paid-off point in FIFO order), not a new stored column — no schema change needed, just a Phase 4 display computation |
+| Printable/shareable receipt (Reçu de collecte, Imprimer/PDF/Partager) | `PaymentReceivedDesktop` | 3.4 only says "voir le solde restant mis à jour" | Confirms A.3's flagged receipt-sharing surface is core UX in the actual design, not a Banani-only embellishment — worth reconsidering for Phase 4/8 scope, still recommend starting without it and adding once Phase 4 ships |
+| "Statistiques" as a persistent nav item on every screen | all 8 | PRD §8: "Rapports et analytics avancés" explicitly HORS SCOPE | No screen designed for it yet (just a nav link) — leave as a disabled/placeholder nav entry until specced, don't build a stats backend speculatively |
+| Premium: annual price (25 000 FCFA/an, "économise 2 mois"), 14-day free trial ("sans carte bancaire"), "Statistiques avancées" as a Premium perk | `PagePremium` | PRD §6: monthly only (2 500 FCFA/mois); §9 mentions "premier mois gratuit aux 50 premiers" as a manual growth tactic, not a systematic trial | Phase 7 should decide: ship monthly-only first (matches PRD's revenue model exactly) and treat annual+trial as a fast-follow, since a trial changes the Subscription state machine (needs a TRIALING status) |
+| Push notifications toggle, language switcher (Français only, but the row exists) | `Parametres` | PRD §8: both explicitly HORS SCOPE V1 | Phase 5 (Paramètres screen) should omit these controls or render them disabled, not wire them to real functionality |
+| Quick-amount buttons (500 / 1 000 / 10 000 / 25 000 FCFA) on Nouvelle dette | `NewDebtDesktop` | Not in PRD, pure UX nicety | Cheap to add in Phase 4, no backend impact |
+
+None of this blocks Phase 1–4 (already built or unambiguous). It reshapes
+Phase 5 (Paramètres now has a concrete design to reproduce, minus the
+hors-scope toggles), Phase 6 (auth strategy — needs re-deciding), Phase 7
+(Premium pricing — recommend monthly-only V1, annual+trial as fast-follow),
+and Phase 8 (reminder scope — recommend keeping manual-only for V1 even
+though the design shows automatic; scheduled reminders need a cron route
+and a "send WhatsApp automatically without the shopkeeper's explicit
+each-time consent" product/legal call that's bigger than this session).
+
 ---
 
 ## Part B — Phased roadmap
@@ -157,17 +191,28 @@ CLAUDE.md's "don't build unneeded abstraction").
 Each phase produces working, demoable software. Order matters: B1 unblocks
 everything else.
 
-### Phase 0 — Decisions (RESOLVED 2026-08-24)
+### Phase 0 — Decisions
 
-1. **Auth strategy: option (c)** — parallel `/api/auth/phone/*` flow,
-   reuses `auth.ts`'s exported JWT/cookie primitives without editing the
-   protected file. SMS provider: **Africa's Talking** (user-specified
-   2026-08-24 — good Senegal/UEMOA coverage, cheaper than Twilio for local
-   SMS).
-2. **Reminder scope: PRD-thin version.** Phase 8 ships US-07 exactly (one
-   button, one message, `wa.me` link, `lastReminderSentAt`). Banani's
-   bulk/SMS/response-tracking extras stay in Phase 9 backlog, not built
-   unless requested after Phase 8 ships.
+1. **Auth strategy: (c-revised) phone + password — RE-DECIDED 2026-08-24.**
+   Follows `Inscription.jsx` (A.5/A.7) over the PRD's OTP prose: `User.email`
+   becomes optional, add `User.phone String? @unique`, `passwordHash` stays
+   required. Reuses `auth.ts`'s existing bcrypt hashing and JWT issuance —
+   just a different unique lookup field, no new SMS provider needed for
+   login. Africa's Talking (user-specified 2026-08-24) is reserved for a
+   possible Phase 9 SMS reminder channel, not used in Phase 6.
+2. **Reminder scope: PRD-thin version — RECONFIRMED 2026-08-24 despite
+   `NewDebtDesktop`/`FicheClient`/`Parametres` showing automatic 7-day
+   WhatsApp reminders.** Automatic reminders need a cron route (new
+   surface), a per-client "reminder enabled + delay" setting, and a
+   product/legal call about sending WhatsApp messages without the
+   shopkeeper re-confirming each time — bigger than a V1 slice. Phase 8
+   still ships US-07's manual button; automatic scheduling moves to Phase 9
+   backlog alongside the other Banani extras (A.3).
+3. **Premium pricing: monthly-only V1 — RECONFIRMED 2026-08-24** despite
+   `PagePremium.jsx` showing monthly + annual + a 14-day no-card trial
+   (A.7). Matches PRD §6's revenue model exactly; annual pricing and a
+   free trial (needs a `TRIALING` Subscription status) become fast-follows
+   once monthly billing is proven in Phase 7.
 
 ### Phase 1 — Domain model (foundation, no open decisions)
 
@@ -313,42 +358,40 @@ that skill tracks progress per-screen across sessions.
 - [ ] Screen 5 (Paiement reçu) built
 - [ ] Commit per screen
 
-### Phase 5 — Missing PRD screens Banani didn't return
+### Phase 5 — Missing PRD screens (UNBLOCKED 2026-08-24)
 
-**Blocked on:** you selecting these in Banani and re-running
-`banani_get_selected_designs`.
-- 3.1 Bienvenue/Inscription (shape depends on Phase 0's auth decision)
-- 3.6 Fiche client (`frontend/src/app/clients/[id]/page.tsx`) — highest
-  priority of the 4, it's used constantly per PRD US-04
-- 3.7 Paramètres
-- 3.8 Page Premium (shape depends on Phase 7 below)
+**No longer blocked** — the second Banani batch delivered all 4:
+- 3.1 Bienvenue/Inscription (`Inscription.jsx`) — shape now known, see A.5/A.7;
+  exact form fields depend on Phase 0's auth re-decision
+- 3.6 Fiche client (`FicheClient.jsx` → `frontend/src/app/clients/[id]/page.tsx`)
+  — highest priority of the 4, used constantly per PRD US-04. Ready to build
+  against Phase 2's `GET /api/clients/[id]` as-is; the "Prochain rappel"
+  auto-reminder card and per-debt Statut filter chips (A.7) render but stay
+  inert/manual until Phase 8/9 backs them
+- 3.7 Paramètres (`Parametres.jsx`) — build the Profil/Sécurité/Données/
+  Langue sections; omit or disable the push-notifications toggle and the
+  language switcher (A.7 — both HORS SCOPE per PRD §8)
+- 3.8 Page Premium (`PagePremium.jsx`) — shape depends on Phase 7's pricing
+  decision (monthly-only V1 vs. the design's monthly+annual+trial)
 
-### Phase 6 — Auth: phone + SMS OTP
+### Phase 6 — Auth: phone + password (DECIDED 2026-08-24, see Phase 0.1)
 
-**Decided (Phase 0): option (c).** Parallel `/api/auth/phone/*` flow,
-reuses `auth.ts`'s exported primitives (JWT issuance, cookie helpers)
-without touching the protected file itself. Backed by a new `PhoneOtp`
-table + **Africa's Talking SMS** (user-specified 2026-08-24).
+Follows `Inscription.jsx` over the PRD's OTP prose (A.5/A.7). No SMS
+provider needed — Africa's Talking stays reserved for a possible Phase 9
+SMS reminder channel, not used here.
 
-**Files (for the detailed writing-plans pass when this phase starts):**
+**Files:**
 - Modify: `frontend/prisma/schema.prisma` — `User.email` becomes optional
-  (`String? @unique`), add `User.phone String? @unique`; add `PhoneOtp`
-  model (`phone`, `codeHash`, `expiresAt`, `attempts`)
-- Create: `frontend/src/lib/server/sms/africastalking.ts` — thin provider
-  wrapper (Africa's Talking REST API, `POST /version1/messaging`), modeled
-  on how `oauth/google.ts` is isolated as a single-responsibility provider
-  file; own `sms/` directory since this isn't OAuth
-- Create: `frontend/src/app/api/auth/phone/start/route.ts` — POST
-  `{phone}`, rate-limited like signup, sends OTP via Africa's Talking,
-  always 200 (no phone enumeration, same principle as email signup)
-- Create: `frontend/src/app/api/auth/phone/verify/route.ts` — POST
-  `{phone, code}`, verifies against `PhoneOtp`, find-or-create `User` by
-  phone, issues the same JWT/CSRF cookies `auth.ts` issues today (import
-  its exported cookie-setting helpers — do not reimplement JWT signing)
-- Env: `AFRICASTALKING_API_KEY`, `AFRICASTALKING_USERNAME`,
-  `AFRICASTALKING_SENDER_ID` (optional, shortcode/alphanumeric sender)
-  added to `.env.example`, inert-if-absent per the starter's
-  optional-provider convention
+  (`String? @unique`), add `User.phone String? @unique`; `passwordHash`
+  stays required for this flow (already exists on `User`)
+- Create: `frontend/src/app/api/auth/phone-signup/route.ts` — POST
+  `{name, phone, shopName, password}`, hashes password the same way
+  email signup does (reuse `auth.ts`'s exported bcrypt helper, don't
+  reimplement), find-or-fail on existing phone, issues the same
+  JWT/CSRF cookies `auth.ts` issues today
+- Create: `frontend/src/app/api/auth/phone-login/route.ts` — POST
+  `{phone, password}`, same enumeration-resistant timing floor pattern
+  as the existing email login route
 
 ### Phase 7 — Abonnement Premium (10-client gate → payment)
 
@@ -356,6 +399,12 @@ table + **Africa's Talking SMS** (user-specified 2026-08-24).
 checkout. Bictorys is **already wired** in this starter
 (`frontend/src/lib/server/payments/bictorys.ts`) — this phase is mostly
 plumbing, not new integration.
+
+**Pricing: monthly-only V1 (DECIDED 2026-08-24, see Phase 0.3).**
+`PagePremium.jsx` shows monthly (2 500 FCFA), annual (25 000 FCFA), and a
+14-day no-card free trial (A.7) — annual + trial deferred as fast-follows
+once monthly billing is proven; the `Subscription` model below ships
+without a `TRIALING` status for now.
 
 **Files:**
 - Modify: `frontend/prisma/schema.prisma` — add `Subscription` model
@@ -402,5 +451,12 @@ these they actually ask for.
 
 ## Status
 
-Phase 0 decisions resolved 2026-08-24 (see Phase 0 above). Phase 1 is
-ready to execute now — no open questions block it.
+- Phase 1 (domain model) — **done**, committed `c7264ba`.
+- Phase 2 (`/api/clients` + `/api/transactions`) — **done**, committed `17b0ea4`.
+- Phase 3 (dashboard endpoint) — next up, unblocked, no open decisions.
+- Phase 0.1 (auth strategy) — **re-decided 2026-08-24**: phone + password
+  (c-revised), following `Inscription.jsx` over the PRD's OTP prose.
+- Phase 5 (missing PRD screens) — **unblocked 2026-08-24**, all 4 screens
+  now in hand.
+- Phase 7 pricing — **decided 2026-08-24**: monthly-only V1, annual +
+  trial deferred.
