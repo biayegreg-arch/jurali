@@ -2,10 +2,12 @@
 
 // Fiche client — PRD 3.6 / US-04. Reproduces Banani's FicheClient.jsx; see
 // .planning/banani/fiche-client.md for translation notes and decisions.
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
+import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { DebtHistoryRow } from '@/components/jurali/DebtHistoryRow';
 import { formatDateFr } from '@/lib/jurali-format';
@@ -25,15 +27,26 @@ interface ClientDetail {
   firstName: string;
   phone: string | null;
   createdAt: string;
+  lastReminderSentAt: string | null;
   balanceFcfa: number;
   isOverdue: boolean;
   transactions: ClientTransaction[];
 }
 
+interface SubscriptionData {
+  isActive: boolean;
+}
+
 export default function ClientFichePage() {
   const user = useUser();
   const params = useParams<{ id: string }>();
-  const { data: client, loading, error } = useApi<ClientDetail>(`/api/clients/${params.id}`);
+  const {
+    data: client,
+    loading,
+    error,
+    refresh,
+  } = useApi<ClientDetail>(`/api/clients/${params.id}`);
+  const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
 
   if (!user) return null;
 
@@ -66,13 +79,25 @@ export default function ClientFichePage() {
           </Link>
         </div>
       ) : (
-        <ClientFicheBody client={client} />
+        <ClientFicheBody
+          client={client}
+          isPremium={subscription?.isActive ?? false}
+          onReminderSent={refresh}
+        />
       )}
     </div>
   );
 }
 
-function ClientFicheBody({ client }: { client: ClientDetail }) {
+function ClientFicheBody({
+  client,
+  isPremium,
+  onReminderSent,
+}: {
+  client: ClientDetail;
+  isPremium: boolean;
+  onReminderSent: () => void;
+}) {
   const debtStatuses = computeDebtStatuses(
     client.transactions
       .filter((t): t is ClientTransaction & { type: 'DEBT' } => t.type === 'DEBT')
@@ -140,22 +165,11 @@ function ClientFicheBody({ client }: { client: ClientDetail }) {
         />
       </div>
 
-      {/* Reminder card — Phase 8 not built yet, shown inert */}
-      <div className="bg-secondary border border-border rounded-xl px-4 py-4">
-        <div className="flex items-center gap-2 mb-1">
-          <Icon i="clock" size={16} className="text-primary" />
-          <span className="font-headings font-bold text-sm text-foreground">Rappel manuel</span>
-        </div>
-        <div className="text-sm text-muted-foreground">Disponible bientôt</div>
-        <button
-          type="button"
-          disabled
-          className="mt-3 w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-headings font-bold text-xs py-2.5 rounded-lg opacity-50 cursor-not-allowed"
-        >
-          <Icon i="message-circle" size={14} />
-          Envoyer WhatsApp
-        </button>
-      </div>
+      {/* Reminder card — US-07: button only shown when there's something to
+          remind about (a phone on file + an outstanding balance). */}
+      {client.phone && client.balanceFcfa > 0 && (
+        <ReminderCard client={client} isPremium={isPremium} onReminderSent={onReminderSent} />
+      )}
 
       {/* History */}
       <div className="flex flex-col gap-2">
@@ -189,6 +203,88 @@ function ClientFicheBody({ client }: { client: ClientDetail }) {
         <Icon i="plus" size={20} />
         Ajouter une dette
       </Link>
+    </div>
+  );
+}
+
+const REMINDER_ERROR_MESSAGES: Record<string, string> = {
+  PREMIUM_REQUIRED: 'Passe à Premium pour envoyer des rappels WhatsApp.',
+  CLIENT_NO_PHONE: 'Ce client n’a pas de numéro de téléphone enregistré.',
+  NOTHING_OWED: 'Ce client n’a plus de solde à régler.',
+};
+
+function ReminderCard({
+  client,
+  isPremium,
+  onReminderSent,
+}: {
+  client: ClientDetail;
+  isPremium: boolean;
+  onReminderSent: () => void;
+}) {
+  const [sending, setSending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!isPremium) {
+    return (
+      <Link
+        href="/premium"
+        className="bg-secondary border border-border rounded-xl px-4 py-4 flex items-center justify-between gap-3"
+      >
+        <div className="flex items-center gap-2 min-w-0">
+          <Icon i="message-circle" size={16} className="text-muted-foreground flex-shrink-0" />
+          <span className="text-sm text-muted-foreground truncate">
+            Rappel WhatsApp — réservé à Premium
+          </span>
+        </div>
+        <span className="bg-accent text-accent-foreground font-headings font-bold text-xs px-2.5 py-1 rounded-lg flex-shrink-0">
+          Premium
+        </span>
+      </Link>
+    );
+  }
+
+  async function sendReminder() {
+    setSending(true);
+    setError(null);
+    try {
+      const res = await api<{ url: string }>(`/api/clients/${client.id}/remind`, {
+        method: 'POST',
+      });
+      window.open(res.url, '_blank', 'noopener,noreferrer');
+      onReminderSent();
+    } catch (err) {
+      setError(
+        err instanceof ApiError
+          ? (REMINDER_ERROR_MESSAGES[err.code] ?? err.message)
+          : 'Erreur réseau. Réessaie.',
+      );
+    } finally {
+      setSending(false);
+    }
+  }
+
+  return (
+    <div className="bg-secondary border border-border rounded-xl px-4 py-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Icon i="clock" size={16} className="text-primary" />
+        <span className="font-headings font-bold text-sm text-foreground">Rappel manuel</span>
+      </div>
+      <div className="text-sm text-muted-foreground">
+        {client.lastReminderSentAt
+          ? `Dernier rappel envoyé le ${formatDateFr(client.lastReminderSentAt)}`
+          : 'Aucun rappel envoyé pour l’instant'}
+      </div>
+      {error && <div className="text-sm text-danger mt-2">{error}</div>}
+      <button
+        type="button"
+        onClick={sendReminder}
+        disabled={sending}
+        className="mt-3 w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground font-headings font-bold text-xs py-2.5 rounded-lg disabled:opacity-60"
+      >
+        <Icon i="message-circle" size={14} />
+        {sending ? 'Ouverture…' : 'Envoyer WhatsApp'}
+      </button>
     </div>
   );
 }

@@ -64,6 +64,7 @@ describe('GET /api/clients/[id]', () => {
       firstName: 'Fatou',
       phone: '+221771234567',
       createdAt: older,
+      lastReminderSentAt: null,
       transactions: [
         { id: 'tx-2', type: 'DEBT', amountFcfa: 5_000, note: null, createdAt: newer },
         { id: 'tx-1', type: 'DEBT', amountFcfa: 12_500, note: 'Riz 5kg', createdAt: older },
@@ -80,5 +81,23 @@ describe('GET /api/clients/[id]', () => {
     expect(json.balanceFcfa).toBe(17_500);
     // most recent first, as returned by the orderBy: createdAt desc query
     expect(json.transactions.map((t) => t.id)).toEqual(['tx-2', 'tx-1']);
+  });
+
+  it('returns lastReminderSentAt when a Phase 8 reminder was sent', async () => {
+    const sentAt = new Date('2026-08-24T09:00:00Z');
+    prismaMock.client.findUnique.mockResolvedValue({
+      id: 'client-1',
+      ownerId: 'user-1',
+      firstName: 'Fatou',
+      phone: '+221771234567',
+      createdAt: new Date('2026-08-01T10:00:00Z'),
+      lastReminderSentAt: sentAt,
+      transactions: [],
+    } as never);
+
+    const { req, routeCtx } = makeGet('client-1');
+    const res = await GET(req, routeCtx);
+    const json = (await res.json()) as { lastReminderSentAt: string };
+    expect(json.lastReminderSentAt).toBe(sentAt.toISOString());
   });
 });

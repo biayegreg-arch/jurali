@@ -41,6 +41,12 @@ All French, inline (matches Phase 4 — no i18n layer exists in this project; Ba
 - **"Marquer les dettes en retard comme payées"** — OMITTED. No clean backend mapping (would conflate "payer une dette précise" with the existing single-amount `POST /api/transactions PAYMENT` flow); the real "Paiement reçu" flow (Phase 4, `/payments/new`) is the correct entry point for recording a payment. Left out of this screen entirely rather than wired to something semantically confusing.
 - **"Exporter PDF"** — OMITTED, Phase 9 backlog (already documented in roadmap A.3).
 - **"Envoyer WhatsApp" / "Envoyer maintenant" (reminder card)** — rendered but visually disabled (`opacity-50 cursor-not-allowed`, no onClick), Phase 8 not built yet. The "Prochain rappel" auto-schedule line is dropped (no real schedule exists) — replaced with a static "Rappel manuel — disponible bientôt" line.
+  **UPDATE 2026-08-24 (Phase 8, see `phase8-reminder.md`):** now fully
+  functional — real `POST /api/clients/[id]/remind` call, real `wa.me`
+  redirect, real `lastReminderSentAt` indicator. Only shown when the
+  client has a phone + an outstanding balance (US-07); grayed to a
+  real `/premium` upsell link for non-Premium users instead of the
+  earlier fully-inert placeholder.
 - **Per-debt Statut (Payée/En retard)** — BUILT for real via `computeDebtStatuses` (FIFO derivation over existing transaction data, no schema change) — this is genuine, useful data, not a Banani-only embellishment, and the roadmap already pre-approved this exact approach (A.7).
 - **"Modifier" (edit client identity)** — OMITTED, no `PATCH /api/clients/[id]` endpoint exists. Not built this phase (would be new backend surface, out of the "Fiche client + Paramètres, no new backend" scope the user picked).
 - **`UserAvatar` (Banani shared component)** — not pulled in; Phase 4 already established initials-circle avatars (`DebtorRow` pattern) as the project's actual avatar treatment — kept consistent instead of introducing a second avatar style.

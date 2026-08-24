@@ -359,14 +359,15 @@ model Withdrawal {
 // See src/lib/server/jurali/balance.ts.
 // ───────────────────────────────────────────────────────────────────────
 model Client {
-  id           String        @id @default(cuid())
-  ownerId      String
-  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-  firstName    String
-  phone        String?
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-  transactions Transaction[]
+  id                 String        @id @default(cuid())
+  ownerId            String
+  owner              User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  firstName          String
+  phone              String?
+  lastReminderSentAt DateTime?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  transactions       Transaction[]
 
   @@index([ownerId])
   @@index([ownerId, firstName])

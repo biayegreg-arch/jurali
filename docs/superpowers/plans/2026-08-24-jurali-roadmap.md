@@ -556,3 +556,40 @@ these they actually ask for.
     confirmed `/` renders the landing page with working CTAs/anchors and
     no dead links, `/dashboard` still renders the dashboard shell, and
     both `/login`/`/signup` wordmarks resolve to `<a href="/">`.
+- Phase 8 (Rappel WhatsApp, US-07 thin PRD version) — **done 2026-08-24**,
+  uncommitted (pending user "commit"). See `.planning/banani/
+  phase8-reminder.md` for the full US-07 acceptance-criteria mapping.
+  - `Client.lastReminderSentAt` added (migration
+    `20260824194357_jurali_reminder`). `lib/server/jurali/reminder.ts`
+    (TDD, 7 tests) builds the pre-written French message
+    (prénom + montant + nom de la boutique) and the `wa.me` deep link in
+    one place.
+  - `POST /api/clients/[id]/remind` — Premium-gated
+    (`isSubscriptionActive`, 403 `PREMIUM_REQUIRED`), 404
+    `CLIENT_NOT_FOUND` (existence-leak-safe like `GET /api/clients/[id]`),
+    409 `CLIENT_NO_PHONE` / `NOTHING_OWED` for the other two
+    button-visibility preconditions from US-07. Stamps
+    `lastReminderSentAt` optimistically at link-generation time (no
+    webhook/Business API exists to confirm actual WhatsApp delivery —
+    out of scope per A.3).
+  - **"Peut visualiser le message avant envoi" resolved without new UI:**
+    a `wa.me/<phone>?text=<msg>` link pre-fills WhatsApp's input box but
+    doesn't send — the boutiquier still taps send inside WhatsApp. No
+    separate preview screen was needed.
+  - Frontend: the fiche-client reminder card (placed inert in Phase 5)
+    is now wired for real — hidden entirely unless the client has both a
+    phone and balance > 0; grayed to a real `/premium` upsell link for
+    free-tier users (not a dead disabled button); functional
+    "Envoyer WhatsApp" button for Premium users that opens the `wa.me`
+    URL and refreshes the fiche to show the updated "dernier rappel
+    envoyé le …" indicator.
+  - TDD throughout (7 `reminder.ts` tests, 10 new `/remind` route tests,
+    1 new `GET /api/clients/[id]` test for the added field — 680 total,
+    same 1 pre-existing bcrypt-timeout flake as Phase 7's run, confirmed
+    unrelated). Verified end-to-end against the dev DB: signup → client
+    w/ phone + debt → 403 `PREMIUM_REQUIRED` → Subscription activated
+    directly in DB (Bictorys unconfigured in dev, same technique as
+    Phase 7) → 409 `CLIENT_NO_PHONE` on a phone-less client → 200 with a
+    correctly-interpolated `wa.me` URL + stamped timestamp, confirmed via
+    a follow-up GET → 409 `NOTHING_OWED` after an offsetting payment.
+    Test data cleaned up, dev server stopped.

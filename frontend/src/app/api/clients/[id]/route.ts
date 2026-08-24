@@ -31,6 +31,7 @@ export async function GET(
         firstName: true,
         phone: true,
         createdAt: true,
+        lastReminderSentAt: true,
         transactions: {
           select: { id: true, type: true, amountFcfa: true, note: true, createdAt: true },
           orderBy: { createdAt: 'desc' },
@@ -60,6 +61,7 @@ export async function GET(
         firstName: client.firstName,
         phone: client.phone,
         createdAt: client.createdAt,
+        lastReminderSentAt: client.lastReminderSentAt,
         balanceFcfa,
         isOverdue: overdue,
         transactions: client.transactions,

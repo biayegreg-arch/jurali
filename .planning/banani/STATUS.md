@@ -11,7 +11,8 @@ Last updated: 2026-08-24
 - [x] `parametres` — `frontend/src/app/settings/page.tsx` (restyle, same route) — plan: `parametres.md` — commit: `eab4b15`
 - [x] `inscription` — `frontend/src/app/signup/page.tsx` + companion `frontend/src/app/login/page.tsx` (no Banani source, built fresh) — plan: `inscription.md` — commit: `098bcbc`
 - [x] `page-premium` — `frontend/src/app/premium/page.tsx` + companions `frontend/src/app/premium/{success,failed}/page.tsx` (no Banani source, built fresh) — plan: `page-premium.md` — commit: `75dc660`
-- [x] `landing-page` — `frontend/src/app/page.tsx` (new home; Dashboard moved to `/dashboard`) — plan: `landing-page.md` — commit: pending
+- [x] `landing-page` — `frontend/src/app/page.tsx` (new home; Dashboard moved to `/dashboard`) — plan: `landing-page.md` — commit: `87f2bb3`
+- [x] `phase8-reminder` — no new Banani screen; wires up the reminder card already placed on `fiche-client` (Phase 5) — `frontend/src/app/api/clients/[id]/remind/route.ts` + `clients/[id]/page.tsx` — plan: `phase8-reminder.md` — commit: pending
 
 ## In progress
 (none)
