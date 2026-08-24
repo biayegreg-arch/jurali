@@ -55,7 +55,7 @@ export default function SignupPage() {
         },
       });
       await refresh();
-      router.push('/');
+      router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
         setError(ERROR_MESSAGES[err.code] ?? err.message);
@@ -72,7 +72,9 @@ export default function SignupPage() {
       {/* Brand panel — desktop only (lg+), matches Banani's 560px left panel */}
       <div className="hidden lg:flex bg-primary flex-col justify-between px-12 py-12 flex-shrink-0 w-[560px]">
         <div>
-          <div className="font-headings font-bold text-3xl text-primary-foreground">Jurali</div>
+          <Link href="/" className="font-headings font-bold text-3xl text-primary-foreground">
+            Jurali
+          </Link>
           <div className="text-sm text-secondary mt-1">Gestion des dettes simplifiée</div>
         </div>
 
@@ -142,7 +144,9 @@ export default function SignupPage() {
         <div className="w-full max-w-[440px]">
           {/* Mobile-only compact wordmark (desktop shows the brand panel instead) */}
           <div className="mb-6 lg:hidden">
-            <div className="font-headings font-bold text-2xl text-primary">Jurali</div>
+            <Link href="/" className="font-headings font-bold text-2xl text-primary">
+              Jurali
+            </Link>
             <div className="text-xs text-muted-foreground">Gestion des dettes simplifiée</div>
           </div>
 

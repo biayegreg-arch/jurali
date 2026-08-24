@@ -116,7 +116,7 @@ export default function NewPaymentPage() {
             Nouveau paiement
           </button>
           <Link
-            href="/"
+            href="/dashboard"
             className="flex items-center justify-center gap-2 bg-primary text-primary-foreground font-headings font-bold text-base py-4 rounded-xl"
           >
             Retour au dashboard
@@ -133,7 +133,7 @@ export default function NewPaymentPage() {
       <div className="bg-primary px-4 pt-10 pb-6">
         <div className="flex items-center gap-3 mb-2">
           <Link
-            href="/"
+            href="/dashboard"
             className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
           >
             <Icon i="chevron-left" size={20} className="text-primary-foreground" />
@@ -177,7 +177,7 @@ export default function NewPaymentPage() {
             {submitting ? 'Enregistrement…' : 'Enregistrer le paiement'}
           </button>
           <Link
-            href="/"
+            href="/dashboard"
             className="flex items-center justify-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-base py-3 rounded-xl"
           >
             <Icon i="x" size={18} />

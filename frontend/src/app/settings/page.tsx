@@ -89,7 +89,7 @@ export default function SettingsPage() {
       <div className="bg-primary px-4 pt-10 pb-6">
         <div className="flex items-center gap-3">
           <Link
-            href="/"
+            href="/dashboard"
             className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
           >
             <Icon i="chevron-left" size={20} className="text-primary-foreground" />

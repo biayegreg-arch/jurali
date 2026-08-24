@@ -30,7 +30,7 @@ export default function PremiumSuccessPage() {
         >
           Voir mon abonnement
         </Link>
-        <Link href="/" className="text-sm text-muted-foreground">
+        <Link href="/dashboard" className="text-sm text-muted-foreground">
           Retour au dashboard
         </Link>
       </div>

@@ -41,7 +41,7 @@ export default function LoginPage() {
         body: { phone: `+221${localPhone.replace(/\s/g, '')}`, password },
       });
       await refresh();
-      router.push('/');
+      router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
         setError(ERROR_MESSAGES[err.code] ?? err.message);
@@ -57,7 +57,12 @@ export default function LoginPage() {
     <div className="min-h-dvh bg-background font-body flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-[440px]">
         <div className="mb-8">
-          <div className="font-headings font-bold text-2xl text-primary mb-1">Jurali</div>
+          <Link
+            href="/"
+            className="font-headings font-bold text-2xl text-primary mb-1 inline-block"
+          >
+            Jurali
+          </Link>
           <div className="font-headings font-bold text-2xl text-foreground mb-2">Se connecter</div>
           <div className="text-sm text-muted-foreground">
             Retrouve tes clients et leurs dettes en un instant

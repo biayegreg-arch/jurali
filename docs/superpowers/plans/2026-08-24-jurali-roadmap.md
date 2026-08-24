@@ -483,8 +483,8 @@ these they actually ask for.
     A.5/A.7 analysis of `Inscription.jsx`.
   - phone-login skips the `emailVerifiedAt` check entirely (no email is
     ever collected for phone accounts, so there's nothing to verify).
-- Phase 7 (Premium subscription) — **done 2026-08-24**, uncommitted
-  (pending user "commit"). Pricing **decided 2026-08-24**: monthly-only
+- Phase 7 (Premium subscription) — **done 2026-08-24**, committed
+  `75dc660`. Pricing **decided 2026-08-24**: monthly-only
   V1, annual + trial deferred (dropped from the built `/premium` page
   too — see `.planning/banani/page-premium.md`).
   - `Subscription` model added (`ownerId @unique` — one row reused
@@ -515,3 +515,44 @@ these they actually ask for.
     `BICTORYS_*` is unconfigured in this dev environment) → cap
     bypassed → `ALREADY_SUBSCRIBED` on re-checkout → all 3 `/premium*`
     pages render cleanly.
+- Landing page (before Phase 8, ad hoc per user request 2026-08-24) —
+  **done 2026-08-24**, uncommitted (pending user "commit"). Built from
+  Banani's `LandingPage.jsx` — see `.planning/banani/landing-page.md`.
+  - **Routing decision:** `/` now serves the public landing page instead
+    of the Dashboard; the Dashboard moved to `/dashboard`. Not explicitly
+    spelled out by the user, but implied by their own instruction ("quand
+    je clique le logo de Jurali [depuis /login], il me retourne sur le
+    landing page") — a logo click returning to a marketing page only
+    makes sense if that page is the site's public home. All 8
+    `href="/"` / `router.push('/')` call sites that meant "back to
+    dashboard" were repointed to `/dashboard`; `/auth/error`'s "Accueil"
+    link correctly kept pointing at `/` (an unauthenticated visitor
+    landing there belongs on the marketing page, not a dashboard they
+    can't reach). `/login` and `/signup`'s wordmarks are now
+    `<Link href="/">`, satisfying the user's request.
+  - **Copy fixes** (same bar as Phase 7's `/premium` fixes — trial/annual
+    language contradicts the Phase 0.3 monthly-only decision): hero and
+    pricing CTAs referencing a 14-day trial changed to
+    "Commencer gratuitement"/"Commencer" (true — the free tier has no
+    card requirement); "Annule quand tu veux" dropped (no
+    cancel-subscription endpoint exists anywhere in the app yet — would
+    have been a functional false claim).
+  - **Dead-link cleanup:** nav/footer links with no real destination
+    ("À propos", "Nous contacter", FAQ, Blog, Mentions légales, CGU,
+    Politique de confidentialité — no pages or contact channel exist)
+    were dropped rather than shipped as inert. "Fonctionnalités"/"Tarif"
+    became real in-page anchors; "Voir la démo" repointed to the Product
+    section anchor instead of a nonexistent demo. Footer's dropped
+    Contact/Légal columns replaced with a real "Compte" column
+    (Se connecter/Créer un compte).
+  - Stats band (traction numbers) and testimonials kept as-is — same
+    aspirational-marketing-copy bar already applied to `/premium`'s
+    feature list and testimonials in Phase 7 (no interactive control
+    claims them as functional).
+  - Verified: typecheck/lint/format/build clean; full suite 660/661
+    (1 pre-existing bcrypt-timeout flake in `signup/route.test.ts`,
+    confirmed unrelated — passes clean in isolation, same category as
+    prior phases); functional curl check against a live dev server
+    confirmed `/` renders the landing page with working CTAs/anchors and
+    no dead links, `/dashboard` still renders the dashboard shell, and
+    both `/login`/`/signup` wordmarks resolve to `<a href="/">`.
