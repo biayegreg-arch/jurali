@@ -136,3 +136,91 @@ but does not prove the toggle renders or the PDF actually downloads.
 - [x] Backend verified end-to-end against dev DB
 - [ ] Client-only UI (toggle visuals, PDF download click) — NOT verified,
       no browser automation available; flagged above, not glossed over
+
+## Month-picker (Phase 9 remainder, 2026-08-25)
+
+Remaining Phase 9 backlog item picked by the user via AskUserQuestion:
+"Month-picker d'abord" (built standalone, ahead of the bulk-select/SMS/
+response-tracking bundle, which the user deliberately deferred to decide
+on separately). Source: Banani's `MonthPickerView` — explicitly a UI
+affordance for browsing history, not a PRD requirement (roadmap A.3/A.7).
+
+### Scope decision
+Dashboard-only: the picker scopes the 2 "Historique mensuel" stat cards
+(Récupéré / Nouvelles dettes) it introduces. The existing debtor-row list
+above it is deliberately **not** month-scoped — it stays "recent activity
+across all time," matching `debtor-list.md`'s own precedent of keeping
+new UI additions thin rather than restructuring an existing list's
+semantics. Not asked about — same "one obviously-correct scope" bar used
+throughout this session.
+
+### Backend — `GET /api/dashboard`, additive only
+- `lib/server/jurali/month-range.ts` (new, no `'server-only'` marker —
+  deliberately client-safe since `MonthPicker.tsx` also imports
+  `shiftMonth`/`formatMonthParam`/`formatMonthLabelFr` from it directly):
+  `parseMonthParam` (`YYYY-MM` → `{year, month}`, 0-indexed internally to
+  match `Date`, defaults to current month on missing/malformed/
+  out-of-range input — never 400s), `monthBounds` ([start, end) pair),
+  `formatMonthParam`, `shiftMonth` (year-rollover-safe both directions),
+  `formatMonthLabelFr` (capitalized French "Août 2026" label via
+  `Intl.DateTimeFormat('fr-FR', …)`). TDD, 12 tests.
+- Route extended additively: reads `?month=`, adds 3 new response fields
+  (`selectedMonth`, `selectedMonthRecoveredFcfa`,
+  `selectedMonthNewDebtsFcfa`, `selectedMonthTransactionCount`) scoped to
+  `[monthStart, monthEnd)`. The pre-existing unbounded `recoveredThisMonthFcfa`
+  field is left untouched for backward compatibility — nothing else
+  consumed it, but there was no reason to churn it in the same change as
+  an additive feature. 3 new tests (default-to-current-month,
+  scoped-to-requested-month with `toHaveBeenNthCalledWith` assertions on
+  the aggregate calls, malformed-param-falls-back); 8/8 passing.
+
+### Frontend
+- `components/jurali/MonthPicker.tsx` (new) — prev/next chevron nav +
+  centered French month label; "next" disables once back at the current
+  month (`month >= currentParam` string-lexicographic compare on
+  zero-padded `YYYY-MM`, which works correctly for this comparison).
+- `dashboard/page.tsx` — `useState` holds the selected month
+  (`YYYY-MM`, initialized to current month), feeds `/api/dashboard?month=`
+  via the existing `useApi` hook; new "Historique mensuel" section
+  inserted between the debtor list and the 2 action buttons, with the
+  `MonthPicker` plus 2 stat cards. `DashboardData` interface updated to
+  match the route's new field names.
+
+### Testing
+- `month-range.test.ts` (new, 12 tests): `parseMonthParam` default/valid/
+  malformed/out-of-range, `monthBounds` mid-year + December rollover,
+  `formatMonthParam`, `shiftMonth` forward/backward + both year-rollover
+  directions, `formatMonthLabelFr` August/January.
+- `dashboard/route.test.ts`: +3 tests (8 total, all passing).
+- Full suite: 727 tests, 726 passed / 1 failed — the same long-established
+  flaky bcrypt-timeout test in `auth/signup/route.test.ts`
+  ("returns 429 TOO_MANY_SIGNUP_ATTEMPTS…", CPU-contention timeout,
+  unrelated to this change), reconfirmed passing clean in an isolated
+  re-run (8/8).
+
+### Verification
+`pnpm typecheck && pnpm lint && pnpm format` all clean. `pnpm build`
+clean — `/api/dashboard` and `/dashboard` both compile. Live end-to-end
+verification against the dev DB (phone-signup → create client → post a
+DEBT + a PAYMENT → `GET /api/dashboard` default, `?month=2026-01`
+no-data, `?month=notamonth` malformed) confirmed: current-month default
+scoping, correct zeroed response for a past month with no transactions,
+and correct fallback-to-current-month for a malformed param. Test data
+cleaned up afterward (user + client + transactions deleted directly via
+Prisma — no `DELETE /api/clients/[id]` route exists in this app).
+
+**Not verified**: the `MonthPicker` component's actual click-through
+behavior in a browser (chevron taps, next-button disable state, label
+formatting as rendered) — same standing limitation as every other
+client-only piece this session (no browser-automation tool available).
+Typecheck/build passing rules out compile-time errors only.
+
+### Implementation checklist
+- [x] `month-range.ts` (TDD, 12 tests)
+- [x] `GET /api/dashboard` extended additively (+3 tests, 8 total)
+- [x] `MonthPicker.tsx` component
+- [x] `dashboard/page.tsx` wired in
+- [x] typecheck/lint/format/build clean
+- [x] Backend verified end-to-end against dev DB (3 month scenarios)
+- [ ] Client-only UI (chevron clicks, disable state) — NOT verified, no
+      browser automation available

@@ -6,6 +6,12 @@
 //
 // Reuses Phase 2's listClientSummaries (same balance/aging computation as
 // GET /api/clients) so the two endpoints can't disagree about who owes what.
+//
+// Phase 9 — optional `?month=YYYY-MM` adds `selectedMonth*` fields for the
+// month-picker (Banani's `MonthPickerView`, a UI affordance not in the
+// PRD). Purely additive: `recoveredThisMonthFcfa` keeps its original
+// always-current-month, unbounded-query shape so existing callers/tests
+// are untouched.
 export const runtime = 'nodejs';
 
 import 'server-only';
@@ -14,6 +20,7 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { listClientSummaries } from '@/lib/server/jurali/clients';
+import { parseMonthParam, monthBounds, formatMonthParam } from '@/lib/server/jurali/month-range';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -47,6 +54,30 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       _sum: { amountFcfa: true },
     });
 
+    const { year, month } = parseMonthParam(req.nextUrl.searchParams.get('month'), now);
+    const { start: monthStart, end: monthEnd } = monthBounds(year, month);
+    const [monthRecovered, monthNewDebts, monthTransactionCount] = await Promise.all([
+      prisma.transaction.aggregate({
+        where: {
+          ownerId: auth.user.sub,
+          type: 'PAYMENT',
+          createdAt: { gte: monthStart, lt: monthEnd },
+        },
+        _sum: { amountFcfa: true },
+      }),
+      prisma.transaction.aggregate({
+        where: {
+          ownerId: auth.user.sub,
+          type: 'DEBT',
+          createdAt: { gte: monthStart, lt: monthEnd },
+        },
+        _sum: { amountFcfa: true },
+      }),
+      prisma.transaction.count({
+        where: { ownerId: auth.user.sub, createdAt: { gte: monthStart, lt: monthEnd } },
+      }),
+    ]);
+
     return NextResponse.json(
       {
         totalDueFcfa,
@@ -54,6 +85,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         overdueDueFcfa,
         overdueDebtorCount,
         recoveredThisMonthFcfa: recovered._sum.amountFcfa ?? 0,
+        selectedMonth: formatMonthParam(year, month),
+        selectedMonthRecoveredFcfa: monthRecovered._sum.amountFcfa ?? 0,
+        selectedMonthNewDebtsFcfa: monthNewDebts._sum.amountFcfa ?? 0,
+        selectedMonthTransactionCount: monthTransactionCount,
       },
       { headers: { 'x-request-id': ctx.requestId } },
     );

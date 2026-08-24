@@ -11,8 +11,9 @@ import { GET } from './route';
 const mockRequireAuth = vi.mocked(requireAuth);
 const authedCtx = { user: { sub: 'user-1', email: 'me@example.com' } };
 
-function makeGet(): NextRequest {
-  return new NextRequest('http://test/api/dashboard');
+function makeGet(month?: string): NextRequest {
+  const url = month ? `http://test/api/dashboard?month=${month}` : 'http://test/api/dashboard';
+  return new NextRequest(url);
 }
 
 function client(
@@ -122,5 +123,73 @@ describe('GET /api/dashboard', () => {
     const res = await GET(makeGet());
     const json = (await res.json()) as { recoveredThisMonthFcfa: number };
     expect(json.recoveredThisMonthFcfa).toBe(0);
+  });
+});
+
+describe('GET /api/dashboard — month-picker (Phase 9)', () => {
+  it('defaults selectedMonth to the current calendar month when no ?month= is given', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-24T10:00:00Z'));
+    prismaMock.client.findMany.mockResolvedValue([]);
+    prismaMock.transaction.count.mockResolvedValue(0);
+
+    const res = await GET(makeGet());
+    const json = (await res.json()) as { selectedMonth: string };
+    expect(json.selectedMonth).toBe('2026-08');
+  });
+
+  it('scopes selectedMonthRecoveredFcfa/selectedMonthNewDebtsFcfa to the requested ?month=', async () => {
+    prismaMock.client.findMany.mockResolvedValue([]);
+    prismaMock.transaction.aggregate
+      .mockResolvedValueOnce({ _sum: { amountFcfa: 10_000 } } as never) // recoveredThisMonthFcfa (unbounded)
+      .mockResolvedValueOnce({ _sum: { amountFcfa: 30_000 } } as never) // selectedMonthRecoveredFcfa
+      .mockResolvedValueOnce({ _sum: { amountFcfa: 45_000 } } as never); // selectedMonthNewDebtsFcfa
+    prismaMock.transaction.count.mockResolvedValue(7);
+
+    const res = await GET(makeGet('2026-03'));
+    const json = (await res.json()) as {
+      selectedMonth: string;
+      selectedMonthRecoveredFcfa: number;
+      selectedMonthNewDebtsFcfa: number;
+      selectedMonthTransactionCount: number;
+    };
+    expect(json.selectedMonth).toBe('2026-03');
+    expect(json.selectedMonthRecoveredFcfa).toBe(30_000);
+    expect(json.selectedMonthNewDebtsFcfa).toBe(45_000);
+    expect(json.selectedMonthTransactionCount).toBe(7);
+
+    // 2nd aggregate call: PAYMENT bounded to March 2026
+    expect(prismaMock.transaction.aggregate).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerId: 'user-1',
+          type: 'PAYMENT',
+          createdAt: { gte: new Date(2026, 2, 1), lt: new Date(2026, 3, 1) },
+        }),
+      }),
+    );
+    // 3rd aggregate call: DEBT bounded to March 2026
+    expect(prismaMock.transaction.aggregate).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerId: 'user-1',
+          type: 'DEBT',
+          createdAt: { gte: new Date(2026, 2, 1), lt: new Date(2026, 3, 1) },
+        }),
+      }),
+    );
+  });
+
+  it('falls back to the current month for a malformed ?month= param', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-24T10:00:00Z'));
+    prismaMock.client.findMany.mockResolvedValue([]);
+    prismaMock.transaction.count.mockResolvedValue(0);
+
+    const res = await GET(makeGet('garbage'));
+    const json = (await res.json()) as { selectedMonth: string };
+    expect(json.selectedMonth).toBe('2026-08');
   });
 });

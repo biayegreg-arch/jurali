@@ -3,13 +3,17 @@
 // Jurali dashboard — PRD 3.2 (Accueil / Tableau de bord). Reproduces
 // Banani's JuraliDashboard.jsx; see .planning/banani/dashboard.md for the
 // full translation notes and confirmed decisions.
+import { useState } from 'react';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { TopBar } from '@/components/jurali/TopBar';
 import { DebtorRow } from '@/components/jurali/DebtorRow';
+import { MonthPicker } from '@/components/jurali/MonthPicker';
 import { toDebtorRowProps } from '@/lib/jurali-format';
+import { formatPrice } from '@/lib/utils';
+import { formatMonthParam } from '@/lib/server/jurali/month-range';
 import type { ClientSummary } from '@/lib/server/jurali/clients';
 
 interface DashboardData {
@@ -17,14 +21,23 @@ interface DashboardData {
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
-  recoveredThisMonthFcfa: number;
+  selectedMonthRecoveredFcfa: number;
+  selectedMonthNewDebtsFcfa: number;
+  selectedMonthTransactionCount: number;
+}
+
+function currentMonthParam(): string {
+  const now = new Date();
+  return formatMonthParam(now.getFullYear(), now.getMonth());
 }
 
 export default function DashboardPage() {
   const user = useUser();
-  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
-    skip: !user,
-  });
+  const [month, setMonth] = useState(currentMonthParam);
+  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>(
+    `/api/dashboard?month=${month}`,
+    { skip: !user },
+  );
   const { data: clients, loading: clientsLoading } = useApi<{ items: ClientSummary[] }>(
     '/api/clients?sort=activity&order=desc&limit=5',
     { skip: !user },
@@ -54,7 +67,9 @@ export default function DashboardPage() {
           </div>
         </Link>
 
-        {/* Filter chips — navigate to the full list; month filters deferred (Phase 9, see debtor-list.md) */}
+        {/* Filter chips — navigate to the full list (unrelated to the
+            month-picker below, which scopes the recovered/new-debts
+            figures, not this debtor-row list). */}
         <div className="flex gap-2 px-4 py-2">
           <Link
             href="/clients"
@@ -90,6 +105,31 @@ export default function DashboardPage() {
           ) : (
             recentClients.map((c, i) => <DebtorRow key={c.id} {...toDebtorRowProps(c, i)} />)
           )}
+        </div>
+
+        {/* Historique mensuel — Phase 9 (Banani's MonthPickerView, a UI
+            affordance for browsing history, not a PRD requirement). */}
+        <div className="px-4 pt-4 flex flex-col gap-2">
+          <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
+            Historique mensuel
+          </div>
+          <MonthPicker month={month} onChange={setMonth} />
+          <div className="grid grid-cols-2 gap-3 mt-1">
+            <div className="bg-background border border-border rounded-xl px-4 py-4">
+              <div className="text-xs text-muted-foreground mb-1">Récupéré</div>
+              <div className="font-headings font-bold text-lg text-foreground">
+                {dashboardLoading ? '…' : formatPrice(dashboard?.selectedMonthRecoveredFcfa ?? 0)}
+              </div>
+              <div className="text-xs text-muted-foreground">FCFA</div>
+            </div>
+            <div className="bg-background border border-border rounded-xl px-4 py-4">
+              <div className="text-xs text-muted-foreground mb-1">Nouvelles dettes</div>
+              <div className="font-headings font-bold text-lg text-foreground">
+                {dashboardLoading ? '…' : formatPrice(dashboard?.selectedMonthNewDebtsFcfa ?? 0)}
+              </div>
+              <div className="text-xs text-muted-foreground">FCFA</div>
+            </div>
+          </div>
         </div>
 
         {/* PRD 3.2/§4: 2 always-visible large action buttons (P0). Banani's

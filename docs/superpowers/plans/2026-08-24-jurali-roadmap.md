@@ -516,7 +516,7 @@ these they actually ask for.
     bypassed → `ALREADY_SUBSCRIBED` on re-checkout → all 3 `/premium*`
     pages render cleanly.
 - Landing page (before Phase 8, ad hoc per user request 2026-08-24) —
-  **done 2026-08-24**, uncommitted (pending user "commit"). Built from
+  **done 2026-08-24**, committed `87f2bb3`. Built from
   Banani's `LandingPage.jsx` — see `.planning/banani/landing-page.md`.
   - **Routing decision:** `/` now serves the public landing page instead
     of the Dashboard; the Dashboard moved to `/dashboard`. Not explicitly
@@ -557,7 +557,7 @@ these they actually ask for.
     no dead links, `/dashboard` still renders the dashboard shell, and
     both `/login`/`/signup` wordmarks resolve to `<a href="/">`.
 - Phase 8 (Rappel WhatsApp, US-07 thin PRD version) — **done 2026-08-24**,
-  uncommitted (pending user "commit"). See `.planning/banani/
+  committed `ae55c70`. See `.planning/banani/
   phase8-reminder.md` for the full US-07 acceptance-criteria mapping.
   - `Client.lastReminderSentAt` added (migration
     `20260824194357_jurali_reminder`). `lib/server/jurali/reminder.ts`
@@ -594,7 +594,7 @@ these they actually ask for.
     a follow-up GET → 409 `NOTHING_OWED` after an offsetting payment.
     Test data cleaned up, dev server stopped.
 - Phase 9 (partial: auto-reminders + PDF export) — **done 2026-08-24**,
-  uncommitted (pending user "commit"). User picked 2 of the 4 backlog
+  committed `263ccab`. User picked 2 of the 4 backlog
   items via AskUserQuestion (bulk contact selection, SMS channel, and
   response tracking remain backlog). See `.planning/banani/phase9.md`.
   - **Auto-reminders cannot silently send** — only the paid WhatsApp
@@ -637,3 +637,34 @@ these they actually ask for.
     browser-automation tool is available in this environment. Typecheck/
     lint/build all pass, which rules out compile errors but not runtime
     UI correctness — flagged rather than glossed over.
+- Full-app audit (user request 2026-08-24: responsive integration +
+  backend wiring across all 14 pages) — **done 2026-08-24**, fixes
+  committed `0b6ee43`. 4 findings (1 critical: `TopBar` showing the
+  synthetic phone-account email instead of `shopName`; 3 high: missing
+  `max-w-2xl` desktop cap on Dashboard/Debtor-list, `/settings` never
+  linked from anywhere in the app, `ClientPicker`'s prefill only
+  applying on first render). All 4 fixed same day — see
+  `.planning/banani/dashboard.md`, `debtor-list.md`, `new-debt.md`
+  "Audit fix (2026-08-25)" sections.
+- Phase 9 (month-picker remainder) — **done 2026-08-25**, uncommitted
+  (pending user "commit"). User chose "Month-picker d'abord" over
+  building the full remaining backlog at once; the bulk-select/SMS/
+  response-tracking bundle stays deferred pending a separate decision.
+  See `.planning/banani/phase9.md` § Month-picker.
+  - `lib/server/jurali/month-range.ts` (TDD, 12 tests, no
+    `'server-only'` marker — shared by both the route and the client
+    component) + `GET /api/dashboard` extended additively with
+    `?month=` support (3 new tests, 8/8 passing) + `MonthPicker.tsx` +
+    `dashboard/page.tsx` wiring. Dashboard-only scope: the picker scopes
+    2 new "Historique mensuel" stat cards, not the existing debtor-row
+    list.
+  - Full suite: 727 tests, 726 passed (1 pre-existing bcrypt-timeout
+    flake in `signup/route.test.ts`, reconfirmed passing clean in
+    isolation). `pnpm build` clean. Verified end-to-end against the dev
+    DB: phone-signup → client with a DEBT + a PAYMENT → default month
+    scoping, a past no-data month, and a malformed `?month=` param all
+    returned correct values; test data cleaned up via direct Prisma
+    deletion (no `DELETE /api/clients/[id]` route exists). **Not
+    verified**: `MonthPicker`'s actual click-through behavior in a
+    browser — same standing limitation (no browser automation
+    available).
