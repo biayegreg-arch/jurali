@@ -42,6 +42,8 @@ model User {
   withdrawals       Withdrawal[]
   oauthAccounts     OAuthAccount[]
   adminActions      AdminAction[]
+  clients           Client[]
+  transactions      Transaction[]
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -331,4 +333,44 @@ model Withdrawal {
   @@index([userId, requestedAt])
   @@index([status, requestedAt])
   @@index([provider, providerPayoutId])
+}
+
+// ───────────────────────────────────────────────────────────────────────
+// Jurali domain — credit notebook. Single-tenant per PRD (one shopkeeper
+// per account, no org scoping): every Client and Transaction is owned by
+// exactly one User via `ownerId`.
+//
+// Balance = sum(DEBT.amountFcfa) - sum(PAYMENT.amountFcfa) for a client.
+// Aging (">30 jours") is computed FIFO: payments clear the oldest debts
+// first, so "oldest unpaid debt" walks the client's transaction history
+// in chronological order rather than needing a running-balance column.
+// See src/lib/server/jurali/balance.ts.
+// ───────────────────────────────────────────────────────────────────────
+model Client {
+  id           String        @id @default(cuid())
+  ownerId      String
+  owner        User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  firstName    String
+  phone        String?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  transactions Transaction[]
+
+  @@index([ownerId])
+  @@index([ownerId, firstName])
+}
+
+model Transaction {
+  id         String   @id @default(cuid())
+  clientId   String
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  ownerId    String
+  owner      User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  type       String // DEBT | PAYMENT
+  amountFcfa Int // integer FCFA, no decimals
+  note       String?
+  createdAt  DateTime @default(now())
+
+  @@index([clientId, createdAt])
+  @@index([ownerId, createdAt])
 }
