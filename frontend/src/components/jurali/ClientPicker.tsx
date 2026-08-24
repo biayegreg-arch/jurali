@@ -42,6 +42,14 @@ export function ClientPicker({
   const requestIdRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Keeps the input synced when `value` is set/updated from outside (e.g. a
+  // caller preloads a client by id before its name has loaded — see
+  // debts/new's `?clientId=` flow). `select()`/`createAndSelect()` already
+  // set `query` directly, so this only fires for genuinely external changes.
+  useEffect(() => {
+    setQuery(value?.firstName ?? '');
+  }, [value?.id, value?.firstName]);
+
   useEffect(() => {
     if (!open) return;
     function onOutsideClick(e: MouseEvent) {

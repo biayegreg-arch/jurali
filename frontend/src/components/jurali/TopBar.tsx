@@ -9,7 +9,9 @@ import { formatPrice } from '@/lib/utils';
 import { useApi } from '@/lib/useApi';
 
 export interface TopBarProps {
-  email: string;
+  /** Shop name (falls back to the account name, then email) — never the
+   * raw phone-signup synthetic email (see AuthContext's `User.shopName`). */
+  displayName: string;
   totalDueFcfa: number;
   debtorCount: number;
   overdueDueFcfa: number;
@@ -18,7 +20,7 @@ export interface TopBarProps {
 }
 
 export function TopBar({
-  email,
+  displayName,
   totalDueFcfa,
   debtorCount,
   overdueDueFcfa,
@@ -27,34 +29,40 @@ export function TopBar({
 }: TopBarProps) {
   return (
     <div className="bg-primary px-4 pt-10 pb-5">
-      <div className="flex items-center justify-between mb-5">
-        <div>
-          <div className="text-xs text-secondary font-body mb-0.5">Boutique</div>
-          {/* Phase 6 (phone+password signup) adds a real shop-owner name field. */}
-          <div className="font-headings font-bold text-xl text-primary-foreground">{email}</div>
-        </div>
-        <div className="flex items-center gap-2">
-          <NotificationBell />
-          <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center">
-            <span className="font-headings font-bold text-sm text-secondary-foreground">
-              {email.charAt(0).toUpperCase()}
-            </span>
+      <div className="max-w-2xl mx-auto">
+        <div className="flex items-center justify-between mb-5">
+          <div className="min-w-0">
+            <div className="text-xs text-secondary font-body mb-0.5">Boutique</div>
+            <div className="font-headings font-bold text-xl text-primary-foreground truncate">
+              {displayName}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <NotificationBell />
+            <Link
+              href="/settings"
+              className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center"
+            >
+              <span className="font-headings font-bold text-sm text-secondary-foreground">
+                {displayName.charAt(0).toUpperCase()}
+              </span>
+            </Link>
           </div>
         </div>
-      </div>
 
-      <div className="flex gap-3">
-        <SummaryStat
-          label="Total dû"
-          value={loading ? '…' : formatPrice(totalDueFcfa)}
-          sub={loading ? '' : `${debtorCount} clients`}
-          accent
-        />
-        <SummaryStat
-          label="En retard"
-          value={loading ? '…' : formatPrice(overdueDueFcfa)}
-          sub={loading ? '' : `${overdueDebtorCount} urgents`}
-        />
+        <div className="flex gap-3">
+          <SummaryStat
+            label="Total dû"
+            value={loading ? '…' : formatPrice(totalDueFcfa)}
+            sub={loading ? '' : `${debtorCount} clients`}
+            accent
+          />
+          <SummaryStat
+            label="En retard"
+            value={loading ? '…' : formatPrice(overdueDueFcfa)}
+            sub={loading ? '' : `${overdueDebtorCount} urgents`}
+          />
+        </div>
       </div>
     </div>
   );

@@ -89,3 +89,19 @@ needed beyond what's idiomatic for a single-language app).
   builds `/clients/[id]`.
 - Notifications bell + "Statistiques" icon button: render inert/disabled,
   no screens designed for either yet.
+
+## Audit fix (2026-08-24) — closes 2 gaps found during a full app audit
+- The `md`/`lg` container-width treatment promised above ("md: max-w
+  container, centered" / "lg: cap content width max-w-2xl mx-auto") was
+  never actually implemented — the page shipped with zero breakpoint
+  classes and zero `max-w`. On a desktop viewport, `TopBar`'s stat tiles
+  and every `DebtorRow` stretched full-bleed edge to edge. Fixed: `TopBar`
+  now wraps its own content in `max-w-2xl mx-auto`, and this page wraps
+  everything below it the same way.
+- Notifications bell is no longer inert (Phase 9 wired it for real). The
+  identity avatar circle — a decision this file never explicitly covered
+  — turned out to have no `onClick`/`href` either, meaning `/settings`
+  was unreachable from anywhere in the authenticated app. Now links there.
+- `TopBar`'s `email` prop displayed the phone-signup synthetic email
+  (`<phone>@phone.jurali.local`) verbatim instead of the shop name —
+  renamed to `displayName`, now passed `user.shopName || user.email`.

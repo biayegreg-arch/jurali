@@ -58,3 +58,11 @@ French strings hardcoded, same as Dashboard.
 ## Decisions (confirmed 2026-08-24)
 - Month filter chips: deferred to Phase 9.
 - Client-row tap: inert for now (see dashboard.md).
+
+## Audit fix (2026-08-25)
+Same container-width gap as Dashboard ("same container-width treatment as
+Dashboard" above was never actually built — zero `max-w` shipped). Fixed
+identically: content now wraps in `max-w-2xl mx-auto`, matching `TopBar`'s
+own fix. See `dashboard.md`'s "Audit fix" note for the full list (this
+page shares `TopBar`, so the `displayName` rename and the bell/avatar
+fixes apply here too).

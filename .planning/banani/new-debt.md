@@ -102,3 +102,15 @@ French strings hardcoded per Banani source.
 - Quick-preset amounts: 500 / 1 000 / 10 000 / 25 000 (second batch).
 - Success UX: toast "Dette enregistrée" + redirect to Dashboard.
 - Desktop layout: simplified centered form, no sidebar.
+
+## Audit fix (2026-08-25)
+Arriving via a fiche client's "Ajouter une dette" link (`?clientId=`)
+preloaded `ClientPicker` with `{id, firstName: ''}` — the search input
+showed blank with no visual confirmation of who was selected, even though
+the correct client was silently wired underneath. Fixed two ways: (1)
+`ClientPicker` now syncs its internal input from the `value` prop
+whenever `value.id`/`value.firstName` changes, not just on mount, so any
+future caller providing a value post-mount displays correctly; (2) this
+page now fetches the real client (`GET /api/clients/[id]`) when a
+`clientId` param is present instead of constructing a name-less
+placeholder.

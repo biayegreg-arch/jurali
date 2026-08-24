@@ -4,12 +4,13 @@
 // NewDebtForm2.jsx (a single screen with two data states, not a wizard —
 // see .planning/banani/new-debt.md for the correction vs. the original
 // 2-step assumption, and the confirmed decisions).
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
+import { useApi } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { ClientPicker, type PickedClient } from '@/components/jurali/ClientPicker';
 import { AmountField } from '@/components/jurali/AmountField';
@@ -22,19 +23,42 @@ export default function NewDebtPage() {
   );
 }
 
+interface PresetClientDetail {
+  id: string;
+  firstName: string;
+  balanceFcfa: number;
+}
+
 function NewDebtPageContent() {
   const user = useUser();
   const router = useRouter();
   const params = useSearchParams();
   const { toast } = useToast();
+  const clientIdParam = params.get('clientId');
 
-  const [client, setClient] = useState<PickedClient | null>(
-    params.get('clientId') ? { id: params.get('clientId')!, firstName: '' } : null,
+  // Arriving via a fiche client's "Ajouter une dette" link only carries the
+  // id — fetch the real name/balance rather than showing an empty
+  // ClientPicker field with no visual confirmation of who's selected.
+  const { data: presetClient } = useApi<PresetClientDetail>(
+    clientIdParam ? `/api/clients/${clientIdParam}` : '',
+    { skip: !clientIdParam },
   );
+
+  const [client, setClient] = useState<PickedClient | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
   const [note, setNote] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (presetClient) {
+      setClient({
+        id: presetClient.id,
+        firstName: presetClient.firstName,
+        balanceFcfa: presetClient.balanceFcfa,
+      });
+    }
+  }, [presetClient]);
 
   if (!user) return null;
 
