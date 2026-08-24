@@ -458,11 +458,12 @@ these they actually ask for.
   Paiement reçu) — **done**, committed `52bce00`.
 - Phase 0.1 (auth strategy) — **re-decided 2026-08-24**: phone + password
   (c-revised), following `Inscription.jsx` over the PRD's OTP prose.
-- Phase 5 (missing PRD screens) — **partially done 2026-08-24**: Fiche
-  client + Paramètres shipped, committed `eab4b15`. Inscription and Page
-  Premium deferred — Inscription is now unblocked (Phase 6 backend
-  shipped, see below); Page Premium still waits on Phase 7. See
-  `.planning/banani/STATUS.md`.
+- Phase 5 (missing PRD screens) — **3/4 done 2026-08-24**: Fiche client
+  + Paramètres (`eab4b15`), Inscription (`/signup`, uncommitted, pending
+  user "commit") plus a companion `/login` page (no Banani source, built
+  fresh — needed so `useUser()`'s app-wide redirect target and
+  Inscription's own "Se connecter" link both resolve to something real).
+  Page Premium still waits on Phase 7. See `.planning/banani/STATUS.md`.
 - Phase 6 (auth: phone + password) — **done 2026-08-24**, uncommitted
   (pending user "commit"). `User.email` was kept required rather than
   made optional as originally planned — see the "Email nullable?"
