@@ -455,11 +455,13 @@ these they actually ask for.
 - Phase 2 (`/api/clients` + `/api/transactions`) — **done**, committed `17b0ea4`.
 - Phase 3 (dashboard endpoint) — **done**, committed `0c4e06d`.
 - Phase 4 (reproduce Dashboard, Liste des débiteurs, Nouvelle dette,
-  Paiement reçu) — **done**, uncommitted (pending user "commit"). See
-  `.planning/banani/STATUS.md`.
+  Paiement reçu) — **done**, committed `52bce00`.
 - Phase 0.1 (auth strategy) — **re-decided 2026-08-24**: phone + password
   (c-revised), following `Inscription.jsx` over the PRD's OTP prose.
-- Phase 5 (missing PRD screens) — **unblocked 2026-08-24**, all 4 screens
-  now in hand, next up.
+- Phase 5 (missing PRD screens) — **partially done 2026-08-24**: Fiche
+  client + Paramètres shipped (uncommitted, pending user "commit").
+  Inscription and Page Premium deferred — they need Phase 6/7 backend
+  first (user chose to sequence this way rather than build backend
+  ahead of its phase). See `.planning/banani/STATUS.md`.
 - Phase 7 pricing — **decided 2026-08-24**: monthly-only V1, annual +
   trial deferred.

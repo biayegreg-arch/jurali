@@ -7,6 +7,8 @@ import { icons } from 'lucide-react';
 
 const RENAMED: Record<string, keyof typeof icons> = {
   'bar-chart-2': 'ChartColumnIncreasing',
+  'check-circle': 'CircleCheck',
+  'alert-circle': 'CircleAlert',
 };
 
 function toPascalCase(kebab: string): string {

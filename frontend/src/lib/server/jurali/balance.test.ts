@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { computeClientBalance, isOverdue, oldestUnpaidDebtDate } from './balance';
+import {
+  computeClientBalance,
+  computeDebtStatuses,
+  isOverdue,
+  oldestUnpaidDebtDate,
+} from './balance';
 
 const day = (offsetDays: number) => new Date(Date.now() - offsetDays * 24 * 60 * 60 * 1000);
 
@@ -94,5 +99,62 @@ describe('isOverdue', () => {
   it('is true when the oldest unpaid debt is over 30 days old', () => {
     const transactions = [{ type: 'DEBT' as const, amountFcfa: 5_000, createdAt: day(45) }];
     expect(isOverdue(transactions, day(0))).toBe(true);
+  });
+});
+
+describe('computeDebtStatuses (per-debt FIFO status)', () => {
+  it('returns an empty map for no transactions', () => {
+    expect(computeDebtStatuses([], day(0)).size).toBe(0);
+  });
+
+  it('marks a single unpaid debt as UNPAID when under the overdue threshold', () => {
+    const statuses = computeDebtStatuses(
+      [{ id: 'd1', type: 'DEBT', amountFcfa: 5_000, createdAt: day(10) }],
+      day(0),
+    );
+    expect(statuses.get('d1')).toBe('UNPAID');
+  });
+
+  it('marks a single unpaid debt as OVERDUE past the threshold', () => {
+    const statuses = computeDebtStatuses(
+      [{ id: 'd1', type: 'DEBT', amountFcfa: 5_000, createdAt: day(45) }],
+      day(0),
+    );
+    expect(statuses.get('d1')).toBe('OVERDUE');
+  });
+
+  it('marks a debt PAID once a payment fully covers it', () => {
+    const statuses = computeDebtStatuses(
+      [
+        { id: 'd1', type: 'DEBT', amountFcfa: 5_000, createdAt: day(45) },
+        { id: 'p1', type: 'PAYMENT', amountFcfa: 5_000, createdAt: day(1) },
+      ],
+      day(0),
+    );
+    expect(statuses.get('d1')).toBe('PAID');
+  });
+
+  it('clears the oldest debt first (FIFO) leaving the newer one UNPAID', () => {
+    const statuses = computeDebtStatuses(
+      [
+        { id: 'old', type: 'DEBT', amountFcfa: 5_000, createdAt: day(40) },
+        { id: 'new', type: 'DEBT', amountFcfa: 5_000, createdAt: day(2) },
+        { id: 'p1', type: 'PAYMENT', amountFcfa: 5_000, createdAt: day(1) },
+      ],
+      day(0),
+    );
+    expect(statuses.get('old')).toBe('PAID');
+    expect(statuses.get('new')).toBe('UNPAID');
+  });
+
+  it('leaves a partially-paid debt UNPAID (not PAID) until fully covered', () => {
+    const statuses = computeDebtStatuses(
+      [
+        { id: 'd1', type: 'DEBT', amountFcfa: 5_000, createdAt: day(10) },
+        { id: 'p1', type: 'PAYMENT', amountFcfa: 2_000, createdAt: day(1) },
+      ],
+      day(0),
+    );
+    expect(statuses.get('d1')).toBe('UNPAID');
   });
 });

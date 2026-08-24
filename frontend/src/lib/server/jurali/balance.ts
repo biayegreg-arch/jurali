@@ -49,6 +49,56 @@ export function oldestUnpaidDebtDate(transactions: AgingTransaction[]): Date | n
   return unpaidDebts.length > 0 ? unpaidDebts[0]!.createdAt : null;
 }
 
+export type DebtStatus = 'PAID' | 'UNPAID' | 'OVERDUE';
+
+export interface DebtTransaction extends AgingTransaction {
+  id: string;
+}
+
+/**
+ * Per-debt FIFO status (fiche client history). Same FIFO allocation as
+ * `oldestUnpaidDebtDate`, but tracked per transaction id instead of
+ * collapsed to a single date — this is a display derivation, not new
+ * stored state (no schema change).
+ */
+export function computeDebtStatuses(
+  transactions: DebtTransaction[],
+  now: Date = new Date(),
+  thresholdDays = 30,
+): Map<string, DebtStatus> {
+  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const unpaidDebts: { id: string; amountRemaining: number; createdAt: Date }[] = [];
+  const statuses = new Map<string, DebtStatus>();
+
+  for (const tx of sorted) {
+    if (tx.type === 'DEBT') {
+      unpaidDebts.push({ id: tx.id, amountRemaining: tx.amountFcfa, createdAt: tx.createdAt });
+      statuses.set(tx.id, 'UNPAID');
+      continue;
+    }
+
+    let remaining = tx.amountFcfa;
+    while (remaining > 0 && unpaidDebts.length > 0) {
+      const oldest = unpaidDebts[0]!;
+      if (oldest.amountRemaining <= remaining) {
+        remaining -= oldest.amountRemaining;
+        statuses.set(oldest.id, 'PAID');
+        unpaidDebts.shift();
+      } else {
+        oldest.amountRemaining -= remaining;
+        remaining = 0;
+      }
+    }
+  }
+
+  for (const debt of unpaidDebts) {
+    const ageDays = (now.getTime() - debt.createdAt.getTime()) / (1000 * 60 * 60 * 24);
+    if (ageDays > thresholdDays) statuses.set(debt.id, 'OVERDUE');
+  }
+
+  return statuses;
+}
+
 export function isOverdue(
   transactions: AgingTransaction[],
   now: Date = new Date(),

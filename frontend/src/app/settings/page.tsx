@@ -1,19 +1,10 @@
-// /settings — account-level controls.
+// Paramètres — PRD 3.7. Reproduces Banani's Parametres.jsx (restyle of the
+// existing generic /settings page, same URL, same logic); see
+// .planning/banani/parametres.md for translation notes and decisions.
 //
-// Two flows live here today:
-//   1. Set / change password
-//      - If the account was created via OAuth (hasPassword=false), the
-//        "Set password" form calls POST /api/auth/set-password — no current
-//        password required, because there isn't one.
-//      - Otherwise the "Change password" form calls PUT /api/auth/change-password
-//        with currentPassword + newPassword.
-//   2. Link a provider (Google)
-//      - When Google is not already linked, the button kicks the user to
-//        GET /api/auth/oauth/google/start?next=/settings, which goes through
-//        the normal OAuth dance and lands back on /settings linked.
-//      - When already linked, we just show a "linked" pill — no unlink action
-//        yet (would need a /api/auth/oauth/google/unlink endpoint with a
-//        guard refusing to leave the user without any sign-in method).
+// Real flows kept from the starter: change/set password, Google OAuth
+// link, logout. Notifications/Données/Langue sections are omitted or
+// static-only — no backend exists yet for those, see the plan file.
 'use client';
 
 import { useState, type FormEvent } from 'react';
@@ -21,26 +12,22 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
+import { Icon } from '@/components/jurali/Icon';
+import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSection';
 
 export default function SettingsPage() {
   const user = useUser();
-  const { refresh } = useAuth();
+  const { refresh, logout } = useAuth();
   const { toast } = useToast();
 
-  // Password form state — fields used by either branch.
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
 
-  if (!user) {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col items-center justify-center gap-2 px-4">
-        <p className="text-sm text-gray-600">Chargement…</p>
-      </main>
-    );
-  }
+  if (!user) return null;
 
   const hasPassword = user.hasPassword;
   const googleLinked = user.linkedProviders.includes('google');
@@ -71,11 +58,12 @@ export default function SettingsPage() {
           method: 'POST',
           body: { newPassword },
         });
-        toast('Mot de passe défini. Tu peux maintenant te connecter par email.', 'success');
+        toast('Mot de passe défini.', 'success');
       }
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
+      setShowPasswordForm(false);
       await refresh();
     } catch (err) {
       if (err instanceof ApiError) {
@@ -84,8 +72,7 @@ export default function SettingsPage() {
           PASSWORD_BANNED: 'Ce mot de passe est trop courant.',
           PASSWORD_TOO_SHORT: err.message || 'Mot de passe trop court.',
           PASSWORD_PWNED: 'Ce mot de passe a fuité — choisis-en un autre.',
-          PASSWORD_ALREADY_SET:
-            'Un mot de passe est déjà défini. Utilise « changer le mot de passe ».',
+          PASSWORD_ALREADY_SET: 'Un mot de passe est déjà défini.',
           VALIDATION_FAILED: 'Champs invalides.',
         };
         setError(map[err.code] ?? err.message);
@@ -98,107 +85,139 @@ export default function SettingsPage() {
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-md flex-col gap-8 px-4 py-12">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-bold">Paramètres</h1>
-        <p className="text-sm text-gray-600">Connecté en tant que {user.email}</p>
-      </header>
-
-      {/* ── Password section ─────────────────────────────────────────── */}
-      <section className="flex flex-col gap-3 rounded-lg border border-gray-200 p-5">
-        <h2 className="text-lg font-semibold">
-          {hasPassword ? 'Changer le mot de passe' : 'Définir un mot de passe'}
-        </h2>
-        <p className="text-sm text-gray-600">
-          {hasPassword
-            ? 'Tu peux modifier ton mot de passe ici. Les autres sessions seront déconnectées.'
-            : 'Tu t’es connecté via Google. Définis un mot de passe pour pouvoir aussi te connecter par email.'}
-        </p>
-        <form onSubmit={onSubmitPassword} className="mt-2 flex flex-col gap-4">
-          {hasPassword && (
-            <label className="flex flex-col gap-1 text-sm">
-              Mot de passe actuel
-              <input
-                type="password"
-                required
-                autoComplete="current-password"
-                value={currentPassword}
-                onChange={(e) => setCurrentPassword(e.target.value)}
-                className="rounded-md border border-gray-300 px-3 py-2"
-              />
-            </label>
-          )}
-          <label className="flex flex-col gap-1 text-sm">
-            Nouveau mot de passe
-            <input
-              type="password"
-              required
-              autoComplete="new-password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1 text-sm">
-            Confirmer le nouveau mot de passe
-            <input
-              type="password"
-              required
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              className="rounded-md border border-gray-300 px-3 py-2"
-            />
-          </label>
-          {error && (
-            <p role="alert" className="text-sm text-red-600">
-              {error}
-            </p>
-          )}
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-md bg-black px-5 py-2.5 text-sm font-medium text-white hover:bg-gray-800 disabled:opacity-50"
+    <div className="min-h-dvh bg-background font-body flex flex-col">
+      <div className="bg-primary px-4 pt-10 pb-6">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/"
+            className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
           >
-            {submitting
-              ? 'Enregistrement…'
-              : hasPassword
-                ? 'Changer le mot de passe'
-                : 'Définir le mot de passe'}
-          </button>
-        </form>
-      </section>
-
-      {/* ── Linked providers section ────────────────────────────────── */}
-      <section className="flex flex-col gap-3 rounded-lg border border-gray-200 p-5">
-        <h2 className="text-lg font-semibold">Comptes liés</h2>
-        <div className="flex items-center justify-between gap-3">
-          <div className="flex flex-col">
-            <span className="text-sm font-medium">Google</span>
-            <span className="text-xs text-gray-500">
-              {googleLinked
-                ? 'Tu peux te connecter via Google.'
-                : 'Lie ton compte Google pour te connecter en un clic.'}
-            </span>
+            <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+          </Link>
+          <div>
+            <div className="font-headings font-bold text-lg text-primary-foreground">
+              Paramètres
+            </div>
+            <div className="text-xs text-secondary">Gérer ton compte</div>
           </div>
-          {googleLinked ? (
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-medium text-emerald-700">
-              Lié
-            </span>
-          ) : (
-            <a
-              href="/api/auth/oauth/google/start?next=/settings"
-              className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-50"
-            >
-              Lier Google
-            </a>
-          )}
         </div>
-      </section>
+      </div>
 
-      <Link href="/dashboard" className="text-center text-sm text-gray-600 underline">
-        Retour au dashboard
-      </Link>
-    </main>
+      <div className="px-4 pt-5 pb-8 flex flex-col gap-6 max-w-lg w-full mx-auto">
+        <SettingsSection title="Profil">
+          <SettingsRow icon="mail" label="Email" value={user.email} last />
+        </SettingsSection>
+
+        <SettingsSection title="Sécurité">
+          <div className={`px-5 py-4 ${showPasswordForm ? '' : 'border-b border-border'}`}>
+            <button
+              type="button"
+              onClick={() => setShowPasswordForm((v) => !v)}
+              className="w-full flex items-center gap-4"
+            >
+              <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                <Icon i="lock" size={18} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <div className="font-headings font-bold text-sm text-foreground">
+                  {hasPassword ? 'Mot de passe' : 'Définir un mot de passe'}
+                </div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  {hasPassword
+                    ? 'Modifier ton mot de passe'
+                    : 'Tu t’es connecté via Google — ajoute un mot de passe'}
+                </div>
+              </div>
+              <Icon
+                i={showPasswordForm ? 'chevron-down' : 'chevron-right'}
+                size={16}
+                className="text-muted-foreground flex-shrink-0"
+              />
+            </button>
+
+            {showPasswordForm && (
+              <form onSubmit={onSubmitPassword} className="mt-4 flex flex-col gap-3">
+                {hasPassword && (
+                  <input
+                    type="password"
+                    required
+                    autoComplete="current-password"
+                    placeholder="Mot de passe actuel"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none"
+                  />
+                )}
+                <input
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  placeholder="Nouveau mot de passe"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  className="bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none"
+                />
+                <input
+                  type="password"
+                  required
+                  autoComplete="new-password"
+                  placeholder="Confirmer le nouveau mot de passe"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  className="bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none"
+                />
+                {error && <div className="text-sm text-danger">{error}</div>}
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="bg-primary text-primary-foreground font-headings font-bold text-sm py-2.5 rounded-lg disabled:opacity-50"
+                >
+                  {submitting ? 'Enregistrement…' : 'Enregistrer'}
+                </button>
+              </form>
+            )}
+          </div>
+
+          <SettingsRow
+            icon="link"
+            label="Google"
+            description={googleLinked ? 'Compte lié' : 'Non lié'}
+          />
+          {!googleLinked && (
+            <div className="px-5 pb-4 -mt-2">
+              <a
+                href="/api/auth/oauth/google/start?next=/settings"
+                className="text-xs text-primary font-bold"
+              >
+                Lier mon compte Google
+              </a>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="w-full flex items-center gap-4 px-5 py-4"
+          >
+            <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+              <Icon i="log-out" size={18} className="text-primary" />
+            </div>
+            <div className="flex-1 text-left font-headings font-bold text-sm text-foreground">
+              Se déconnecter
+            </div>
+          </button>
+        </SettingsSection>
+
+        <SettingsSection title="Langue & Devise">
+          <SettingsRow icon="globe" label="Langue" value="Français" />
+          <SettingsRow icon="credit-card" label="Devise" value="FCFA" last />
+        </SettingsSection>
+
+        <div className="bg-input border border-border rounded-xl px-5 py-4">
+          <div className="font-headings font-bold text-sm text-foreground">Jurali</div>
+          <div className="text-xs text-muted-foreground">Conçu pour les boutiquiers</div>
+        </div>
+      </div>
+    </div>
   );
 }

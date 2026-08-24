@@ -19,3 +19,13 @@ export function toDebtorRowProps(summary: ClientSummary, index: number): DebtorR
     index,
   };
 }
+
+const dateFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
+export function formatDateFr(iso: string): string {
+  return dateFormatter.format(new Date(iso));
+}
