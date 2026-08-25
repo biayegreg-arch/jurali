@@ -5,7 +5,7 @@
 // runs for real against request cookie/header (no mock needed — makePost
 // sets matching cookie+header like the orders test).
 import { prismaMock } from '@/test-utils/prisma-mock';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
 vi.mock('@/lib/server/middleware', () => ({ requireAuth: vi.fn() }));
@@ -124,6 +124,68 @@ describe('GET /api/clients', () => {
     const res = await GET(makeGet('?limit=2'));
     const json = (await res.json()) as { items: unknown[] };
     expect(json.items).toHaveLength(2);
+  });
+});
+
+describe('GET /api/clients — month filter (Phase 9 desktop table)', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('applies no transaction-date filter when ?month= is absent (unchanged default: all clients)', async () => {
+    prismaMock.client.findMany.mockResolvedValue([]);
+    await GET(makeGet());
+    const call = prismaMock.client.findMany.mock.calls[0]![0] as { where: Record<string, unknown> };
+    expect(call.where.transactions).toBeUndefined();
+  });
+
+  it('restricts to clients with a transaction inside the requested month when ?month= is given', async () => {
+    prismaMock.client.findMany.mockResolvedValue([]);
+    await GET(makeGet('?month=2026-03'));
+    expect(prismaMock.client.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerId: 'user-1',
+          transactions: {
+            some: { createdAt: { gte: new Date(2026, 2, 1), lt: new Date(2026, 3, 1) } },
+          },
+        }),
+      }),
+    );
+  });
+
+  it('combines the month filter with an active ?q= search (both must hold)', async () => {
+    prismaMock.client.findMany.mockResolvedValue([]);
+    await GET(makeGet('?month=2026-03&q=fatou'));
+    expect(prismaMock.client.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { firstName: { contains: 'fatou', mode: 'insensitive' } },
+            { phone: { contains: 'fatou', mode: 'insensitive' } },
+          ],
+          transactions: {
+            some: { createdAt: { gte: new Date(2026, 2, 1), lt: new Date(2026, 3, 1) } },
+          },
+        }),
+      }),
+    );
+  });
+
+  it('falls back to the current month for a malformed ?month= value', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-24T10:00:00Z'));
+    prismaMock.client.findMany.mockResolvedValue([]);
+    await GET(makeGet('?month=garbage'));
+    expect(prismaMock.client.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          transactions: {
+            some: { createdAt: { gte: new Date(2026, 7, 1), lt: new Date(2026, 8, 1) } },
+          },
+        }),
+      }),
+    );
   });
 });
 

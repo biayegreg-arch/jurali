@@ -11,6 +11,7 @@ export function daysSince(iso: string): number {
 
 export function toDebtorRowProps(summary: ClientSummary, index: number): DebtorRowProps {
   return {
+    id: summary.id,
     name: summary.firstName,
     amount: formatPrice(summary.balanceFcfa),
     daysAgo: summary.lastActivityAt ? daysSince(summary.lastActivityAt) : null,

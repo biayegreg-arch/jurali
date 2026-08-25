@@ -17,6 +17,11 @@ export interface TopBarProps {
   overdueDueFcfa: number;
   overdueDebtorCount: number;
   loading: boolean;
+  /** Pass when a sibling tree on the same page already fetches this (e.g.
+   * a desktop bell rendered alongside this mobile bar) — avoids two
+   * simultaneous `/api/notifications/count` fetches (useApi's cache isn't
+   * dedup'd across concurrently-mounting instances). Omit to self-fetch. */
+  notificationCount?: number;
 }
 
 export function TopBar({
@@ -26,6 +31,7 @@ export function TopBar({
   overdueDueFcfa,
   overdueDebtorCount,
   loading,
+  notificationCount,
 }: TopBarProps) {
   return (
     <div className="bg-primary px-4 pt-10 pb-5">
@@ -38,7 +44,7 @@ export function TopBar({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <NotificationBell />
+            <NotificationBell count={notificationCount} />
             <Link
               href="/settings"
               className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center"
@@ -68,9 +74,15 @@ export function TopBar({
   );
 }
 
-function NotificationBell() {
-  const { data } = useApi<{ count: number }>('/api/notifications/count');
-  const count = data?.count ?? 0;
+export function NotificationBell({
+  count: countOverride,
+}: {
+  count?: number | undefined;
+} = {}) {
+  const { data } = useApi<{ count: number }>('/api/notifications/count', {
+    skip: countOverride !== undefined,
+  });
+  const count = countOverride ?? data?.count ?? 0;
 
   return (
     <Link

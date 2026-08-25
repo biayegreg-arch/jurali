@@ -1,6 +1,6 @@
 # Banani implementation status
 
-Last updated: 2026-08-25 (Google sign-in button)
+Last updated: 2026-08-25 (debtor-list desktop sidebar + table)
 
 ## Done
 - [x] `dashboard` — `frontend/src/app/dashboard/page.tsx` (moved from `/` — see `landing-page.md`) — plan: `dashboard.md` — commit: `52bce00` (move: pending)
@@ -15,15 +15,14 @@ Last updated: 2026-08-25 (Google sign-in button)
 - [x] `phase8-reminder` — no new Banani screen; wires up the reminder card already placed on `fiche-client` (Phase 5) — `frontend/src/app/api/clients/[id]/remind/route.ts` + `clients/[id]/page.tsx` — plan: `phase8-reminder.md` — commit: `ae55c70`
 - [x] `phase9` (partial — auto-reminders + PDF export only) — no new Banani screens; user picked 2 of 4 backlog items — `frontend/src/app/api/cron/auto-reminders/`, `api/settings/auto-reminders/`, `app/notifications/page.tsx`, `lib/jurali-pdf.ts` — plan: `phase9.md` — commit: `263ccab`
 - [x] `phase9` (month-picker) — no new Banani screen fetch (reused prior `MonthPickerView` reference); Dashboard-only, scopes 2 new stat cards — `frontend/src/lib/server/jurali/month-range.ts`, `components/jurali/MonthPicker.tsx`, `api/dashboard/route.ts` (additive), `dashboard/page.tsx` — plan: `phase9.md` § Month-picker — commit: `9ec2575`
-- [x] `inscription` (Google sign-in button) — no new Banani screen; user requested connecting Google OAuth to actually test login — `components/jurali/GoogleIcon.tsx`, `GoogleSignInButton.tsx`, wired into `signup/page.tsx` + `login/page.tsx` — plan: `inscription.md` § Google Sign-in button — commit: pending
+- [x] `inscription` (Google sign-in button) — no new Banani screen; user requested connecting Google OAuth to actually test login — `components/jurali/GoogleIcon.tsx`, `GoogleSignInButton.tsx`, wired into `signup/page.tsx` + `login/page.tsx` — plan: `inscription.md` § Google Sign-in button — commit: `8bb1e13`
+- [x] `debtor-list` (desktop sidebar + table) — Banani screen `DashboardDesktopWithMonthPicker.jsx` ("Jurali — Dashboard Desktop"), mapped to `/clients` (not `/dashboard`) after confirming scope with the user — `components/jurali/DesktopSidebar.tsx`, `DebtorTableRow.tsx`, `api/clients/route.ts` (`?month=`, additive), `clients/page.tsx` (lg+ layout) — plan: `debtor-list.md` § Desktop sidebar + table — commit: pending
 
 ## In progress
 (none)
 
 ## Pending (seen in Banani, not yet fetched/planned for implementation)
-- Desktop variants (`DashboardDesktopWithMonthPicker`, `DebtorListDesktop`,
-  `NewDebtDesktop`, `PaymentReceivedDesktop`) — reference only for now,
-  informing responsive decisions in the 4 in-progress plans above; not
+- `NewDebtDesktop`, `PaymentReceivedDesktop` — reference only for now; not
   implemented as separate routes
 - Bulk contact selection + SMS channel + response-tracking bundle —
   remaining Phase 9 backlog per roadmap A.3/A.7; user deliberately

@@ -25,6 +25,7 @@ import { makeRequestContext, withRequestContext } from '@/lib/server/observabili
 import { listClientSummaries } from '@/lib/server/jurali/clients';
 import { zPhone } from '@/lib/server/zod-helpers';
 import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
+import { parseMonthParam, monthBounds } from '@/lib/server/jurali/month-range';
 
 const CLIENT_FREE_TIER_LIMIT = 10;
 const Q_MAX_LEN = 200;
@@ -47,17 +48,32 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const limitRaw = Number.parseInt(url.searchParams.get('limit') ?? '', 10);
     const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : null;
 
-    const summarized = await listClientSummaries(
-      auth.user.sub,
-      q
+    // ?month= is OPTIONAL and unrelated to /api/dashboard's own ?month=
+    // default-to-current behaviour: absent here means "no filter, show
+    // every client" (today's behaviour, unchanged) — a debtor list must
+    // never silently hide older unpaid debts. Only a PRESENT value scopes
+    // the list to clients with activity that month; a present-but-malformed
+    // value still falls back to the current month via parseMonthParam.
+    const monthParam = url.searchParams.get('month');
+    const monthWhere = monthParam
+      ? (() => {
+          const { year, month } = parseMonthParam(monthParam);
+          const { start, end } = monthBounds(year, month);
+          return { transactions: { some: { createdAt: { gte: start, lt: end } } } };
+        })()
+      : {};
+
+    const summarized = await listClientSummaries(auth.user.sub, {
+      ...monthWhere,
+      ...(q
         ? {
             OR: [
               { firstName: { contains: q, mode: 'insensitive' } },
               { phone: { contains: q, mode: 'insensitive' } },
             ],
           }
-        : {},
-    );
+        : {}),
+    });
 
     summarized.sort((a, b) => {
       const dir = order === 'asc' ? 1 : -1;

@@ -1,4 +1,7 @@
+import Link from 'next/link';
+
 export interface DebtorRowProps {
+  id: string;
   name: string;
   amount: string;
   daysAgo: number | null;
@@ -8,9 +11,18 @@ export interface DebtorRowProps {
 }
 
 /** A single debtor line item — ported from Banani's shared DebtorRow.jsx. */
-export function DebtorRow({ name, amount, daysAgo, lastItem, isOverdue, index }: DebtorRowProps) {
+export function DebtorRow({
+  id,
+  name,
+  amount,
+  daysAgo,
+  lastItem,
+  isOverdue,
+  index,
+}: DebtorRowProps) {
   return (
-    <div
+    <Link
+      href={`/clients/${id}`}
       className={`flex items-center gap-3 px-4 py-3 ${index !== 0 ? 'border-t border-border' : ''}`}
     >
       <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
@@ -36,6 +48,6 @@ export function DebtorRow({ name, amount, daysAgo, lastItem, isOverdue, index }:
           {isOverdue ? 'En retard' : daysAgo === null ? '—' : `${daysAgo}j`}
         </span>
       </div>
-    </div>
+    </Link>
   );
 }
