@@ -18,6 +18,12 @@ export interface User {
   linkedProviders: string[];
   /** Shop name collected at phone signup (Jurali Phase 6); null for email/OAuth accounts. */
   shopName: string | null;
+  /** Full name — collected at phone signup, or from the Google ID token for OAuth accounts. */
+  name: string | null;
+  /** E.164 phone (Phase 6 phone auth or set later via PATCH /api/auth/me). */
+  phone: string | null;
+  /** Shop address — Phase 9 desktop /settings, editable via PATCH /api/auth/me. */
+  address: string | null;
 }
 
 interface AuthContextValue {

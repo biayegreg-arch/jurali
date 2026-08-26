@@ -25,6 +25,10 @@ export interface ClientPickerProps {
   value: PickedClient | null;
   onChange: (client: PickedClient) => void;
   helperText?: string;
+  /** Forwarded to the underlying `<input>` — lets a sibling control (e.g.
+   * the desktop "Créer client" shortcut button) focus this field by id
+   * instead of duplicating the search/create UX. */
+  inputId?: string;
 }
 
 const SEARCH_DEBOUNCE_MS = 250;
@@ -33,6 +37,7 @@ export function ClientPicker({
   value,
   onChange,
   helperText = 'Sélectionner un client existant',
+  inputId,
 }: ClientPickerProps) {
   const [query, setQuery] = useState(value?.firstName ?? '');
   const [matches, setMatches] = useState<ClientMatch[]>([]);
@@ -113,6 +118,7 @@ export function ClientPicker({
       <div className="flex items-center gap-2 bg-input border border-border rounded-xl px-3 py-3">
         <Icon i="search" size={16} className="text-muted-foreground flex-shrink-0" />
         <input
+          id={inputId}
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);

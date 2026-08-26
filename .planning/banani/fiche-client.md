@@ -53,8 +53,55 @@ All French, inline (matches Phase 4 — no i18n layer exists in this project; Ba
 
 ## Implementation checklist
 - [x] `computeDebtStatuses` in `balance.ts` + tests (TDD: red → green)
-- [ ] `DebtHistoryRow` component
-- [ ] `frontend/src/app/clients/[id]/page.tsx`
-- [ ] 375 / 768 / 1024+ layout check
-- [ ] Wire "Ajouter dette", "WhatsApp" (inert), 404 state
-- [ ] Lint / typecheck / build
+- [x] `DebtHistoryRow` component
+- [x] `frontend/src/app/clients/[id]/page.tsx`
+- [x] 375 / 768 / 1024+ layout check
+- [x] Wire "Ajouter dette", "WhatsApp" (inert), 404 state
+- [x] Lint / typecheck / build
+
+## UPDATE 2026-08-26 (desktop redesign, `FicheClient.jsx` re-fetched alongside `CreateClientDesktop.jsx`)
+
+Companion batched `AskUserQuestion` round (all answered "Recommandé"), superseding several 2026-08-24 decisions above:
+
+- **Client contact fields** — `Client.email` and `Client.address` added to the schema
+  (migration `20260826000422_jurali_client_contact_fields`). Both display on
+  the fiche (mobile + desktop identity card) and are editable.
+- **"Modifier" (edit client identity)** — now REAL. `PATCH /api/clients/[id]`
+  (partial update: firstName/phone/email/address, ownership-checked,
+  404 `CLIENT_NOT_FOUND`) + `frontend/src/app/clients/[id]/edit/page.tsx`,
+  sharing a new `ClientForm` component with the create flow (see
+  `new-debt.md` for `CreateClientDesktop.jsx`'s companion decisions).
+  Supersedes the 2026-08-24 "OMITTED, no PATCH endpoint" note above.
+- **"Avance payée" block** — seen in the desktop mock, DROPPED entirely: no
+  backing concept in the data model (debts/payments have no "advance"
+  distinction) and fabricating one would be exactly the kind of half-real
+  UI this project avoids.
+- **"Prochain rappel" date** — the desktop mock showed a literal fixed date
+  ("19 janv. 2024 09:00"). Replaced with a genuinely DERIVED date:
+  `oldestUnpaidDebtDate + AUTO_REMINDER_THRESHOLD_DAYS` (7 days), computed
+  in the new `useFicheDerived(client)` hook and rendered as "Rappel
+  automatique éligible à partir du {date}" — real data, not a Banani
+  placeholder.
+- **"Marquer les dettes en retard comme payées"** — now REAL, reversing the
+  2026-08-24 "OMITTED" decision above. Since debts/payments have no mutable
+  "paid" status (always FIFO-derived), reframed as a single
+  `POST /api/transactions {type:'PAYMENT', amountFcfa: overdueBalanceFcfa}`
+  for the exact overdue balance — consistent with the existing data model,
+  no schema change. New `computeOverdueBalance` in `balance.ts` (FIFO
+  remaining-sum of debts currently overdue, `balance.test.ts`, 6 new tests).
+  Built via a new `MarkOverdueAsPaidButton`, shown on BOTH mobile and
+  desktop (not desktop-exclusive).
+- **Desktop layout** — `useFicheDerived(client)` hook computes shared
+  derived values once (debtStatuses, debtCount, overdueCount,
+  totalPaidFcfa, overdueBalanceFcfa, nextEligibleReminderDate, history),
+  passed as props to both `MobileFicheBody` and `DesktopFicheBody` (no
+  duplicate computation, no duplicate fetch — `ReminderCard`'s local
+  send-button state is safe to duplicate since it holds no fetched data).
+  Desktop adds: identity card with address + "Dernière activité" +
+  "Modifier" link; 2×2 `StatTile` grid; debt-history TABLE with
+  Toutes/En retard/Payées filter tabs; desktop top bar's "Envoyer
+  WhatsApp" is an anchor-scroll link (`href="#reminder-card"`) to the
+  single canonical `ReminderCard` instance rather than a duplicate
+  send-logic — avoids divergent duplicate mutation logic.
+- **"Fidèle" loyalty badge** — seen in the mock, DROPPED (no backing
+  concept, same "no fake data" reasoning as "Avance payée").

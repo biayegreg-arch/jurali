@@ -224,6 +224,59 @@ describe('POST /api/clients', () => {
     );
   });
 
+  it('Phase 9 — accepts optional email + address and persists them', async () => {
+    prismaMock.client.count.mockResolvedValue(0);
+    prismaMock.client.create.mockResolvedValue({
+      id: 'client-new',
+      firstName: 'Aïssatou',
+      phone: null,
+      email: 'aissatou@example.com',
+      address: 'Dakar, Sénégal',
+      createdAt: new Date('2026-08-26T10:00:00Z'),
+    } as never);
+
+    const res = await POST(
+      makePost({ firstName: 'Aïssatou', email: 'aissatou@example.com', address: 'Dakar, Sénégal' }),
+    );
+    expect(res.status).toBe(201);
+    const json = (await res.json()) as { email: string; address: string };
+    expect(json.email).toBe('aissatou@example.com');
+    expect(json.address).toBe('Dakar, Sénégal');
+    expect(prismaMock.client.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          email: 'aissatou@example.com',
+          address: 'Dakar, Sénégal',
+        }),
+      }),
+    );
+  });
+
+  it('returns 400 VALIDATION_FAILED for a malformed email', async () => {
+    prismaMock.client.count.mockResolvedValue(0);
+    const res = await POST(makePost({ firstName: 'Fatou', email: 'not-an-email' }));
+    expect(res.status).toBe(400);
+  });
+
+  it('omits email/address (null) when not provided', async () => {
+    prismaMock.client.count.mockResolvedValue(0);
+    prismaMock.client.create.mockResolvedValue({
+      id: 'client-new',
+      firstName: 'Ousmane',
+      phone: null,
+      email: null,
+      address: null,
+      createdAt: new Date('2026-08-24T10:00:00Z'),
+    } as never);
+
+    await POST(makePost({ firstName: 'Ousmane' }));
+    expect(prismaMock.client.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ email: null, address: null }),
+      }),
+    );
+  });
+
   it('returns 409 CLIENT_LIMIT_REACHED at the free-tier cap of 10 clients', async () => {
     prismaMock.client.count.mockResolvedValue(10);
     const res = await POST(makePost({ firstName: 'Onzième Client' }));

@@ -103,6 +103,59 @@ French strings hardcoded per Banani source.
 - Success UX: toast "Dette enregistrée" + redirect to Dashboard.
 - Desktop layout: simplified centered form, no sidebar.
 
+## Desktop layout reversal (2026-08-26)
+The 2026-08-24 decision ("Desktop layout: simplified centered form, no
+sidebar") is reversed. User selected `NewDebtDesktop.jsx` again alongside
+`StatisticsDesktop.jsx` and confirmed (via AskUserQuestion) they want the
+full 2-column desktop layout built after all. Implemented on
+`frontend/src/app/debts/new/page.tsx`:
+
+- `DesktopSidebar` (shared with `/clients`/`/dashboard`/`/stats`) at lg+.
+- Left column: same `ClientPicker`/`AmountField` instances as mobile (not
+  duplicated — two independently-mounted `ClientPicker`s would each debounce
+  their own `/api/clients?q=` search, a duplicate-fetch bug already fixed
+  once this session on `/clients`/`/dashboard`). Responsive `lg:` classes
+  change the surrounding chrome only.
+- **Articles achetés** (desktop-only, replaces the mobile free-text
+  "Achetés" field): a client-side itemized list (`{name, amountFcfa}[]`,
+  local component state, no new Prisma model). Its sum auto-syncs into the
+  same `amount` state used for submission (`useEffect` on `articlesTotal`);
+  on submit, `note` becomes the comma-joined article names when the list is
+  non-empty, else the (mobile-only) free-text note. This satisfies "sums
+  into existing `amountFcfa`, joins names into existing `note`" with zero
+  schema change.
+- **Rappel automatique** toggle (desktop-only): NOT a per-debt setting — a
+  shortcut to the existing GLOBAL `GET/PATCH /api/settings/auto-reminders`
+  (same endpoint `AutoReminderSection` on `/settings` already uses), with
+  an explicit "S'applique à tous tes clients" caption so it's never
+  mistaken for a per-debt toggle. Premium-gated like every other
+  reminder-adjacent feature (`ReminderToggle` mirrors `ReminderCard`'s
+  `isPremium` branch).
+- **Créer client** button: no new page — focuses the existing `ClientPicker`
+  input (`inputId` prop, new) via `document.getElementById(...).focus()`,
+  reusing its existing inline "create on the fly" flow rather than building
+  a second creation UI. (Banani's separately-selected `CreateClientDesktop`
+  screen — a dedicated 2-column client-creation form — was seen but
+  explicitly deferred; not implemented this round.)
+- **Clients récents** panel: real data (`GET /api/clients?sort=activity&
+  order=desc&limit=4`), clicking a row calls the same `setClient` used by
+  `ClientPicker`.
+- **Statut: Impayé** badge: hardcoded, and correctly so — a debt being
+  created on this screen is by definition unpaid; no computation needed,
+  not fabricated data.
+- **Astuce** tip block: static copy, matches the Banani source verbatim.
+
+## Créer client button — superseded (2026-08-26)
+The "focus the existing `ClientPicker` input" shortcut above is superseded
+now that `CreateClientDesktop.jsx` was implemented for real (batched
+`AskUserQuestion`, confirmed "Recommandé", alongside `FicheClient.jsx`'s
+desktop redesign — see `fiche-client.md`'s 2026-08-26 update). The button
+now links to `/clients/new?next=/debts/new`; the create page redirects back
+to `${next}?clientId=${created.id}`, reusing this page's existing
+`?clientId=` preset-loading logic (see "Audit fix" below) so the newly
+created client is preselected on return. `CreateClientDesktop` moves from
+STATUS.md's "Pending" list to "Done".
+
 ## Audit fix (2026-08-25)
 Arriving via a fiche client's "Ajouter une dette" link (`?clientId=`)
 preloaded `ClientPicker` with `{id, firstName: ''}` — the search input

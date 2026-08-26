@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   computeClientBalance,
   computeDebtStatuses,
+  computeOverdueBalance,
   isOverdue,
   oldestUnpaidDebtDate,
 } from './balance';
@@ -156,5 +157,45 @@ describe('computeDebtStatuses (per-debt FIFO status)', () => {
       day(0),
     );
     expect(statuses.get('d1')).toBe('UNPAID');
+  });
+});
+
+describe('computeOverdueBalance (FIFO remaining sum of >30-day debts)', () => {
+  it('returns 0 for a client with no transactions', () => {
+    expect(computeOverdueBalance([], day(0))).toBe(0);
+  });
+
+  it('returns 0 when the oldest unpaid debt is under 30 days old', () => {
+    const transactions = [{ type: 'DEBT' as const, amountFcfa: 5_000, createdAt: day(10) }];
+    expect(computeOverdueBalance(transactions, day(0))).toBe(0);
+  });
+
+  it('returns the full remaining amount of a single overdue debt', () => {
+    const transactions = [{ type: 'DEBT' as const, amountFcfa: 20_000, createdAt: day(45) }];
+    expect(computeOverdueBalance(transactions, day(0))).toBe(20_000);
+  });
+
+  it('excludes a fresh debt while still counting an older overdue one (FIFO)', () => {
+    const transactions = [
+      { type: 'DEBT' as const, amountFcfa: 20_000, createdAt: day(45) },
+      { type: 'DEBT' as const, amountFcfa: 5_000, createdAt: day(2) },
+    ];
+    expect(computeOverdueBalance(transactions, day(0))).toBe(20_000);
+  });
+
+  it('reflects a partial payment against the overdue debt (FIFO remaining, not the original amount)', () => {
+    const transactions = [
+      { type: 'DEBT' as const, amountFcfa: 20_000, createdAt: day(45) },
+      { type: 'PAYMENT' as const, amountFcfa: 8_000, createdAt: day(1) },
+    ];
+    expect(computeOverdueBalance(transactions, day(0))).toBe(12_000);
+  });
+
+  it('returns 0 once the overdue debt is fully paid off', () => {
+    const transactions = [
+      { type: 'DEBT' as const, amountFcfa: 20_000, createdAt: day(45) },
+      { type: 'PAYMENT' as const, amountFcfa: 20_000, createdAt: day(1) },
+    ];
+    expect(computeOverdueBalance(transactions, day(0))).toBe(0);
   });
 });

@@ -19,10 +19,22 @@
 export const runtime = 'nodejs';
 
 import 'server-only';
+import { z } from 'zod';
 import { NextResponse, type NextRequest } from 'next/server';
+import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
+import { zPhone } from '@/lib/server/zod-helpers';
+
+// Phase 9 — desktop /settings "Modifier" button (Parametres.jsx's "Profil
+// & Boutique"). All fields optional/independent (partial update).
+const PatchBody = z.object({
+  name: z.string().trim().min(1).max(120).optional(),
+  shopName: z.string().trim().min(1).max(120).optional(),
+  phone: z.union([zPhone, z.literal('')]).optional(),
+  address: z.union([z.string().trim().min(1).max(200), z.literal('')]).optional(),
+});
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -46,6 +58,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         updatedAt: true,
         passwordHash: true,
         shopName: true,
+        name: true,
+        phone: true,
+        address: true,
         oauthAccounts: { select: { provider: true } },
       },
     });
@@ -74,8 +89,64 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       hasPassword: !!dbUser?.passwordHash,
       linkedProviders: (dbUser?.oauthAccounts ?? []).map((a) => a.provider),
       shopName: dbUser?.shopName ?? null,
+      name: dbUser?.name ?? null,
+      phone: dbUser?.phone ?? null,
+      address: dbUser?.address ?? null,
     };
 
     return NextResponse.json({ user }, { status: 200, headers: { 'x-request-id': ctx.requestId } });
+  });
+}
+
+export async function PATCH(req: NextRequest): Promise<NextResponse> {
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    const csrfFail = verifyCsrf(req);
+    if (csrfFail) return csrfFail;
+
+    const auth = await requireAuth(req.headers.get('authorization'));
+    if (auth instanceof NextResponse) {
+      auth.headers.set('x-request-id', ctx.requestId);
+      return auth;
+    }
+
+    const parsed = PatchBody.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: 'VALIDATION_FAILED',
+          message: 'Invalid request body',
+          issues: parsed.error.issues,
+        },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    if (parsed.data.phone) {
+      const existing = await prisma.user.findFirst({
+        where: { phone: parsed.data.phone, id: { not: auth.user.sub } },
+        select: { id: true },
+      });
+      if (existing) {
+        return NextResponse.json(
+          { error: 'PHONE_ALREADY_EXISTS', message: 'This phone number is already registered.' },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+    }
+
+    const data: Record<string, string | null> = {};
+    if (parsed.data.name !== undefined) data.name = parsed.data.name;
+    if (parsed.data.shopName !== undefined) data.shopName = parsed.data.shopName;
+    if (parsed.data.phone !== undefined) data.phone = parsed.data.phone || null;
+    if (parsed.data.address !== undefined) data.address = parsed.data.address || null;
+
+    const updated = await prisma.user.update({
+      where: { id: auth.user.sub },
+      data,
+      select: { name: true, shopName: true, phone: true, address: true },
+    });
+
+    return NextResponse.json({ user: updated }, { headers: { 'x-request-id': ctx.requestId } });
   });
 }

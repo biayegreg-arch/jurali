@@ -2,37 +2,24 @@
 
 // Liste des débiteurs — PRD 3.5. Reproduces Banani's DashboardAll.jsx; see
 // .planning/banani/debtor-list.md for translation notes and decisions.
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useUser } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
+import { useDebtorListState } from '@/lib/useDebtorListState';
 import { Icon } from '@/components/jurali/Icon';
-import { TopBar, NotificationBell } from '@/components/jurali/TopBar';
+import { TopBar } from '@/components/jurali/TopBar';
 import { DebtorRow } from '@/components/jurali/DebtorRow';
-import { DebtorTableRow } from '@/components/jurali/DebtorTableRow';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
-import { MonthPicker } from '@/components/jurali/MonthPicker';
+import { DesktopDebtorWorkspace } from '@/components/jurali/DesktopDebtorWorkspace';
 import { toDebtorRowProps } from '@/lib/jurali-format';
-import {
-  formatMonthParam,
-  formatMonthLabelFr,
-  parseMonthParam,
-} from '@/lib/server/jurali/month-range';
-import type { ClientSummary } from '@/lib/server/jurali/clients';
 
 interface DashboardData {
   totalDueFcfa: number;
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
-}
-
-const SEARCH_DEBOUNCE_MS = 300;
-
-function currentMonthParam(): string {
-  const now = new Date();
-  return formatMonthParam(now.getFullYear(), now.getMonth());
 }
 
 export default function ClientsPage() {
@@ -47,27 +34,23 @@ function ClientsPageContent() {
   const user = useUser();
   const params = useSearchParams();
 
-  const [query, setQuery] = useState('');
-  const [debouncedQuery, setDebouncedQuery] = useState('');
-  const [sort, setSort] = useState<'amount' | 'activity'>(
-    params.get('sort') === 'amount' ? 'amount' : 'activity',
-  );
-  const [overdueOnly, setOverdueOnly] = useState(params.get('filter') === 'overdue');
-  const [monthActive, setMonthActive] = useState(false);
-  const [month, setMonth] = useState(currentMonthParam);
-
-  useEffect(() => {
-    const id = setTimeout(() => setDebouncedQuery(query), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(id);
-  }, [query]);
+  const {
+    query,
+    setQuery,
+    debouncedQuery,
+    sort,
+    setSort,
+    overdueOnly,
+    setOverdueOnly,
+    monthActive,
+    setMonthActive,
+    month,
+    setMonth,
+    items,
+    clientsLoading,
+  } = useDebtorListState({ skip: !user, initialOverdueOnly: params.get('filter') === 'overdue' });
 
   const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
-    skip: !user,
-  });
-  const listPath = `/api/clients?sort=${sort}&order=desc${
-    debouncedQuery ? `&q=${encodeURIComponent(debouncedQuery)}` : ''
-  }${monthActive ? `&month=${month}` : ''}`;
-  const { data: clients, loading: clientsLoading } = useApi<{ items: ClientSummary[] }>(listPath, {
     skip: !user,
   });
   // Hoisted once: both the mobile TopBar's bell and the desktop content
@@ -82,26 +65,18 @@ function ClientsPageContent() {
 
   if (!user) return null;
 
-  const items = (clients?.items ?? []).filter((c) => !overdueOnly || c.isOverdue);
   const displayName = user.shopName || user.email;
-
-  function resetToAll() {
-    setMonthActive(false);
-    setOverdueOnly(false);
-  }
 
   return (
     <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
       <DesktopSidebar
         displayName={displayName}
+        fullName={user.name}
         totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
         debtorCount={dashboard?.debtorCount ?? 0}
         overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
         overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
         loading={dashboardLoading}
-        overdueOnly={overdueOnly}
-        onSelectAll={resetToAll}
-        onSelectOverdue={() => setOverdueOnly(true)}
       />
 
       {/* Mobile/tablet (< lg) — unchanged card-list layout */}
@@ -200,105 +175,23 @@ function ClientsPageContent() {
 
       {/* Desktop (lg+) — sidebar + full-width table, Banani's
           "Dashboard Desktop" screen (see debtor-list.md § Desktop
-          sidebar + table for the route/scope decisions) */}
-      <div className="hidden lg:flex flex-1 flex-col">
-        <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-          <div className="font-headings font-bold text-2xl text-foreground">Tous les débiteurs</div>
-          <NotificationBell count={notificationCount} />
-        </div>
-
-        <div className="px-8 pt-5 pb-4 flex items-center gap-4">
-          <div className="flex items-center gap-2 bg-input border border-border rounded-xl px-4 py-2.5 flex-1 max-w-md">
-            <Icon i="search" size={16} className="text-muted-foreground flex-shrink-0" />
-            <input
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder="Chercher un client..."
-              className="flex-1 bg-transparent text-sm text-foreground placeholder-muted-foreground outline-none"
-            />
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              type="button"
-              onClick={() => setMonthActive(false)}
-              className={`text-sm font-bold px-4 py-2 rounded-lg ${
-                !monthActive
-                  ? 'bg-primary text-primary-foreground'
-                  : 'bg-surface border border-border text-foreground'
-              }`}
-            >
-              Tous
-            </button>
-            <button
-              type="button"
-              onClick={() => setMonthActive(true)}
-              className={`text-sm px-4 py-2 rounded-lg ${
-                monthActive
-                  ? 'bg-primary text-primary-foreground font-bold'
-                  : 'bg-surface border border-border text-foreground'
-              }`}
-            >
-              Ce mois
-            </button>
-            {monthActive && <MonthPicker month={month} onChange={setMonth} />}
-            <button
-              type="button"
-              onClick={() => setOverdueOnly((v) => !v)}
-              className={`text-sm px-4 py-2 rounded-lg ${
-                overdueOnly
-                  ? 'bg-primary text-primary-foreground font-bold'
-                  : 'bg-surface border border-border text-foreground'
-              }`}
-            >
-              En retard
-            </button>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between px-8 pb-3">
-          <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
-            Débiteurs
-          </div>
-          <span className="text-sm text-muted-foreground">
-            {clientsLoading
-              ? ''
-              : `${items.length} résultat${items.length === 1 ? '' : 's'}${
-                  monthActive
-                    ? ` — ${formatMonthLabelFr(parseMonthParam(month).year, parseMonthParam(month).month)}`
-                    : ''
-                }`}
-          </span>
-        </div>
-
-        <div className="px-8 pb-8 flex-1">
-          <div className="bg-background border border-border rounded-xl overflow-hidden h-full">
-            <div className="flex items-center px-6 py-4 bg-muted border-b border-border font-headings font-bold text-sm text-foreground uppercase tracking-wide">
-              <div className="w-12">Client</div>
-              <div className="flex-1 pl-2">Produit</div>
-              <div className="w-32 text-right">Montant</div>
-              <div className="w-24 text-right">Ancienneté</div>
-              <div className="w-24 text-right">Statut</div>
-            </div>
-
-            <div className="divide-y divide-border">
-              {clientsLoading ? (
-                <div className="px-6 py-6 text-sm text-muted-foreground">Chargement…</div>
-              ) : items.length === 0 && debouncedQuery ? (
-                <div className="px-6 py-6 text-sm text-muted-foreground">
-                  Aucun client ne correspond à « {debouncedQuery} ».
-                </div>
-              ) : items.length === 0 ? (
-                <div className="px-6 py-6 text-sm text-muted-foreground">
-                  Aucun client pour l&rsquo;instant — ajoute ton premier client en enregistrant une
-                  dette.
-                </div>
-              ) : (
-                items.map((c, i) => <DebtorTableRow key={c.id} {...toDebtorRowProps(c, i)} />)
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
+          sidebar + table for the route/scope decisions). Also mounted on
+          /dashboard — see dashboard.md § Desktop sidebar + table. */}
+      <DesktopDebtorWorkspace
+        query={query}
+        onQueryChange={setQuery}
+        debouncedQuery={debouncedQuery}
+        monthActive={monthActive}
+        onSelectAllTime={() => setMonthActive(false)}
+        onSelectMonth={() => setMonthActive(true)}
+        month={month}
+        onMonthChange={setMonth}
+        overdueOnly={overdueOnly}
+        onToggleOverdueOnly={() => setOverdueOnly((v) => !v)}
+        items={items}
+        clientsLoading={clientsLoading}
+        notificationCount={notificationCount}
+      />
     </div>
   );
 }

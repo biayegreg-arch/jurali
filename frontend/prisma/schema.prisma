@@ -34,6 +34,11 @@ model User {
   // Shop name collected at phone signup (Inscription.jsx); null for
   // email/OAuth accounts that never went through that flow.
   shopName          String?
+  // Shop address — Phase 9 desktop /settings (Parametres.jsx's "Profil &
+  // Boutique"), editable via PATCH /api/auth/me. Optional, display-only
+  // (no feature currently depends on it, unlike Client.address's "pour tes
+  // notes" caption — this one is purely informational on the profile).
+  address           String?
   // Phase 9 — global opt-in for the auto-reminder cron (Parametres.jsx's
   // "Rappels WhatsApp automatiques"). Defaults false: existing users never
   // consented to this, and the cron only takes effect for Premium accounts
@@ -41,6 +46,12 @@ model User {
   // silent — this only creates an in-app Notification; the boutiquier
   // still taps to open the wa.me link (see auto-reminder.ts).
   autoReminderEnabled Boolean @default(false)
+  // Phase 9 — global opt-in for the daily "clients overdue 14+ days" digest
+  // cron (Parametres.jsx's "Notifications dettes en retard") — a distinct
+  // toggle from autoReminderEnabled: this is a once-a-day per-USER summary
+  // notification, not a per-client WhatsApp nudge. Same Premium gate as
+  // the 7-day reminder (see overdue-alert.ts).
+  overdueAlertsEnabled Boolean @default(false)
   // App-wide role. USER is the default; ADMIN unlocks /admin back-office;
   // SUPERADMIN can promote/demote other admins. Bootstrap an initial
   // SUPERADMIN via `pnpm db:make-superadmin <email>` (see scripts).
@@ -371,6 +382,13 @@ model Client {
   owner              User          @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   firstName          String
   phone              String?
+  // Phase 9 — optional contact details added for the desktop "Créer
+  // client"/"Fiche client" screens (2026-08-26). Both nullable: every
+  // existing client and the mobile create-on-the-fly flow never collect
+  // them. `email` has no send-mail usage yet (unlike User.email) — purely
+  // a display/future-invoicing field, per the Banani source's own caption.
+  email              String?
+  address            String?
   lastReminderSentAt DateTime?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt

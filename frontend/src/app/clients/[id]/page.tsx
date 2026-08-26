@@ -1,7 +1,10 @@
 'use client';
 
-// Fiche client — PRD 3.6 / US-04. Reproduces Banani's FicheClient.jsx; see
-// .planning/banani/fiche-client.md for translation notes and decisions.
+// Fiche client — PRD 3.6 / US-04. Mobile reproduces Banani's FicheClient.jsx
+// (card-list layout); desktop (lg+) reproduces the later desktop redesign
+// of the same screen (2026-08-26) — sidebar + 2-column layout with a debt
+// history TABLE (filter tabs) instead of a card list. Both share the same
+// fetched `client`/derived data — see .planning/banani/fiche-client.md.
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -9,10 +12,19 @@ import { useUser } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
+import { NotificationBell } from '@/components/jurali/TopBar';
+import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { DebtHistoryRow } from '@/components/jurali/DebtHistoryRow';
 import { formatDateFr } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
-import { computeDebtStatuses, type DebtTransaction } from '@/lib/server/jurali/balance';
+import {
+  computeDebtStatuses,
+  computeOverdueBalance,
+  oldestUnpaidDebtDate,
+  type DebtTransaction,
+  type DebtStatus,
+} from '@/lib/server/jurali/balance';
+import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { downloadClientHistoryPdf } from '@/lib/jurali-pdf';
 
 interface ClientTransaction {
@@ -27,6 +39,8 @@ interface ClientDetail {
   id: string;
   firstName: string;
   phone: string | null;
+  email: string | null;
+  address: string | null;
   createdAt: string;
   lastReminderSentAt: string | null;
   balanceFcfa: number;
@@ -36,6 +50,13 @@ interface ClientDetail {
 
 interface SubscriptionData {
   isActive: boolean;
+}
+
+interface DashboardData {
+  totalDueFcfa: number;
+  debtorCount: number;
+  overdueDueFcfa: number;
+  overdueDebtorCount: number;
 }
 
 export default function ClientFichePage() {
@@ -48,86 +69,229 @@ export default function ClientFichePage() {
     refresh,
   } = useApi<ClientDetail>(`/api/clients/${params.id}`);
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
+  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
+    skip: !user,
+  });
+  const { data: notifData } = useApi<{ count: number }>('/api/notifications/count', {
+    skip: !user,
+  });
+  const isPremium = subscription?.isActive ?? false;
+  const { data: autoReminderSettings } = useApi<{ enabled: boolean }>(
+    '/api/settings/auto-reminders',
+    { skip: !isPremium },
+  );
 
   if (!user) return null;
 
+  const displayName = user.shopName || user.email;
+
   return (
-    <div className="min-h-dvh bg-background font-body flex flex-col">
-      <div className="bg-primary px-4 pt-10 pb-6">
-        <div className="flex items-center gap-3">
-          <Link
-            href="/clients"
-            className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-          >
-            <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-          </Link>
-          <div>
-            <div className="font-headings font-bold text-lg text-primary-foreground">
-              Fiche client
+    <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
+      <DesktopSidebar
+        displayName={displayName}
+        fullName={user.name}
+        totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
+        debtorCount={dashboard?.debtorCount ?? 0}
+        overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
+        overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
+        loading={dashboardLoading}
+      />
+
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Mobile top bar (< lg) — unchanged */}
+        <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/clients"
+              className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+            >
+              <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+            </Link>
+            <div>
+              <div className="font-headings font-bold text-lg text-primary-foreground">
+                Fiche client
+              </div>
+              <div className="text-xs text-secondary">Historique complet des dettes</div>
             </div>
-            <div className="text-xs text-secondary">Historique complet des dettes</div>
           </div>
         </div>
-      </div>
 
-      {loading ? (
-        <div className="px-4 py-8 text-sm text-muted-foreground">Chargement…</div>
-      ) : error || !client ? (
-        <div className="px-4 py-8 flex flex-col items-center gap-3 text-center">
-          <div className="text-sm text-muted-foreground">Client introuvable.</div>
-          <Link href="/clients" className="text-sm text-primary font-bold">
-            Retour à la liste
-          </Link>
+        {/* Desktop top bar (lg+) */}
+        <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/clients"
+              className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
+            >
+              <Icon i="chevron-left" size={20} className="text-foreground" />
+            </Link>
+            <div>
+              <div className="font-headings font-bold text-2xl text-foreground">Fiche client</div>
+              <div className="text-sm text-muted-foreground mt-0.5">
+                Historique complet des dettes
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <NotificationBell count={notifData?.count} />
+            {client && client.phone && client.balanceFcfa > 0 && (
+              <a
+                href="#reminder-card"
+                className="flex items-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
+              >
+                <Icon i="message-circle" size={16} />
+                Envoyer WhatsApp
+              </a>
+            )}
+            {client && (
+              <Link
+                href={`/debts/new?clientId=${client.id}`}
+                className="flex items-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
+              >
+                <Icon i="plus" size={16} />
+                Ajouter dette
+              </Link>
+            )}
+          </div>
         </div>
-      ) : (
-        <ClientFicheBody
-          client={client}
-          isPremium={subscription?.isActive ?? false}
-          shopName={user.shopName}
-          onReminderSent={refresh}
-        />
-      )}
+
+        {loading ? (
+          <div className="px-4 lg:px-8 py-8 text-sm text-muted-foreground">Chargement…</div>
+        ) : error || !client ? (
+          <div className="px-4 lg:px-8 py-8 flex flex-col items-center gap-3 text-center">
+            <div className="text-sm text-muted-foreground">Client introuvable.</div>
+            <Link href="/clients" className="text-sm text-primary font-bold">
+              Retour à la liste
+            </Link>
+          </div>
+        ) : (
+          <ClientFicheContent
+            client={client}
+            isPremium={isPremium}
+            autoReminderEnabled={autoReminderSettings?.enabled ?? false}
+            shopName={user.shopName}
+            onRefresh={refresh}
+          />
+        )}
+      </div>
     </div>
   );
 }
 
-function ClientFicheBody({
-  client,
-  isPremium,
-  shopName,
-  onReminderSent,
-}: {
-  client: ClientDetail;
-  isPremium: boolean;
-  shopName: string | null;
-  onReminderSent: () => void;
-}) {
-  const debtStatuses = computeDebtStatuses(
-    client.transactions
-      .filter((t): t is ClientTransaction & { type: 'DEBT' } => t.type === 'DEBT')
-      .map(
-        (t): DebtTransaction => ({
-          id: t.id,
-          type: 'DEBT',
-          amountFcfa: t.amountFcfa,
-          createdAt: new Date(t.createdAt),
-        }),
-      ),
-  );
+interface FicheDerived {
+  debtStatuses: Map<string, DebtStatus>;
+  debtCount: number;
+  overdueCount: number;
+  totalPaidFcfa: number;
+  overdueBalanceFcfa: number;
+  nextEligibleReminderDate: Date | null;
+  history: ClientTransaction[];
+}
 
-  const debtCount = client.transactions.filter((t) => t.type === 'DEBT').length;
+function useFicheDerived(client: ClientDetail): FicheDerived {
+  const debts: DebtTransaction[] = client.transactions
+    .filter((t): t is ClientTransaction & { type: 'DEBT' } => t.type === 'DEBT')
+    .map((t) => ({
+      id: t.id,
+      type: 'DEBT',
+      amountFcfa: t.amountFcfa,
+      createdAt: new Date(t.createdAt),
+    }));
+  const debtStatuses = computeDebtStatuses(debts);
+  const debtCount = debts.length;
   const overdueCount = [...debtStatuses.values()].filter((s) => s === 'OVERDUE').length;
   const totalPaidFcfa = client.transactions
     .filter((t) => t.type === 'PAYMENT')
     .reduce((sum, t) => sum + t.amountFcfa, 0);
 
+  const aging = client.transactions.map((t) => ({
+    type: t.type,
+    amountFcfa: t.amountFcfa,
+    createdAt: new Date(t.createdAt),
+  }));
+  const overdueBalanceFcfa = computeOverdueBalance(aging);
+  const oldest = oldestUnpaidDebtDate(aging);
+  const nextEligibleReminderDate = oldest
+    ? new Date(oldest.getTime() + AUTO_REMINDER_THRESHOLD_DAYS * 24 * 60 * 60 * 1000)
+    : null;
+
   const history = [...client.transactions].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
+  return {
+    debtStatuses,
+    debtCount,
+    overdueCount,
+    totalPaidFcfa,
+    overdueBalanceFcfa,
+    nextEligibleReminderDate,
+    history,
+  };
+}
+
+function ClientFicheContent({
+  client,
+  isPremium,
+  autoReminderEnabled,
+  shopName,
+  onRefresh,
+}: {
+  client: ClientDetail;
+  isPremium: boolean;
+  autoReminderEnabled: boolean;
+  shopName: string | null;
+  onRefresh: () => void;
+}) {
+  const derived = useFicheDerived(client);
+  const nextEligibleDate =
+    isPremium && autoReminderEnabled ? derived.nextEligibleReminderDate : null;
+
+  return (
+    <>
+      <div className="lg:hidden">
+        <MobileFicheBody
+          client={client}
+          isPremium={isPremium}
+          shopName={shopName}
+          derived={derived}
+          nextEligibleDate={nextEligibleDate}
+          onRefresh={onRefresh}
+        />
+      </div>
+      <div className="hidden lg:block flex-1">
+        <DesktopFicheBody
+          client={client}
+          isPremium={isPremium}
+          shopName={shopName}
+          derived={derived}
+          nextEligibleDate={nextEligibleDate}
+          onRefresh={onRefresh}
+        />
+      </div>
+    </>
+  );
+}
+
+function MobileFicheBody({
+  client,
+  isPremium,
+  shopName,
+  derived,
+  nextEligibleDate,
+  onRefresh,
+}: {
+  client: ClientDetail;
+  isPremium: boolean;
+  shopName: string | null;
+  derived: FicheDerived;
+  nextEligibleDate: Date | null;
+  onRefresh: () => void;
+}) {
+  const { debtStatuses, debtCount, overdueCount, totalPaidFcfa, history } = derived;
+
   return (
     <div className="px-4 pt-5 pb-8 flex flex-col gap-5 max-w-lg w-full mx-auto">
-      {/* Identity card */}
       <div className="bg-background border border-border rounded-xl p-5">
         <div className="flex items-center gap-4 mb-4">
           <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center flex-shrink-0">
@@ -135,7 +299,7 @@ function ClientFicheBody({
               {client.firstName.charAt(0)}
             </span>
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <div className="font-headings font-bold text-lg text-foreground truncate">
               {client.firstName}
             </div>
@@ -143,16 +307,29 @@ function ClientFicheBody({
               Client depuis {formatDateFr(client.createdAt)}
             </div>
           </div>
+          <Link
+            href={`/clients/${client.id}/edit`}
+            className="w-8 h-8 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
+          >
+            <Icon i="pencil" size={14} className="text-foreground" />
+          </Link>
         </div>
-        {client.phone && (
-          <div className="flex items-center gap-3">
-            <Icon i="phone" size={16} className="text-muted-foreground flex-shrink-0" />
-            <span className="text-sm text-foreground">{client.phone}</span>
-          </div>
-        )}
+        <div className="flex flex-col gap-2">
+          {client.phone && (
+            <div className="flex items-center gap-3">
+              <Icon i="phone" size={16} className="text-muted-foreground flex-shrink-0" />
+              <span className="text-sm text-foreground">{client.phone}</span>
+            </div>
+          )}
+          {client.address && (
+            <div className="flex items-center gap-3">
+              <Icon i="map-pin" size={16} className="text-muted-foreground flex-shrink-0" />
+              <span className="text-sm text-foreground">{client.address}</span>
+            </div>
+          )}
+        </div>
       </div>
 
-      {/* Stat tiles */}
       <div className="grid grid-cols-2 gap-3">
         <StatTile
           label="Total dû"
@@ -169,13 +346,23 @@ function ClientFicheBody({
         />
       </div>
 
-      {/* Reminder card — US-07: button only shown when there's something to
-          remind about (a phone on file + an outstanding balance). */}
       {client.phone && client.balanceFcfa > 0 && (
-        <ReminderCard client={client} isPremium={isPremium} onReminderSent={onReminderSent} />
+        <ReminderCard
+          client={client}
+          isPremium={isPremium}
+          nextEligibleDate={nextEligibleDate}
+          onReminderSent={onRefresh}
+        />
       )}
 
-      {/* History */}
+      {derived.overdueBalanceFcfa > 0 && (
+        <MarkOverdueAsPaidButton
+          clientId={client.id}
+          overdueBalanceFcfa={derived.overdueBalanceFcfa}
+          onDone={onRefresh}
+        />
+      )}
+
       <div className="flex flex-col gap-2">
         <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
           Historique
@@ -213,19 +400,263 @@ function ClientFicheBody({
   );
 }
 
+type DesktopFilter = 'all' | 'overdue' | 'paid';
+
+function DesktopFicheBody({
+  client,
+  isPremium,
+  shopName,
+  derived,
+  nextEligibleDate,
+  onRefresh,
+}: {
+  client: ClientDetail;
+  isPremium: boolean;
+  shopName: string | null;
+  derived: FicheDerived;
+  nextEligibleDate: Date | null;
+  onRefresh: () => void;
+}) {
+  const { debtStatuses, debtCount, overdueCount, totalPaidFcfa, history } = derived;
+  const [filter, setFilter] = useState<DesktopFilter>('all');
+
+  const filteredHistory = history.filter((t) => {
+    if (filter === 'all') return true;
+    if (t.type === 'PAYMENT') return false;
+    const status = debtStatuses.get(t.id);
+    return filter === 'overdue' ? status === 'OVERDUE' : status === 'PAID';
+  });
+
+  return (
+    <div className="flex gap-8 px-8 pt-8 pb-8">
+      {/* Left: identity + stats + reminder */}
+      <div className="flex flex-col gap-5 w-[320px] flex-shrink-0">
+        <div className="bg-background border border-border rounded-xl p-6">
+          <div className="flex items-center gap-4 mb-5">
+            <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center flex-shrink-0">
+              <span className="font-headings font-bold text-2xl text-secondary-foreground">
+                {client.firstName.charAt(0)}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <div className="font-headings font-bold text-xl text-foreground truncate">
+                {client.firstName}
+              </div>
+              <div className="text-sm text-muted-foreground mt-0.5">
+                Client depuis {formatDateFr(client.createdAt)}
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {client.phone && (
+              <div className="flex items-center gap-3">
+                <Icon i="phone" size={16} className="text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-foreground">{client.phone}</span>
+              </div>
+            )}
+            {client.address && (
+              <div className="flex items-center gap-3">
+                <Icon i="map-pin" size={16} className="text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-foreground">{client.address}</span>
+              </div>
+            )}
+            {history.length > 0 && (
+              <div className="flex items-center gap-3">
+                <Icon i="calendar" size={16} className="text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-foreground">
+                  Dernière activité {formatDateFr(history[0]!.createdAt)}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <Link
+            href={`/clients/${client.id}/edit`}
+            className="mt-5 w-full flex items-center justify-center gap-2 bg-input border border-border text-foreground font-headings font-bold text-xs py-2.5 rounded-lg"
+          >
+            <Icon i="pencil" size={14} />
+            Modifier
+          </Link>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <StatTile
+            label="Total dû"
+            value={formatPrice(client.balanceFcfa)}
+            danger={client.isOverdue}
+          />
+          <StatTile label="Total payé" value={formatPrice(totalPaidFcfa)} />
+          <StatTile label="Nb dettes" value={String(debtCount)} sub="au total" />
+          <StatTile
+            label="En retard"
+            value={String(overdueCount)}
+            sub="à régler"
+            danger={overdueCount > 0}
+          />
+        </div>
+
+        {client.phone && client.balanceFcfa > 0 && (
+          <div id="reminder-card">
+            <ReminderCard
+              client={client}
+              isPremium={isPremium}
+              nextEligibleDate={nextEligibleDate}
+              onReminderSent={onRefresh}
+            />
+          </div>
+        )}
+      </div>
+
+      {/* Right: debt history table */}
+      <div className="flex-1 flex flex-col gap-4 min-w-0">
+        <div className="flex items-center justify-between">
+          <div className="font-headings font-bold text-base text-foreground">
+            Historique des dettes
+          </div>
+          <div className="flex gap-2">
+            {(
+              [
+                ['all', 'Toutes'],
+                ['overdue', 'En retard'],
+                ['paid', 'Payées'],
+              ] as const
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilter(value)}
+                className={`text-xs font-bold px-3 py-1.5 rounded-lg ${
+                  filter === value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-input border border-border text-foreground'
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="bg-background border border-border rounded-xl overflow-hidden">
+          <div className="grid bg-muted border-b border-border px-6 py-3 grid-cols-[140px_1fr_130px_110px]">
+            <div className="text-xs font-headings font-bold text-muted-foreground uppercase tracking-wide">
+              Date
+            </div>
+            <div className="text-xs font-headings font-bold text-muted-foreground uppercase tracking-wide">
+              Articles
+            </div>
+            <div className="text-xs font-headings font-bold text-muted-foreground uppercase tracking-wide text-right">
+              Montant
+            </div>
+            <div className="text-xs font-headings font-bold text-muted-foreground uppercase tracking-wide text-center">
+              Statut
+            </div>
+          </div>
+
+          {filteredHistory.length === 0 ? (
+            <div className="px-6 py-6 text-sm text-muted-foreground">
+              Aucune dette dans cette catégorie.
+            </div>
+          ) : (
+            filteredHistory.map((t, i) => {
+              const status =
+                t.type === 'PAYMENT' ? 'PAYMENT' : (debtStatuses.get(t.id) ?? 'UNPAID');
+              return (
+                <div
+                  key={t.id}
+                  className={`grid items-center px-6 py-4 grid-cols-[140px_1fr_130px_110px] ${
+                    i !== 0 ? 'border-t border-border' : ''
+                  }`}
+                >
+                  <div className="text-sm text-muted-foreground">{formatDateFr(t.createdAt)}</div>
+                  <div className="text-sm text-foreground pr-4 truncate">
+                    {t.note ?? (t.type === 'DEBT' ? 'Dette' : 'Paiement reçu')}
+                  </div>
+                  <div
+                    className={`font-headings font-bold text-sm text-right ${
+                      status === 'OVERDUE' ? 'text-danger' : 'text-foreground'
+                    }`}
+                  >
+                    {status === 'PAYMENT' ? '−' : ''}
+                    {formatPrice(t.amountFcfa)}{' '}
+                    <span className="font-body font-normal text-xs text-muted-foreground">
+                      FCFA
+                    </span>
+                  </div>
+                  <div className="flex justify-center">
+                    <StatusBadge status={status} />
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="flex gap-3 mt-2">
+          {derived.overdueBalanceFcfa > 0 && (
+            <MarkOverdueAsPaidButton
+              clientId={client.id}
+              overdueBalanceFcfa={derived.overdueBalanceFcfa}
+              onDone={onRefresh}
+            />
+          )}
+          <ExportPdfButton client={client} isPremium={isPremium} shopName={shopName} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }: { status: DebtStatus | 'PAYMENT' }) {
+  if (status === 'OVERDUE') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-50 border border-red-200 text-danger font-bold text-xs">
+        <Icon i="alert-circle" size={11} />
+        En retard
+      </span>
+    );
+  }
+  if (status === 'PAID' || status === 'PAYMENT') {
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 border border-green-200 text-green-700 font-bold text-xs">
+        <Icon i="check-circle" size={11} />
+        {status === 'PAYMENT' ? 'Paiement' : 'Payée'}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-input text-muted-foreground font-bold text-xs">
+      <Icon i="clock" size={11} />
+      En cours
+    </span>
+  );
+}
+
 const REMINDER_ERROR_MESSAGES: Record<string, string> = {
   PREMIUM_REQUIRED: 'Passe à Premium pour envoyer des rappels WhatsApp.',
   CLIENT_NO_PHONE: 'Ce client n’a pas de numéro de téléphone enregistré.',
   NOTHING_OWED: 'Ce client n’a plus de solde à régler.',
 };
 
+// Includes the year: the eligible date is derived from the oldest unpaid
+// debt + 7 days, which can land in the past by an arbitrary margin (an old
+// unpaid debt) — day+month alone would misread across a year boundary.
+const nextEligibleFormatter = new Intl.DateTimeFormat('fr-FR', {
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+});
+
 function ReminderCard({
   client,
   isPremium,
+  nextEligibleDate,
   onReminderSent,
 }: {
   client: ClientDetail;
   isPremium: boolean;
+  nextEligibleDate: Date | null;
   onReminderSent: () => void;
 }) {
   const [sending, setSending] = useState(false);
@@ -281,6 +712,11 @@ function ReminderCard({
           ? `Dernier rappel envoyé le ${formatDateFr(client.lastReminderSentAt)}`
           : 'Aucun rappel envoyé pour l’instant'}
       </div>
+      {nextEligibleDate && (
+        <div className="text-xs text-muted-foreground mt-1">
+          Rappel automatique éligible à partir du {nextEligibleFormatter.format(nextEligibleDate)}
+        </div>
+      )}
       {error && <div className="text-sm text-danger mt-2">{error}</div>}
       <button
         type="button"
@@ -291,6 +727,57 @@ function ReminderCard({
         <Icon i="message-circle" size={14} />
         {sending ? 'Ouverture…' : 'Envoyer WhatsApp'}
       </button>
+    </div>
+  );
+}
+
+function MarkOverdueAsPaidButton({
+  clientId,
+  overdueBalanceFcfa,
+  onDone,
+}: {
+  clientId: string;
+  overdueBalanceFcfa: number;
+  onDone: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function markPaid() {
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api('/api/transactions', {
+        method: 'POST',
+        body: {
+          clientId,
+          type: 'PAYMENT',
+          amountFcfa: overdueBalanceFcfa,
+          note: 'Dettes en retard réglées',
+        },
+      });
+      onDone();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erreur réseau. Réessaie.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <button
+        type="button"
+        onClick={markPaid}
+        disabled={submitting}
+        className="flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-sm px-5 py-3 rounded-xl disabled:opacity-60"
+      >
+        <Icon i="check" size={16} />
+        {submitting
+          ? 'Enregistrement…'
+          : `Marquer les dettes en retard comme payées (${formatPrice(overdueBalanceFcfa)} FCFA)`}
+      </button>
+      {error && <div className="text-xs text-danger">{error}</div>}
     </div>
   );
 }

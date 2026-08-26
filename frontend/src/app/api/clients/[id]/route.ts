@@ -7,11 +7,25 @@
 export const runtime = 'nodejs';
 
 import 'server-only';
+import { z } from 'zod';
 import { NextResponse, type NextRequest } from 'next/server';
+import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeClientBalance, isOverdue as computeIsOverdue } from '@/lib/server/jurali/balance';
+import { zPhone, zEmail } from '@/lib/server/zod-helpers';
+
+// Phase 9 — desktop "Fiche client"'s "Modifier" button. All fields
+// optional/independent (partial update) — an empty string clears
+// email/address (distinct from omitting the key, which leaves it
+// untouched); firstName can't be cleared (still required, matches POST).
+const PatchBody = z.object({
+  firstName: z.string().trim().min(1).max(120).optional(),
+  phone: z.union([zPhone, z.literal('')]).optional(),
+  email: z.union([zEmail, z.literal('')]).optional(),
+  address: z.union([z.string().trim().min(1).max(200), z.literal('')]).optional(),
+});
 
 export async function GET(
   req: NextRequest,
@@ -30,6 +44,8 @@ export async function GET(
         ownerId: true,
         firstName: true,
         phone: true,
+        email: true,
+        address: true,
         createdAt: true,
         lastReminderSentAt: true,
         transactions: {
@@ -60,6 +76,8 @@ export async function GET(
         id: client.id,
         firstName: client.firstName,
         phone: client.phone,
+        email: client.email,
+        address: client.address,
         createdAt: client.createdAt,
         lastReminderSentAt: client.lastReminderSentAt,
         balanceFcfa,
@@ -68,5 +86,58 @@ export async function GET(
       },
       { headers: { 'x-request-id': ctx.requestId } },
     );
+  });
+}
+
+export async function PATCH(
+  req: NextRequest,
+  routeCtx: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    const csrfFail = verifyCsrf(req);
+    if (csrfFail) return csrfFail;
+
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
+    const { id } = await routeCtx.params;
+    const existing = await prisma.client.findUnique({
+      where: { id },
+      select: { id: true, ownerId: true },
+    });
+
+    if (!existing || existing.ownerId !== auth.user.sub) {
+      return NextResponse.json(
+        { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
+        { status: 404, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    const parsed = PatchBody.safeParse(await req.json().catch(() => null));
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: 'VALIDATION_FAILED',
+          message: 'Invalid request body',
+          issues: parsed.error.issues,
+        },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    const data: Record<string, string | null> = {};
+    if (parsed.data.firstName !== undefined) data.firstName = parsed.data.firstName;
+    if (parsed.data.phone !== undefined) data.phone = parsed.data.phone || null;
+    if (parsed.data.email !== undefined) data.email = parsed.data.email || null;
+    if (parsed.data.address !== undefined) data.address = parsed.data.address || null;
+
+    const updated = await prisma.client.update({
+      where: { id },
+      data,
+      select: { id: true, firstName: true, phone: true, email: true, address: true },
+    });
+
+    return NextResponse.json(updated, { headers: { 'x-request-id': ctx.requestId } });
   });
 }

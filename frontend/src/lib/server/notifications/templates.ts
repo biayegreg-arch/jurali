@@ -74,3 +74,21 @@ export function autoReminderDue(
     dedupeKey: `auto-reminder:${clientId}:${oldestUnpaidDebtDate.toISOString().slice(0, 10)}`,
   };
 }
+
+/**
+ * Jurali Phase 9 — daily digest cron (`overdue-alert.ts`, 14-day threshold,
+ * distinct from the 7-day per-client `autoReminderDue`). One notification
+ * per user per day summarizing how many clients have debts overdue 14+
+ * days — `dedupeKey` is keyed off today's date so a second cron tick the
+ * same day (e.g. a retry) can't double-notify.
+ */
+export function overdueAlertDue(userId: string, overdueCount: number, now: Date = new Date()) {
+  return {
+    userId,
+    type: 'OVERDUE_ALERT',
+    title: 'Dettes en retard',
+    body: `${overdueCount} client${overdueCount === 1 ? ' a' : 's ont'} une dette en retard de plus de 14 jours.`,
+    data: { overdueCount },
+    dedupeKey: `overdue-alert:${userId}:${now.toISOString().slice(0, 10)}`,
+  } satisfies CreateNotificationInput;
+}

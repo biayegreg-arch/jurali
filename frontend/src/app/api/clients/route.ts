@@ -23,7 +23,7 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { listClientSummaries } from '@/lib/server/jurali/clients';
-import { zPhone } from '@/lib/server/zod-helpers';
+import { zPhone, zEmail } from '@/lib/server/zod-helpers';
 import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
 import { parseMonthParam, monthBounds } from '@/lib/server/jurali/month-range';
 
@@ -33,6 +33,10 @@ const Q_MAX_LEN = 200;
 const CreateBody = z.object({
   firstName: z.string().trim().min(1).max(120),
   phone: z.union([zPhone, z.literal('')]).optional(),
+  // Phase 9 — optional contact fields added for the desktop "Créer client"
+  // screen; the mobile create-on-the-fly flow never sends these.
+  email: z.union([zEmail, z.literal('')]).optional(),
+  address: z.union([z.string().trim().min(1).max(200), z.literal('')]).optional(),
 });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -131,8 +135,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         ownerId: auth.user.sub,
         firstName: parsed.data.firstName,
         phone: parsed.data.phone || null,
+        email: parsed.data.email || null,
+        address: parsed.data.address || null,
       },
-      select: { id: true, firstName: true, phone: true, createdAt: true },
+      select: {
+        id: true,
+        firstName: true,
+        phone: true,
+        email: true,
+        address: true,
+        createdAt: true,
+      },
     });
 
     return NextResponse.json(

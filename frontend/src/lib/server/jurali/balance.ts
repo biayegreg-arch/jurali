@@ -99,6 +99,46 @@ export function computeDebtStatuses(
   return statuses;
 }
 
+/**
+ * FIFO remaining balance of debts currently overdue (>30 days unpaid) —
+ * the "Marquer les dettes en retard comme payées" bulk action's amount
+ * (Phase 9, `clients/[id]/page.tsx`): a partial payment already applied to
+ * an overdue debt reduces what's left to settle, so this returns the FIFO
+ * *remaining* amount, not the original debt total.
+ */
+export function computeOverdueBalance(
+  transactions: AgingTransaction[],
+  now: Date = new Date(),
+  thresholdDays = 30,
+): number {
+  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const unpaidDebts: { amountRemaining: number; createdAt: Date }[] = [];
+
+  for (const tx of sorted) {
+    if (tx.type === 'DEBT') {
+      unpaidDebts.push({ amountRemaining: tx.amountFcfa, createdAt: tx.createdAt });
+      continue;
+    }
+
+    let remaining = tx.amountFcfa;
+    while (remaining > 0 && unpaidDebts.length > 0) {
+      const oldest = unpaidDebts[0]!;
+      if (oldest.amountRemaining <= remaining) {
+        remaining -= oldest.amountRemaining;
+        unpaidDebts.shift();
+      } else {
+        oldest.amountRemaining -= remaining;
+        remaining = 0;
+      }
+    }
+  }
+
+  const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
+  return unpaidDebts
+    .filter((d) => now.getTime() - d.createdAt.getTime() > thresholdMs)
+    .reduce((sum, d) => sum + d.amountRemaining, 0);
+}
+
 export function isOverdue(
   transactions: AgingTransaction[],
   now: Date = new Date(),
