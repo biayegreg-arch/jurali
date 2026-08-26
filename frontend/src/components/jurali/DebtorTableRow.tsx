@@ -7,7 +7,15 @@ import type { DebtorRowProps } from './DebtorRow';
  * sidebar + table. Reuses `DebtorRowProps` so the amount/daysAgo/lastItem
  * derivation (`toDebtorRowProps`) isn't duplicated between the two.
  */
-export function DebtorTableRow({ id, name, amount, daysAgo, lastItem, isOverdue }: DebtorRowProps) {
+export function DebtorTableRow({
+  id,
+  name,
+  amount,
+  balanceFcfa,
+  daysAgo,
+  lastItem,
+  isOverdue,
+}: DebtorRowProps) {
   return (
     <Link href={`/clients/${id}`} className="flex items-center px-6 py-4 hover:bg-input">
       <div className="w-12 flex-shrink-0">
@@ -41,6 +49,10 @@ export function DebtorTableRow({ id, name, amount, daysAgo, lastItem, isOverdue 
         {isOverdue ? (
           <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-danger/10 text-danger font-body font-bold text-xs">
             En retard
+          </span>
+        ) : balanceFcfa === 0 ? (
+          <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-green-50 border border-green-200 text-green-700 font-body font-bold text-xs">
+            Payé
           </span>
         ) : (
           <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-secondary text-secondary-foreground font-body font-bold text-xs">

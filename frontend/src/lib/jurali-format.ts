@@ -14,6 +14,7 @@ export function toDebtorRowProps(summary: ClientSummary, index: number): DebtorR
     id: summary.id,
     name: summary.firstName,
     amount: formatPrice(summary.balanceFcfa),
+    balanceFcfa: summary.balanceFcfa,
     daysAgo: summary.lastActivityAt ? daysSince(summary.lastActivityAt) : null,
     lastItem: summary.lastNote ?? 'Aucune note',
     isOverdue: summary.isOverdue,

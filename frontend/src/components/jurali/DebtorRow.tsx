@@ -4,6 +4,10 @@ export interface DebtorRowProps {
   id: string;
   name: string;
   amount: string;
+  /** Raw balance (Phase 9) — lets rows distinguish "fully paid" (0) from
+   * "current, not yet overdue" (positive, !isOverdue); `amount` alone is
+   * already formatted for display and not safe to compare against. */
+  balanceFcfa: number;
   daysAgo: number | null;
   lastItem: string;
   isOverdue: boolean;
@@ -15,6 +19,7 @@ export function DebtorRow({
   id,
   name,
   amount,
+  balanceFcfa,
   daysAgo,
   lastItem,
   isOverdue,
@@ -45,7 +50,13 @@ export function DebtorRow({
           {amount}
         </span>
         <span className="text-xs text-muted-foreground mt-0.5">
-          {isOverdue ? 'En retard' : daysAgo === null ? '—' : `${daysAgo}j`}
+          {isOverdue
+            ? 'En retard'
+            : balanceFcfa === 0
+              ? 'Payé'
+              : daysAgo === null
+                ? '—'
+                : `${daysAgo}j`}
         </span>
       </div>
     </Link>
