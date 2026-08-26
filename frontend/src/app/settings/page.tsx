@@ -15,7 +15,7 @@ import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSection';
-import { downloadDebtsCsv, type ExportRow } from '@/lib/jurali-csv';
+import { useExportDebtsCsv } from '@/lib/useExportDebtsCsv';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { OVERDUE_ALERT_THRESHOLD_DAYS } from '@/lib/server/jurali/overdue-alert';
 
@@ -553,21 +553,7 @@ function ToggleRow({
 }
 
 function DataSection({ isPremium }: { isPremium: boolean }) {
-  const [exporting, setExporting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function exportCsv() {
-    setExporting(true);
-    setError(null);
-    try {
-      const res = await api<{ items: ExportRow[] }>('/api/clients/export');
-      downloadDebtsCsv(res.items);
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erreur réseau. Réessaie.');
-    } finally {
-      setExporting(false);
-    }
-  }
+  const { exporting, error, exportCsv } = useExportDebtsCsv();
 
   return (
     <SettingsSection title="Données">

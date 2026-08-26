@@ -89,11 +89,21 @@ export function DesktopSidebar({
           <span className="text-primary-foreground">Débiteurs</span>
         </Link>
         <Link
-          href="/clients?filter=overdue"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-body text-sm"
+          href="/debts/overdue"
+          className={`flex items-center gap-3 px-3 py-2.5 rounded-lg font-body text-sm ${
+            pathname === '/debts/overdue' ? 'bg-primary-foreground/15 font-bold' : ''
+          }`}
         >
-          <Icon i="clock" size={18} className="text-secondary flex-shrink-0" />
-          <span className="text-secondary">En retard</span>
+          <Icon
+            i="clock"
+            size={18}
+            className={pathname === '/debts/overdue' ? 'text-primary-foreground' : 'text-secondary'}
+          />
+          <span
+            className={pathname === '/debts/overdue' ? 'text-primary-foreground' : 'text-secondary'}
+          >
+            En retard
+          </span>
         </Link>
         <Link
           href="/stats"

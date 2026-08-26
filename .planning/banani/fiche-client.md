@@ -105,3 +105,32 @@ Companion batched `AskUserQuestion` round (all answered "Recommandé"), supersed
   send-logic — avoids divergent duplicate mutation logic.
 - **"Fidèle" loyalty badge** — seen in the mock, DROPPED (no backing
   concept, same "no fake data" reasoning as "Avance payée").
+
+## UPDATE 2026-08-26, #2 (re-fetch alongside `DettesEnRetardDesktop.jsx`)
+
+User re-selected `FicheClient.jsx` (screenshot showed the updated mock) —
+re-fetched and diffed. Two new elements this time, resolved via a batched
+`AskUserQuestion` (confirmed "Recommandé"):
+
+- **"Suivi des paiements" panel** — built for REAL, scoped to the client's
+  current OLDEST unpaid debt (FIFO means only one debt is ever "being paid
+  down" at a time — the same reasoning `oldestUnpaidDebtDate` already
+  uses). New `computeOldestDebtProgress` in `balance.ts`: walks the same
+  FIFO allocation as the other balance helpers, but for the current oldest
+  debt specifically returns `{originalAmountFcfa, remainingFcfa, events[]}`
+  where each event is a payment that contributed to paying it down
+  (`amountAppliedFcfa` + running `remainingAfterFcfa`) — correctly splits a
+  single payment across two debts when it overflows from one to the next.
+  Returns `null` once every debt is settled (panel hides itself, same
+  pattern as `ReminderCard`/`MarkOverdueAsPaidButton`). Not Premium-gated:
+  paying down debts is core functionality, same tier as the existing
+  "Total dû"/"Total payé" tiles. "Ajouter un versement" is NOT a new
+  mutation — it's the exact same `POST /api/transactions
+  {type:'PAYMENT'}` every other payment flow already uses; FIFO allocation
+  automatically applies it to the oldest debt shown. Zero schema change.
+  Shown on BOTH mobile and desktop (new `PaymentTrackingCard` component),
+  not desktop-exclusive.
+- **"Fidèle" badge** — reintroduced in this mock, but STAYS dropped — no
+  real definition was given for what makes a client "loyal", and the
+  2026-08-24 decision above already established the "no fake badge with no
+  backing concept" precedent. Not re-litigated, re-confirmed by the user.

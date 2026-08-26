@@ -1,6 +1,6 @@
 # Banani implementation status
 
-Last updated: 2026-08-26 (fiche-client + create-client desktop redesign, Paramètres desktop redesign)
+Last updated: 2026-08-26 (Dettes en retard — new page, fiche-client "Suivi des paiements")
 
 ## Done
 - [x] `dashboard` — `frontend/src/app/dashboard/page.tsx` (moved from `/` — see `landing-page.md`) — plan: `dashboard.md` — commit: `52bce00` (move: pending)
@@ -26,6 +26,9 @@ Last updated: 2026-08-26 (fiche-client + create-client desktop redesign, Paramè
 - [x] `fiche-client` (desktop redesign) — Banani screen `FicheClient.jsx` (desktop) re-fetched alongside `CreateClientDesktop.jsx` — real client email/address + edit (`PATCH /api/clients/[id]`), real "Marquer les dettes en retard comme payées" bulk-pay, real derived "Prochain rappel" date, dropped fabricated "Avance payée"/"Fidèle" — `clients/[id]/page.tsx` (`useFicheDerived` hook, `MobileFicheBody`/`DesktopFicheBody` split), `clients/[id]/edit/page.tsx`, `components/jurali/ClientForm.tsx`, `lib/server/jurali/balance.ts` (`computeOverdueBalance`) — plan: `fiche-client.md` § UPDATE 2026-08-26 — commit: pending
 - [x] `create-client` — Banani screen `CreateClientDesktop.jsx` (previously seen and deferred 2026-08-26, now implemented as part of the same batched decision as `fiche-client` desktop above) — `frontend/src/app/clients/new/page.tsx`, shares `ClientForm`/`ClientFormInfoPanel` with the edit flow; `new-debt.md`'s "Créer client" button now links here (`?next=/debts/new`) instead of the earlier focus-shortcut — plan: `fiche-client.md` § UPDATE 2026-08-26, `new-debt.md` § Créer client button — superseded — commit: pending
 - [x] `parametres` (desktop redesign) — Banani screen `Parametres.jsx` (desktop) re-fetched — real profile editing (`PATCH /api/auth/me`, adds `User.address`), new 14-day "Notifications dettes en retard" toggle + cron (distinct from the existing 7-day WhatsApp reminder), global Premium CSV export (`GET /api/clients/export` + `lib/jurali-csv.ts`), dropped fabricated PIN app-lock + password-last-changed date; also fixed a duplicate `/settings` link in `DesktopSidebar` (nav-list item removed, identity-block link kept + given active-state) — `settings/page.tsx`, `api/settings/overdue-alerts/`, `api/cron/overdue-alerts/`, `lib/server/jurali/overdue-alert.ts` — plan: `parametres.md` § UPDATE 2026-08-26 — commit: pending
+
+- [x] `dettes-en-retard` — Banani screen `DettesEnRetardDesktop.jsx`, a brand-new dedicated per-DEBT overdue list (distinct from the existing per-CLIENT `/clients?filter=overdue` chip, which stays as-is) — `frontend/src/app/debts/overdue/page.tsx` + `api/debts/overdue/route.ts`, new `listOverdueDebts` in `balance.ts`, `DesktopSidebar`'s "En retard" nav item repointed here with active-state. No bulk WhatsApp send (wa.me is one-conversation-at-a-time, architecturally can't be 1-click bulk) — real bulk mark-paid + reused CSV export instead — plan: `dettes-en-retard.md` — commit: pending
+- [x] `fiche-client` (Suivi des paiements) — `FicheClient.jsx` re-fetched alongside the above — new "Suivi des paiements" panel scoped to the client's current oldest unpaid debt (real FIFO data via new `computeOldestDebtProgress`, zero schema change — "Ajouter un versement" is the same existing `POST /api/transactions` mutation), shown on mobile + desktop; "Fidèle" badge stays dropped (re-confirmed, still no real definition) — `clients/[id]/page.tsx` (`PaymentTrackingCard`) — plan: `fiche-client.md` § UPDATE 2026-08-26 #2 — commit: pending
 
 ## In progress
 (none)

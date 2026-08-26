@@ -19,10 +19,12 @@ import { formatDateFr } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
 import {
   computeDebtStatuses,
+  computeOldestDebtProgress,
   computeOverdueBalance,
   oldestUnpaidDebtDate,
   type DebtTransaction,
   type DebtStatus,
+  type OldestDebtProgress,
 } from '@/lib/server/jurali/balance';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { downloadClientHistoryPdf } from '@/lib/jurali-pdf';
@@ -186,6 +188,7 @@ interface FicheDerived {
   overdueBalanceFcfa: number;
   nextEligibleReminderDate: Date | null;
   history: ClientTransaction[];
+  oldestDebtProgress: OldestDebtProgress | null;
 }
 
 function useFicheDerived(client: ClientDetail): FicheDerived {
@@ -219,6 +222,10 @@ function useFicheDerived(client: ClientDetail): FicheDerived {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
+  const oldestDebtProgress = computeOldestDebtProgress(
+    client.transactions.map((t) => ({ ...t, createdAt: new Date(t.createdAt) })),
+  );
+
   return {
     debtStatuses,
     debtCount,
@@ -227,6 +234,7 @@ function useFicheDerived(client: ClientDetail): FicheDerived {
     overdueBalanceFcfa,
     nextEligibleReminderDate,
     history,
+    oldestDebtProgress,
   };
 }
 
@@ -362,6 +370,12 @@ function MobileFicheBody({
           onDone={onRefresh}
         />
       )}
+
+      <PaymentTrackingCard
+        progress={derived.oldestDebtProgress}
+        clientId={client.id}
+        onRefresh={onRefresh}
+      />
 
       <div className="flex flex-col gap-2">
         <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
@@ -508,8 +522,14 @@ function DesktopFicheBody({
         )}
       </div>
 
-      {/* Right: debt history table */}
+      {/* Right: payment tracking + debt history table */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
+        <PaymentTrackingCard
+          progress={derived.oldestDebtProgress}
+          clientId={client.id}
+          onRefresh={onRefresh}
+        />
+
         <div className="flex items-center justify-between">
           <div className="font-headings font-bold text-base text-foreground">
             Historique des dettes
@@ -727,6 +747,164 @@ function ReminderCard({
         <Icon i="message-circle" size={14} />
         {sending ? 'Ouverture…' : 'Envoyer WhatsApp'}
       </button>
+    </div>
+  );
+}
+
+// "Suivi des paiements" (Phase 9, FicheClient.jsx re-fetch 2026-08-26) —
+// tracks the CLIENT's current oldest unpaid debt specifically (FIFO means
+// only one debt is ever "being paid down" at a time, see
+// computeOldestDebtProgress). Not Premium-gated: paying down debts is core
+// functionality, same tier as the existing "Total dû"/"Total payé" tiles.
+function PaymentTrackingCard({
+  progress,
+  clientId,
+  onRefresh,
+}: {
+  progress: OldestDebtProgress | null;
+  clientId: string;
+  onRefresh: () => void;
+}) {
+  const [amount, setAmount] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  if (!progress) return null;
+
+  const percent = Math.round(
+    ((progress.originalAmountFcfa - progress.remainingFcfa) / progress.originalAmountFcfa) * 100,
+  );
+
+  async function addPayment() {
+    if (!amount || amount <= 0) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      await api('/api/transactions', {
+        method: 'POST',
+        body: { clientId, type: 'PAYMENT', amountFcfa: amount },
+      });
+      setAmount(null);
+      onRefresh();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Erreur réseau. Réessaie.');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="bg-background border border-border rounded-xl p-5">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Icon i="credit-card" size={16} className="text-primary" />
+          <span className="font-headings font-bold text-base text-foreground">
+            Suivi des paiements
+          </span>
+        </div>
+        {progress.remainingFcfa === 0 && (
+          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 border border-green-200 text-green-700 font-bold text-xs">
+            <Icon i="check-circle" size={11} />
+            Payé
+          </span>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-3 mb-4">
+        <div className="bg-input rounded-lg px-3 py-3">
+          <div className="text-xs text-muted-foreground mb-1">Montant initial</div>
+          <div className="font-headings font-bold text-base text-foreground">
+            {formatPrice(progress.originalAmountFcfa)} FCFA
+          </div>
+        </div>
+        <div className="bg-input rounded-lg px-3 py-3">
+          <div className="text-xs text-muted-foreground mb-1">Total versé</div>
+          <div className="font-headings font-bold text-base text-primary">
+            {formatPrice(progress.originalAmountFcfa - progress.remainingFcfa)} FCFA
+          </div>
+        </div>
+        <div
+          className={`rounded-lg px-3 py-3 ${progress.remainingFcfa === 0 ? 'bg-green-50' : 'bg-red-50'}`}
+        >
+          <div className="text-xs text-muted-foreground mb-1">Reste à payer</div>
+          <div
+            className={`font-headings font-bold text-base ${progress.remainingFcfa === 0 ? 'text-green-700' : 'text-danger'}`}
+          >
+            {formatPrice(progress.remainingFcfa)} FCFA
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-3">
+        <div className="w-full bg-muted rounded-full h-2">
+          <div className="bg-primary h-2 rounded-full" style={{ width: `${percent}%` }} />
+        </div>
+        <div className="text-xs text-muted-foreground mt-1.5 text-center">{percent}% remboursé</div>
+      </div>
+
+      <div className="border-t border-border pt-3 mt-3">
+        <div className="text-xs font-headings font-bold text-muted-foreground mb-3">
+          Historique des versements
+        </div>
+        {progress.events.length === 0 ? (
+          <div className="text-xs text-muted-foreground mb-4">
+            Aucun versement pour l&rsquo;instant.
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2 mb-4">
+            {[...progress.events].reverse().map((e) => (
+              <div key={e.paymentId} className="flex items-center justify-between text-sm">
+                <div className="flex items-center gap-2">
+                  <Icon i="arrow-down" size={12} className="text-primary flex-shrink-0" />
+                  <span className="text-muted-foreground">
+                    {formatDateFr(e.createdAt.toISOString())}
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="font-headings font-bold text-foreground">
+                    {formatPrice(e.amountAppliedFcfa)} FCFA
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    → {formatPrice(e.remainingAfterFcfa)} FCFA restant
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <div className="border-t border-border pt-3">
+          <div className="text-xs font-headings font-bold text-muted-foreground mb-2">
+            Ajouter un versement
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1 flex items-center gap-2 bg-input border border-border rounded-lg px-3 py-2">
+              <Icon i="credit-card" size={14} className="text-muted-foreground flex-shrink-0" />
+              <input
+                type="text"
+                inputMode="numeric"
+                value={amount === null ? '' : String(amount)}
+                onChange={(e) => {
+                  const digits = e.target.value.replace(/\D/g, '');
+                  setAmount(digits === '' ? null : Number(digits));
+                }}
+                placeholder="Montant"
+                className="flex-1 bg-transparent text-sm text-foreground placeholder-muted-foreground outline-none min-w-0"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={addPayment}
+              disabled={submitting || !amount || amount <= 0}
+              className="flex items-center gap-1 bg-primary text-primary-foreground font-headings font-bold text-xs px-3 py-2 rounded-lg disabled:opacity-50"
+            >
+              <Icon i="plus" size={14} />
+              {submitting ? '…' : 'Ajouter'}
+            </button>
+          </div>
+          {error && <div className="text-xs text-danger mt-2">{error}</div>}
+        </div>
+      </div>
     </div>
   );
 }

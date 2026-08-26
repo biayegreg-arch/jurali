@@ -139,6 +139,154 @@ export function computeOverdueBalance(
     .reduce((sum, d) => sum + d.amountRemaining, 0);
 }
 
+export interface TransactionWithNote extends AgingTransaction {
+  id: string;
+  note: string | null;
+}
+
+export interface OverdueDebtRow {
+  id: string;
+  amountFcfa: number;
+  note: string | null;
+  createdAt: Date;
+}
+
+/**
+ * Itemized version of `computeOverdueBalance` (Phase 9, "Dettes en retard"
+ * page) — one row per currently-overdue debt (FIFO remaining amount) rather
+ * than a single summed total. Deliberately NOT refactored to share the loop
+ * with `computeOverdueBalance` — both are money-correctness-critical and
+ * already independently tested; a shared-core refactor would widen the
+ * blast radius of touching either for no behavioral gain.
+ */
+export function listOverdueDebts(
+  transactions: TransactionWithNote[],
+  now: Date = new Date(),
+  thresholdDays = 30,
+): OverdueDebtRow[] {
+  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const unpaidDebts: {
+    id: string;
+    amountRemaining: number;
+    note: string | null;
+    createdAt: Date;
+  }[] = [];
+
+  for (const tx of sorted) {
+    if (tx.type === 'DEBT') {
+      unpaidDebts.push({
+        id: tx.id,
+        amountRemaining: tx.amountFcfa,
+        note: tx.note,
+        createdAt: tx.createdAt,
+      });
+      continue;
+    }
+
+    let remaining = tx.amountFcfa;
+    while (remaining > 0 && unpaidDebts.length > 0) {
+      const oldest = unpaidDebts[0]!;
+      if (oldest.amountRemaining <= remaining) {
+        remaining -= oldest.amountRemaining;
+        unpaidDebts.shift();
+      } else {
+        oldest.amountRemaining -= remaining;
+        remaining = 0;
+      }
+    }
+  }
+
+  const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
+  return unpaidDebts
+    .filter((d) => now.getTime() - d.createdAt.getTime() > thresholdMs)
+    .map((d) => ({
+      id: d.id,
+      amountFcfa: d.amountRemaining,
+      note: d.note,
+      createdAt: d.createdAt,
+    }));
+}
+
+export interface DebtPaymentEvent {
+  paymentId: string;
+  amountAppliedFcfa: number;
+  remainingAfterFcfa: number;
+  createdAt: Date;
+}
+
+export interface OldestDebtProgress {
+  debtId: string;
+  originalAmountFcfa: number;
+  remainingFcfa: number;
+  createdAt: Date;
+  events: DebtPaymentEvent[];
+}
+
+export interface IdentifiedTransaction extends AgingTransaction {
+  id: string;
+}
+
+/**
+ * FIFO paydown progress of the client's current oldest unpaid debt (Phase 9,
+ * fiche client "Suivi des paiements") — which payments contributed to it,
+ * how much of each was applied, and the running remaining balance after
+ * each. Returns null once every debt is fully paid (nothing to track).
+ *
+ * Not scoped to a specific debt id on purpose: FIFO means only one debt is
+ * ever "being paid down" at a time, so "the oldest unpaid debt" is the only
+ * sensible target — the same reasoning `oldestUnpaidDebtDate` already uses.
+ */
+export function computeOldestDebtProgress(
+  transactions: IdentifiedTransaction[],
+): OldestDebtProgress | null {
+  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const unpaidDebts: {
+    id: string;
+    originalAmount: number;
+    amountRemaining: number;
+    createdAt: Date;
+    events: DebtPaymentEvent[];
+  }[] = [];
+
+  for (const tx of sorted) {
+    if (tx.type === 'DEBT') {
+      unpaidDebts.push({
+        id: tx.id,
+        originalAmount: tx.amountFcfa,
+        amountRemaining: tx.amountFcfa,
+        createdAt: tx.createdAt,
+        events: [],
+      });
+      continue;
+    }
+
+    let remaining = tx.amountFcfa;
+    while (remaining > 0 && unpaidDebts.length > 0) {
+      const oldest = unpaidDebts[0]!;
+      const applied = Math.min(oldest.amountRemaining, remaining);
+      oldest.amountRemaining -= applied;
+      remaining -= applied;
+      oldest.events.push({
+        paymentId: tx.id,
+        amountAppliedFcfa: applied,
+        remainingAfterFcfa: oldest.amountRemaining,
+        createdAt: tx.createdAt,
+      });
+      if (oldest.amountRemaining === 0) unpaidDebts.shift();
+    }
+  }
+
+  const target = unpaidDebts[0];
+  if (!target) return null;
+  return {
+    debtId: target.id,
+    originalAmountFcfa: target.originalAmount,
+    remainingFcfa: target.amountRemaining,
+    createdAt: target.createdAt,
+    events: target.events,
+  };
+}
+
 export function isOverdue(
   transactions: AgingTransaction[],
   now: Date = new Date(),
