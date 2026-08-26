@@ -5,7 +5,7 @@
 // and a Premium CSV export. See .planning/banani/parametres.md.
 'use client';
 
-import { useState, type FormEvent, type ReactNode } from 'react';
+import { useState, type FormEvent } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useUser } from '@/contexts/AuthContext';
@@ -127,7 +127,6 @@ export default function SettingsPage() {
             </Link>
           </SettingsSection>
           <DataSection isPremium={isPremium} />
-          <LangSection />
           <AppInfoBlock />
         </div>
       </div>
@@ -152,7 +151,6 @@ export default function SettingsPage() {
           <div className="flex flex-col gap-6 w-[400px] flex-shrink-0">
             <SecuritySection {...sharedProps} />
             <DataSection isPremium={isPremium} />
-            <LangSection />
             <AppInfoBlock />
           </div>
         </div>
@@ -598,15 +596,6 @@ function DataSection({ isPremium }: { isPremium: boolean }) {
           </span>
         </Link>
       )}
-    </SettingsSection>
-  );
-}
-
-function LangSection(): ReactNode {
-  return (
-    <SettingsSection title="Langue & Devise">
-      <SettingsRow icon="globe" label="Langue" value="Français" />
-      <SettingsRow icon="credit-card" label="Devise" value="FCFA" last />
     </SettingsSection>
   );
 }
