@@ -18,7 +18,6 @@ import {
   ClientFormInfoPanel,
   type ClientFormValues,
 } from '@/components/jurali/ClientForm';
-import { normalizePhoneInput } from '@/lib/jurali-phone';
 
 const ERROR_MESSAGES: Record<string, string> = {
   VALIDATION_FAILED: 'Vérifie les champs du formulaire (numéro de téléphone ou email invalide).',
@@ -92,7 +91,7 @@ export default function EditClientPage() {
         method: 'PATCH',
         body: {
           firstName: values.firstName.trim(),
-          phone: normalizePhoneInput(values.phone),
+          phone: values.phone.trim(),
           email: values.email.trim(),
           address: values.address.trim(),
         },

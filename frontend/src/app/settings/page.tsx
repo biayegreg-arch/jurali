@@ -15,8 +15,8 @@ import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSection';
+import { PhoneField } from '@/components/jurali/PhoneField';
 import { useExportDebtsCsv } from '@/lib/useExportDebtsCsv';
-import { normalizePhoneInput } from '@/lib/jurali-phone';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { OVERDUE_ALERT_THRESHOLD_DAYS } from '@/lib/server/jurali/overdue-alert';
 
@@ -191,7 +191,7 @@ function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<
         body: {
           name: name.trim(),
           shopName: shopName.trim(),
-          phone: normalizePhoneInput(phone),
+          phone,
           address: address.trim(),
         },
       });
@@ -255,12 +255,7 @@ function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<
               placeholder="Nom de la boutique"
               className="bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none"
             />
-            <input
-              value={phone}
-              onChange={(e) => setPhone(e.target.value)}
-              placeholder="+221 77 123 45 67"
-              className="bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none"
-            />
+            <PhoneField value={phone} onChange={setPhone} compact />
             <input
               value={address}
               onChange={(e) => setAddress(e.target.value)}

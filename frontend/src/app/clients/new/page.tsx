@@ -20,7 +20,6 @@ import {
   ClientFormInfoPanel,
   type ClientFormValues,
 } from '@/components/jurali/ClientForm';
-import { normalizePhoneInput } from '@/lib/jurali-phone';
 
 const ERROR_MESSAGES: Record<string, string> = {
   CLIENT_LIMIT_REACHED: 'Limite de 10 clients gratuits atteinte — passe à Premium pour continuer.',
@@ -80,7 +79,7 @@ function CreateClientPageContent() {
         method: 'POST',
         body: {
           firstName: values.firstName.trim(),
-          ...(values.phone.trim() ? { phone: normalizePhoneInput(values.phone) } : {}),
+          ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
           ...(values.email.trim() ? { email: values.email.trim() } : {}),
           ...(values.address.trim() ? { address: values.address.trim() } : {}),
         },

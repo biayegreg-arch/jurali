@@ -7,6 +7,7 @@
 // desktop mock, so the unprefixed classes below are the phone layout,
 // `lg:` adds the sidebar + 2-column info panel.
 import { Icon } from './Icon';
+import { PhoneField } from './PhoneField';
 
 export interface ClientFormValues {
   firstName: string;
@@ -49,13 +50,9 @@ export function ClientForm({
         placeholder="Aïssatou Ndiaye"
         helper="Obligatoire"
       />
-      <Field
-        icon="smartphone"
-        label="Numéro de téléphone"
+      <PhoneField
         value={values.phone}
         onChange={(v) => set('phone', v)}
-        placeholder="+221 77 123 45 67"
-        type="tel"
         helper="Recommandé — pour les rappels WhatsApp"
       />
       <Field
