@@ -24,9 +24,14 @@ interface DashboardData {
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
+  totalClientCount: number;
   selectedMonthRecoveredFcfa: number;
   selectedMonthNewDebtsFcfa: number;
   selectedMonthTransactionCount: number;
+}
+
+interface SubscriptionData {
+  isActive: boolean;
 }
 
 function currentMonthParam(): string {
@@ -45,6 +50,7 @@ export default function DashboardPage() {
     '/api/clients?sort=activity&order=desc&limit=5',
     { skip: !user },
   );
+  const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
   // Desktop (lg+) sidebar + full debtor table — same shared state/fetch as
   // `/clients`' desktop view (see .planning/banani/dashboard.md § Desktop
   // sidebar + table). Named `debtor*` here to avoid colliding with this
@@ -88,6 +94,8 @@ export default function DashboardPage() {
         overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
         overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
         loading={dashboardLoading}
+        totalClientCount={dashboard?.totalClientCount ?? 0}
+        isPremium={subscription?.isActive ?? false}
       />
 
       {/* Mobile/tablet (< lg) — unchanged KPI-hero + preview layout */}

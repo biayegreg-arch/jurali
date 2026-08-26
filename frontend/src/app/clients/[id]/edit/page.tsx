@@ -18,12 +18,22 @@ import {
   ClientFormInfoPanel,
   type ClientFormValues,
 } from '@/components/jurali/ClientForm';
+import { normalizePhoneInput } from '@/lib/jurali-phone';
+
+const ERROR_MESSAGES: Record<string, string> = {
+  VALIDATION_FAILED: 'Vérifie les champs du formulaire (numéro de téléphone ou email invalide).',
+};
 
 interface DashboardData {
   totalDueFcfa: number;
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
+  totalClientCount: number;
+}
+
+interface SubscriptionData {
+  isActive: boolean;
 }
 
 interface ClientDetail {
@@ -51,6 +61,7 @@ export default function EditClientPage() {
   const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
+  const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
   const { data: notifData } = useApi<{ count: number }>('/api/notifications/count', {
     skip: !user,
   });
@@ -81,7 +92,7 @@ export default function EditClientPage() {
         method: 'PATCH',
         body: {
           firstName: values.firstName.trim(),
-          phone: values.phone.trim(),
+          phone: normalizePhoneInput(values.phone),
           email: values.email.trim(),
           address: values.address.trim(),
         },
@@ -89,7 +100,11 @@ export default function EditClientPage() {
       toast('Client mis à jour', 'success');
       router.push(`/clients/${params.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Une erreur est survenue. Réessaie.');
+      setError(
+        err instanceof ApiError
+          ? (ERROR_MESSAGES[err.code] ?? err.message)
+          : 'Une erreur est survenue. Réessaie.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -126,6 +141,8 @@ export default function EditClientPage() {
         overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
         overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
         loading={dashboardLoading}
+        totalClientCount={dashboard?.totalClientCount ?? 0}
+        isPremium={subscription?.isActive ?? false}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

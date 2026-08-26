@@ -1,6 +1,6 @@
 # Banani implementation status
 
-Last updated: 2026-08-26 (Dettes en retard — new page, fiche-client "Suivi des paiements")
+Last updated: 2026-08-26 (Sidebar "Passer à Premium" nudge, all 9 pages using DesktopSidebar)
 
 ## Done
 - [x] `dashboard` — `frontend/src/app/dashboard/page.tsx` (moved from `/` — see `landing-page.md`) — plan: `dashboard.md` — commit: `52bce00` (move: pending)
@@ -29,6 +29,8 @@ Last updated: 2026-08-26 (Dettes en retard — new page, fiche-client "Suivi des
 
 - [x] `dettes-en-retard` — Banani screen `DettesEnRetardDesktop.jsx`, a brand-new dedicated per-DEBT overdue list (distinct from the existing per-CLIENT `/clients?filter=overdue` chip, which stays as-is) — `frontend/src/app/debts/overdue/page.tsx` + `api/debts/overdue/route.ts`, new `listOverdueDebts` in `balance.ts`, `DesktopSidebar`'s "En retard" nav item repointed here with active-state. No bulk WhatsApp send (wa.me is one-conversation-at-a-time, architecturally can't be 1-click bulk) — real bulk mark-paid + reused CSV export instead — plan: `dettes-en-retard.md` — commit: pending
 - [x] `fiche-client` (Suivi des paiements) — `FicheClient.jsx` re-fetched alongside the above — new "Suivi des paiements" panel scoped to the client's current oldest unpaid debt (real FIFO data via new `computeOldestDebtProgress`, zero schema change — "Ajouter un versement" is the same existing `POST /api/transactions` mutation), shown on mobile + desktop; "Fidèle" badge stays dropped (re-confirmed, still no real definition) — `clients/[id]/page.tsx` (`PaymentTrackingCard`) — plan: `fiche-client.md` § UPDATE 2026-08-26 #2 — commit: pending
+
+- [x] `premium-sidebar-nudge` — `PagePremium.jsx` + `PremiumActivationSuccess.jsx` re-fetched (sidebar-only elements) — real `totalClientCount / CLIENT_FREE_TIER_LIMIT` progress card + "Passer à Premium" link added below the nav on all 9 pages sharing `DesktopSidebar`, hidden once Premium — `lib/server/jurali/client-limits.ts` (new, shared constant), `api/dashboard/route.ts` (`totalClientCount`, additive), `DesktopSidebar.tsx`, 9 consumer pages — plan: `premium-sidebar-nudge.md` — commit: pending
 
 ## In progress
 (none)

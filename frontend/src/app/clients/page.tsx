@@ -20,6 +20,11 @@ interface DashboardData {
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
+  totalClientCount: number;
+}
+
+interface SubscriptionData {
+  isActive: boolean;
 }
 
 export default function ClientsPage() {
@@ -53,6 +58,7 @@ function ClientsPageContent() {
   const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
+  const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
   // Hoisted once: both the mobile TopBar's bell and the desktop content
   // bar's bell render on every load (Tailwind's hidden/lg:hidden is
   // CSS-only, not conditional mounting) — without a single shared fetch
@@ -77,6 +83,8 @@ function ClientsPageContent() {
         overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
         overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
         loading={dashboardLoading}
+        totalClientCount={dashboard?.totalClientCount ?? 0}
+        isPremium={subscription?.isActive ?? false}
       />
 
       {/* Mobile/tablet (< lg) — unchanged card-list layout */}

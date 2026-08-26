@@ -84,6 +84,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         debtorCount,
         overdueDueFcfa,
         overdueDebtorCount,
+        // Every Client row regardless of balance — the free-tier cap (Phase
+        // 9 sidebar "Passer à Premium" nudge) counts ALL clients, not just
+        // those currently owing money (debtorCount above excludes
+        // balanceFcfa <= 0). `summaries` already has one row per client.
+        totalClientCount: summaries.length,
         recoveredThisMonthFcfa: recovered._sum.amountFcfa ?? 0,
         selectedMonth: formatMonthParam(year, month),
         selectedMonthRecoveredFcfa: monthRecovered._sum.amountFcfa ?? 0,

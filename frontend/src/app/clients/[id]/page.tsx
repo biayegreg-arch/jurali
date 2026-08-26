@@ -59,6 +59,7 @@ interface DashboardData {
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
+  totalClientCount: number;
 }
 
 export default function ClientFichePage() {
@@ -97,6 +98,8 @@ export default function ClientFichePage() {
         overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
         overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
         loading={dashboardLoading}
+        totalClientCount={dashboard?.totalClientCount ?? 0}
+        isPremium={isPremium}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

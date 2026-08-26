@@ -20,12 +20,23 @@ import {
   ClientFormInfoPanel,
   type ClientFormValues,
 } from '@/components/jurali/ClientForm';
+import { normalizePhoneInput } from '@/lib/jurali-phone';
+
+const ERROR_MESSAGES: Record<string, string> = {
+  CLIENT_LIMIT_REACHED: 'Limite de 10 clients gratuits atteinte — passe à Premium pour continuer.',
+  VALIDATION_FAILED: 'Vérifie les champs du formulaire (numéro de téléphone ou email invalide).',
+};
 
 interface DashboardData {
   totalDueFcfa: number;
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
+  totalClientCount: number;
+}
+
+interface SubscriptionData {
+  isActive: boolean;
 }
 
 const EMPTY: ClientFormValues = { firstName: '', phone: '', email: '', address: '' };
@@ -49,6 +60,7 @@ function CreateClientPageContent() {
   const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
+  const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
   const { data: notifData } = useApi<{ count: number }>('/api/notifications/count', {
     skip: !user,
   });
@@ -68,7 +80,7 @@ function CreateClientPageContent() {
         method: 'POST',
         body: {
           firstName: values.firstName.trim(),
-          ...(values.phone.trim() ? { phone: values.phone.trim() } : {}),
+          ...(values.phone.trim() ? { phone: normalizePhoneInput(values.phone) } : {}),
           ...(values.email.trim() ? { email: values.email.trim() } : {}),
           ...(values.address.trim() ? { address: values.address.trim() } : {}),
         },
@@ -76,11 +88,11 @@ function CreateClientPageContent() {
       toast('Client créé', 'success');
       router.push(next ? `${next}?clientId=${created.id}` : `/clients/${created.id}`);
     } catch (err) {
-      if (err instanceof ApiError && err.code === 'CLIENT_LIMIT_REACHED') {
-        setError('Limite de 10 clients gratuits atteinte — passe à Premium pour continuer.');
-      } else {
-        setError(err instanceof ApiError ? err.message : 'Une erreur est survenue. Réessaie.');
-      }
+      setError(
+        err instanceof ApiError
+          ? (ERROR_MESSAGES[err.code] ?? err.message)
+          : 'Une erreur est survenue. Réessaie.',
+      );
     } finally {
       setSubmitting(false);
     }
@@ -98,6 +110,8 @@ function CreateClientPageContent() {
         overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
         overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
         loading={dashboardLoading}
+        totalClientCount={dashboard?.totalClientCount ?? 0}
+        isPremium={subscription?.isActive ?? false}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

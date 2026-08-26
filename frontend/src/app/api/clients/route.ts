@@ -26,8 +26,8 @@ import { listClientSummaries } from '@/lib/server/jurali/clients';
 import { zPhone, zEmail } from '@/lib/server/zod-helpers';
 import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
 import { parseMonthParam, monthBounds } from '@/lib/server/jurali/month-range';
+import { CLIENT_FREE_TIER_LIMIT } from '@/lib/server/jurali/client-limits';
 
-const CLIENT_FREE_TIER_LIMIT = 10;
 const Q_MAX_LEN = 200;
 
 const CreateBody = z.object({

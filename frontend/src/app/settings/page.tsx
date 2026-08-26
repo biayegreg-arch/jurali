@@ -16,6 +16,7 @@ import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSection';
 import { useExportDebtsCsv } from '@/lib/useExportDebtsCsv';
+import { normalizePhoneInput } from '@/lib/jurali-phone';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { OVERDUE_ALERT_THRESHOLD_DAYS } from '@/lib/server/jurali/overdue-alert';
 
@@ -28,6 +29,7 @@ interface DashboardData {
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
+  totalClientCount: number;
 }
 
 function usePremiumToggle(endpoint: string, skip: boolean) {
@@ -83,6 +85,8 @@ export default function SettingsPage() {
         overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
         overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
         loading={dashboardLoading}
+        totalClientCount={dashboard?.totalClientCount ?? 0}
+        isPremium={isPremium}
       />
 
       {/* Mobile/tablet (< lg) — single column, unchanged structure */}
@@ -187,7 +191,7 @@ function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<
         body: {
           name: name.trim(),
           shopName: shopName.trim(),
-          phone: phone.trim(),
+          phone: normalizePhoneInput(phone),
           address: address.trim(),
         },
       });
@@ -196,7 +200,11 @@ function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<
       await refresh();
     } catch (err) {
       if (err instanceof ApiError) {
-        setError(err.code === 'PHONE_ALREADY_EXISTS' ? 'Ce numéro est déjà utilisé.' : err.message);
+        const map: Record<string, string> = {
+          PHONE_ALREADY_EXISTS: 'Ce numéro est déjà utilisé.',
+          VALIDATION_FAILED: 'Vérifie les champs du formulaire (numéro de téléphone invalide).',
+        };
+        setError(map[err.code] ?? err.message);
       } else {
         setError('Erreur réseau. Réessaie.');
       }

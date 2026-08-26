@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Icon } from './Icon';
 import { formatPrice } from '@/lib/utils';
+import { CLIENT_FREE_TIER_LIMIT } from '@/lib/server/jurali/client-limits';
 
 // Desktop (lg+) sidebar shared by /clients, /dashboard, /debts/new and
 // /stats — Banani's "Dashboard Desktop" screen family, scoped to these
@@ -26,6 +27,10 @@ export interface DesktopSidebarProps {
   overdueDueFcfa: number;
   overdueDebtorCount: number;
   loading: boolean;
+  /** Every Client row regardless of balance (see GET /api/dashboard) —
+   * drives the free-tier "Passer à Premium" nudge below. */
+  totalClientCount: number;
+  isPremium: boolean;
 }
 
 export function DesktopSidebar({
@@ -36,6 +41,8 @@ export function DesktopSidebar({
   overdueDueFcfa,
   overdueDebtorCount,
   loading,
+  totalClientCount,
+  isPremium,
 }: DesktopSidebarProps) {
   const pathname = usePathname();
   const firstName = fullName?.trim().split(/\s+/)[0] || displayName;
@@ -115,6 +122,36 @@ export function DesktopSidebar({
           <span className="text-secondary">Statistiques</span>
         </Link>
       </nav>
+
+      {/* "Passer à Premium" nudge (Banani's PagePremium.jsx sidebar) — real
+          totalClientCount/CLIENT_FREE_TIER_LIMIT progress, not the mock's
+          fixed "8/10". Hidden entirely once Premium (no cap left to show —
+          matches PremiumActivationSuccess.jsx's sidebar, which drops the
+          nudge once the plan is active). */}
+      {!isPremium && (
+        <Link
+          href="/premium"
+          className="mx-4 mt-8 rounded-xl p-4 bg-primary-foreground/10 flex flex-col gap-2"
+        >
+          <div className="flex items-center gap-2">
+            <Icon i="zap" size={15} className="text-accent flex-shrink-0" />
+            <span className="font-headings font-bold text-xs text-primary-foreground">
+              Passer à Premium
+            </span>
+          </div>
+          <div className="w-full h-1 rounded-full overflow-hidden bg-primary-foreground/20">
+            <div
+              className="h-full bg-accent rounded-full"
+              style={{
+                width: `${Math.min(100, Math.round((totalClientCount / CLIENT_FREE_TIER_LIMIT) * 100))}%`,
+              }}
+            />
+          </div>
+          <p className="text-xs text-secondary">
+            {totalClientCount} / {CLIENT_FREE_TIER_LIMIT} clients utilisés
+          </p>
+        </Link>
+      )}
 
       <div className="px-4 mt-8 flex flex-col gap-3">
         <SidebarStat

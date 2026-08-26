@@ -26,6 +26,7 @@ interface DashboardData {
   debtorCount: number;
   overdueDueFcfa: number;
   overdueDebtorCount: number;
+  totalClientCount: number;
 }
 
 interface SubscriptionData {
@@ -116,6 +117,8 @@ export default function OverdueDebtsPage() {
         overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
         overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
         loading={dashboardLoading}
+        totalClientCount={dashboard?.totalClientCount ?? 0}
+        isPremium={isPremium}
       />
 
       {/* Mobile/tablet (< lg) */}
