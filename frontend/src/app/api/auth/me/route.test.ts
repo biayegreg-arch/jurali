@@ -223,4 +223,80 @@ describe('PATCH /api/auth/me', () => {
       expect.objectContaining({ data: { address: 'Plateau, Dakar' } }),
     );
   });
+
+  it('returns 409 PHONE_REQUIRED when clearing phone would lock a phone-only account out', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      tokenVersion: 0,
+      phone: '+221771234567',
+      email: '221771234567@phone.jurali.local',
+      emailVerifiedAt: null,
+      oauthAccounts: [],
+    } as never);
+
+    const res = await PATCH(makePatchReq({ phone: '' }, { bearer: 'tok' }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('PHONE_REQUIRED');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('allows clearing phone when the account has a verified email', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      tokenVersion: 0,
+      phone: '+221771234567',
+      email: 'a@b.com',
+      emailVerifiedAt: new Date(),
+      oauthAccounts: [],
+    } as never);
+    prismaMock.user.update.mockResolvedValue({ phone: null } as never);
+
+    const res = await PATCH(makePatchReq({ phone: '' }, { bearer: 'tok' }));
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ phone: null }) }),
+    );
+  });
+
+  it('keeps the synthetic email in sync when a phone-only account changes phone', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      tokenVersion: 0,
+      phone: '+221771111111',
+      email: '221771111111@phone.jurali.local',
+      emailVerifiedAt: null,
+      oauthAccounts: [],
+    } as never);
+    prismaMock.user.findFirst.mockResolvedValue(null); // new phone is free
+    prismaMock.user.update.mockResolvedValue({ phone: '+221772222222' } as never);
+
+    const res = await PATCH(makePatchReq({ phone: '+221772222222' }, { bearer: 'tok' }));
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          phone: '+221772222222',
+          email: '221772222222@phone.jurali.local',
+        }),
+      }),
+    );
+  });
+
+  it('does not touch email when a real-email account changes phone', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      tokenVersion: 0,
+      phone: '+221771111111',
+      email: 'a@b.com',
+      emailVerifiedAt: new Date(),
+      oauthAccounts: [],
+    } as never);
+    prismaMock.user.findFirst.mockResolvedValue(null);
+    prismaMock.user.update.mockResolvedValue({ phone: '+221772222222' } as never);
+
+    const res = await PATCH(makePatchReq({ phone: '+221772222222' }, { bearer: 'tok' }));
+    expect(res.status).toBe(200);
+    const call = prismaMock.user.update.mock.calls[0]?.[0] as { data: Record<string, unknown> };
+    expect(call.data.email).toBeUndefined();
+  });
 });

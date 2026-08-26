@@ -31,6 +31,7 @@ import {
 } from '@/lib/server/auth';
 import { isBanned } from '@/lib/server/auth/banned-passwords';
 import { isPwned } from '@/lib/server/auth/hibp';
+import { syntheticEmail } from '@/lib/server/auth/synthetic-email';
 
 const PASSWORD_MIN = Number(process.env.AUTH_PASSWORD_MIN_LENGTH ?? 10);
 
@@ -48,11 +49,6 @@ const limiter = createEmailLimiter(redis ? { redis } : {}, {
   code: 'TOO_MANY_PHONE_SIGNUP_ATTEMPTS',
   message: 'Too many signup attempts. Try again later.',
 });
-
-/** Synthetic, non-deliverable placeholder — never used to send mail. */
-function syntheticEmail(phone: string): string {
-  return `${phone.replace(/\+/g, '')}@phone.jurali.local`;
-}
 
 function formatIssues(err: z.ZodError) {
   return err.issues.map((e) => ({ path: e.path.join('.'), message: e.message }));

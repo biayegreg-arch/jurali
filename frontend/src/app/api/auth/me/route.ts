@@ -26,6 +26,7 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { zPhone } from '@/lib/server/zod-helpers';
+import { isSyntheticEmail, syntheticEmail } from '@/lib/server/auth/synthetic-email';
 
 // Phase 9 — desktop /settings "Modifier" button (Parametres.jsx's "Profil
 // & Boutique"). All fields optional/independent (partial update).
@@ -122,24 +123,58 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    if (parsed.data.phone) {
-      const existing = await prisma.user.findFirst({
-        where: { phone: parsed.data.phone, id: { not: auth.user.sub } },
-        select: { id: true },
-      });
-      if (existing) {
-        return NextResponse.json(
-          { error: 'PHONE_ALREADY_EXISTS', message: 'This phone number is already registered.' },
-          { status: 409, headers: { 'x-request-id': ctx.requestId } },
-        );
-      }
-    }
-
     const data: Record<string, string | null> = {};
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
     if (parsed.data.shopName !== undefined) data.shopName = parsed.data.shopName;
-    if (parsed.data.phone !== undefined) data.phone = parsed.data.phone || null;
     if (parsed.data.address !== undefined) data.address = parsed.data.address || null;
+
+    if (parsed.data.phone !== undefined) {
+      const nextPhone = parsed.data.phone || null;
+
+      const current = await prisma.user.findUnique({
+        where: { id: auth.user.sub },
+        select: {
+          phone: true,
+          email: true,
+          emailVerifiedAt: true,
+          oauthAccounts: { select: { provider: true }, take: 1 },
+        },
+      });
+
+      // Phone-only accounts (synthetic email, never verified, no OAuth
+      // linked) have no other way to sign back in — clearing the phone
+      // would permanently lock the account out.
+      if (!nextPhone && current && !current.emailVerifiedAt && current.oauthAccounts.length === 0) {
+        return NextResponse.json(
+          {
+            error: 'PHONE_REQUIRED',
+            message: 'Remove your phone number after setting a verified email or linking Google.',
+          },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+
+      if (nextPhone && nextPhone !== current?.phone) {
+        const existing = await prisma.user.findFirst({
+          where: { phone: nextPhone, id: { not: auth.user.sub } },
+          select: { id: true },
+        });
+        if (existing) {
+          return NextResponse.json(
+            { error: 'PHONE_ALREADY_EXISTS', message: 'This phone number is already registered.' },
+            { status: 409, headers: { 'x-request-id': ctx.requestId } },
+          );
+        }
+
+        // Keep the 1:1 phone->synthetic-email mapping in sync so the old
+        // phone number is safe to reassign to another account afterwards.
+        if (current?.email && isSyntheticEmail(current.email)) {
+          data.email = syntheticEmail(nextPhone);
+        }
+      }
+
+      data.phone = nextPhone;
+    }
 
     const updated = await prisma.user.update({
       where: { id: auth.user.sub },
