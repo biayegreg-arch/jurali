@@ -128,6 +128,13 @@ export function ClientPicker({
           placeholder="Chercher ou sélectionner..."
           className="flex-1 bg-transparent text-base text-foreground placeholder-muted-foreground outline-none"
         />
+        {value && !open && (
+          <div className="w-8 h-8 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
+            <span className="font-headings font-bold text-sm text-secondary-foreground">
+              {value.firstName.charAt(0).toUpperCase()}
+            </span>
+          </div>
+        )}
       </div>
       {!open && <div className="text-xs text-muted-foreground mt-2">{helperText}</div>}
 

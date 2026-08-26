@@ -145,6 +145,29 @@ full 2-column desktop layout built after all. Implemented on
   not fabricated data.
 - **Astuce** tip block: static copy, matches the Banani source verbatim.
 
+## Re-fetch + diff confirmation (2026-08-26, later same day)
+User re-selected `NewDebtDesktop.jsx` and asked to re-verify the page was
+built "with the same debt-adding components and all". Re-fetched the
+screen and diffed line-by-line against the shipped implementation — no
+drift found in the sidebar, top bar, amount field, articles list, reminder
+toggle, CTAs, recent-clients panel, status badge, or tip block. The
+progress bar (still present in Banani's own mock) stays dropped per the
+2026-08-24 decision above (implies a 3-step flow that doesn't exist); the
+reminder toggle keeps its "S'applique à tous tes clients" caption instead
+of Banani's literal "Envoyer un WhatsApp dans 7 jours" for the same reason
+documented in the Desktop layout reversal section (it's a global setting,
+not a per-debt schedule — the literal copy would misrepresent that).
+
+One genuine gap found and fixed: Banani's client field shows a small
+initials-avatar badge next to the search input once a client is selected
+(`ml-auto w-8 h-8 rounded-xl bg-secondary`, first-letter initial) — this
+was missing from `ClientPicker.tsx`. Added it (shown whenever `value` is
+set and the dropdown is closed), using the real selected client's
+`firstName` initial — same avatar-initials pattern already used
+everywhere else in the app (sidebar, recent-clients panel, fiche client).
+Since `ClientPicker` is shared with the payment-entry screen, that screen
+gains the same badge for free.
+
 ## Créer client button — superseded (2026-08-26)
 The "focus the existing `ClientPicker` input" shortcut above is superseded
 now that `CreateClientDesktop.jsx` was implemented for real (batched
