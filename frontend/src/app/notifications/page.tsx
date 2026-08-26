@@ -7,7 +7,7 @@
 // same "no fake UI" treatment as every other bare route in this project.
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
-import { useApi } from '@/lib/useApi';
+import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { formatDateFr } from '@/lib/jurali-format';
@@ -35,11 +35,13 @@ export default function NotificationsPage() {
 
   async function markAllRead() {
     await api('/api/notifications', { method: 'PATCH', body: { ids: 'all' } });
+    invalidateAllCache();
     await refresh();
   }
 
   async function markRead(id: string) {
     await api('/api/notifications', { method: 'PATCH', body: { ids: [id] } });
+    invalidateAllCache();
     await refresh();
   }
 

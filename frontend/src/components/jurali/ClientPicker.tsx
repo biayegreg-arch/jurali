@@ -4,6 +4,7 @@
 // Nouvelle dette and Paiement reçu forms. See .planning/banani/new-debt.md.
 import { useEffect, useRef, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
+import { invalidateAllCache } from '@/lib/useApi';
 import { Icon } from './Icon';
 
 export interface PickedClient {
@@ -98,6 +99,7 @@ export function ClientPicker({
         method: 'POST',
         body: { firstName: query.trim() },
       });
+      invalidateAllCache();
       select(created);
     } catch (err) {
       if (err instanceof ApiError && err.code === 'CLIENT_LIMIT_REACHED') {

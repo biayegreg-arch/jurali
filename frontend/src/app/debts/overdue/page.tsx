@@ -12,7 +12,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { useApi } from '@/lib/useApi';
+import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
@@ -55,7 +55,11 @@ interface OverdueData {
 export default function OverdueDebtsPage() {
   const user = useUser();
   const { toast } = useToast();
-  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
+  const {
+    data: dashboard,
+    loading: dashboardLoading,
+    refresh: refreshDashboard,
+  } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
@@ -98,7 +102,8 @@ export default function OverdueDebtsPage() {
       } else {
         toast('Dettes en retard réglées.', 'success');
       }
-      await refresh();
+      invalidateAllCache();
+      await Promise.all([refresh(), refreshDashboard()]);
     } finally {
       setMarkingPaid(false);
     }

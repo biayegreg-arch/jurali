@@ -17,7 +17,7 @@ import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
-import { useApi } from '@/lib/useApi';
+import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
@@ -128,6 +128,7 @@ function NewDebtPageContent() {
           ...(composedNote ? { note: composedNote } : {}),
         },
       });
+      invalidateAllCache();
       toast('Dette enregistrée', 'success');
       router.push('/dashboard');
     } catch (err) {
@@ -401,6 +402,7 @@ function ReminderToggle({ isPremium }: { isPremium: boolean }) {
     setSaving(true);
     try {
       await api('/api/settings/auto-reminders', { method: 'PATCH', body: { enabled: next } });
+      invalidateAllCache();
     } catch {
       setOverride(!next);
     } finally {

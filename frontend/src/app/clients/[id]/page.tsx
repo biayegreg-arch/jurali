@@ -9,7 +9,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
-import { useApi } from '@/lib/useApi';
+import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
@@ -72,7 +72,11 @@ export default function ClientFichePage() {
     refresh,
   } = useApi<ClientDetail>(`/api/clients/${params.id}`);
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
-  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
+  const {
+    data: dashboard,
+    loading: dashboardLoading,
+    refresh: refreshDashboard,
+  } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
   const { data: notifData } = useApi<{ count: number }>('/api/notifications/count', {
@@ -83,6 +87,11 @@ export default function ClientFichePage() {
     '/api/settings/auto-reminders',
     { skip: !isPremium },
   );
+
+  async function refreshAll() {
+    invalidateAllCache();
+    await Promise.all([refresh(), refreshDashboard()]);
+  }
 
   if (!user) return null;
 
@@ -175,7 +184,7 @@ export default function ClientFichePage() {
             isPremium={isPremium}
             autoReminderEnabled={autoReminderSettings?.enabled ?? false}
             shopName={user.shopName}
-            onRefresh={refresh}
+            onRefresh={refreshAll}
           />
         )}
       </div>

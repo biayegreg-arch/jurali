@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
-import { useApi } from '@/lib/useApi';
+import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
@@ -84,6 +84,7 @@ function CreateClientPageContent() {
           ...(values.address.trim() ? { address: values.address.trim() } : {}),
         },
       });
+      invalidateAllCache();
       toast('Client créé', 'success');
       router.push(next ? `${next}?clientId=${created.id}` : `/clients/${created.id}`);
     } catch (err) {

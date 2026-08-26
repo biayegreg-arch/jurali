@@ -10,7 +10,7 @@ import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
 import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
-import { useApi } from '@/lib/useApi';
+import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
@@ -45,6 +45,7 @@ function usePremiumToggle(endpoint: string, skip: boolean) {
     setSaving(true);
     try {
       await api(endpoint, { method: 'PATCH', body: { enabled: next } });
+      invalidateAllCache();
     } catch {
       setOverride(!next);
     } finally {
@@ -193,6 +194,7 @@ function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<
           address: address.trim(),
         },
       });
+      invalidateAllCache();
       toast('Profil mis à jour.', 'success');
       setEditing(false);
       await refresh();

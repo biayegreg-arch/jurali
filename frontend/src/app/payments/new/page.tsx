@@ -11,6 +11,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/lib/api';
+import { invalidateAllCache } from '@/lib/useApi';
 import { formatPrice } from '@/lib/utils';
 import { Icon } from '@/components/jurali/Icon';
 import { ClientPicker, type PickedClient } from '@/components/jurali/ClientPicker';
@@ -48,6 +49,7 @@ export default function NewPaymentPage() {
         method: 'POST',
         body: { clientId: client.id, type: 'PAYMENT', amountFcfa: amount },
       });
+      invalidateAllCache();
       setReceipt({
         clientName: client.firstName,
         amountFcfa: amount,

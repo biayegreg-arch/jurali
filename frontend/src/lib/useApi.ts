@@ -116,3 +116,13 @@ export function invalidateCachePrefix(prefix: string): void {
     if (key.startsWith(prefix)) cache.delete(key);
   }
 }
+
+// Called after any mutation so other pages never serve stale
+// stale-while-revalidate data (up to STALE_TIME old) for data the mutation
+// changed. Clearing everything (rather than tracking per-mutation
+// dependency lists) is deliberate: this app's read set is small and a
+// missed prefix would silently reintroduce the exact staleness bug this
+// exists to fix.
+export function invalidateAllCache(): void {
+  cache.clear();
+}
