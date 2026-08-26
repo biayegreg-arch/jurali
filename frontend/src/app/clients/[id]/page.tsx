@@ -802,12 +802,6 @@ function PaymentTrackingCard({
             Suivi des paiements
           </span>
         </div>
-        {progress.remainingFcfa === 0 && (
-          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-50 border border-green-200 text-green-700 font-bold text-xs">
-            <Icon i="check-circle" size={11} />
-            Payé
-          </span>
-        )}
       </div>
 
       <div className="grid grid-cols-3 gap-3 mb-4">
@@ -823,13 +817,9 @@ function PaymentTrackingCard({
             {formatPrice(progress.originalAmountFcfa - progress.remainingFcfa)} FCFA
           </div>
         </div>
-        <div
-          className={`rounded-lg px-3 py-3 ${progress.remainingFcfa === 0 ? 'bg-green-50' : 'bg-red-50'}`}
-        >
+        <div className="rounded-lg px-3 py-3 bg-red-50">
           <div className="text-xs text-muted-foreground mb-1">Reste à payer</div>
-          <div
-            className={`font-headings font-bold text-base ${progress.remainingFcfa === 0 ? 'text-green-700' : 'text-danger'}`}
-          >
+          <div className="font-headings font-bold text-base text-danger">
             {formatPrice(progress.remainingFcfa)} FCFA
           </div>
         </div>
