@@ -1,6 +1,6 @@
 # Banani implementation status
 
-Last updated: 2026-08-26 (Phone country-code selector, client/profile forms)
+Last updated: 2026-08-26 (Phone country-code selector extended to login/signup + a selection bug fix)
 
 ## Done
 - [x] `dashboard` — `frontend/src/app/dashboard/page.tsx` (moved from `/` — see `landing-page.md`) — plan: `dashboard.md` — commit: `52bce00` (move: pending)
@@ -32,7 +32,7 @@ Last updated: 2026-08-26 (Phone country-code selector, client/profile forms)
 
 - [x] `premium-sidebar-nudge` — `PagePremium.jsx` + `PremiumActivationSuccess.jsx` re-fetched (sidebar-only elements) — real `totalClientCount / CLIENT_FREE_TIER_LIMIT` progress card + "Passer à Premium" link added below the nav on all 9 pages sharing `DesktopSidebar`, hidden once Premium — `lib/server/jurali/client-limits.ts` (new, shared constant), `api/dashboard/route.ts` (`totalClientCount`, additive), `DesktopSidebar.tsx`, 9 consumer pages — plan: `premium-sidebar-nudge.md` — commit: pending
 
-- [x] `phone-country-selector` — no Banani source (attached screenshot was unrelated, confirmed with user) — world country dial-code dropdown (~166 countries, hand-built, no new dependency) replacing free-text phone inputs on `ClientForm` (create/edit client) and Settings' profile; `/login`/`/signup` keep their fixed +221 split UI on purpose — `lib/jurali-countries.ts`, `components/jurali/PhoneField.tsx`; removed the prior turn's `lib/jurali-phone.ts` heuristic (superseded) — plan: `phone-country-selector.md` — commit: pending
+- [x] `phone-country-selector` — no Banani source (attached screenshot was unrelated, confirmed with user) — world country dial-code dropdown (~166 countries, hand-built, no new dependency) replacing free-text phone inputs on `ClientForm` (create/edit client), Settings' profile, and (user explicitly reversed the earlier scope decision) `/login` + `/signup` — `lib/jurali-countries.ts`, `components/jurali/PhoneField.tsx`; removed the prior turn's `lib/jurali-phone.ts` heuristic (superseded); fixed a bug where picking a country before typing any digits was silently discarded — plan: `phone-country-selector.md` — commit: pending
 
 ## In progress
 (none)

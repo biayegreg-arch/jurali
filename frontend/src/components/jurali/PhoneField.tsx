@@ -21,9 +21,12 @@ export interface PhoneFieldProps {
   onChange: (value: string) => void;
   label?: string;
   helper?: string;
-  /** Drops the label and shrinks padding/radius/text to match a compact
-   * unlabeled form stack (Settings' profile edit) instead of `ClientForm`'s
-   * roomy labeled fields. */
+  /** Set false when the caller already renders its own label above the
+   * field (login/signup's own `<label>Téléphone</label>`) — avoids a
+   * duplicate label. */
+  showLabel?: boolean;
+  /** Shrinks padding/radius/text to match a compact unlabeled form stack
+   * (Settings' profile edit) instead of `ClientForm`'s roomy fields. */
   compact?: boolean;
 }
 
@@ -32,9 +35,21 @@ export function PhoneField({
   onChange,
   label = 'Numéro de téléphone',
   helper,
+  showLabel = true,
   compact = false,
 }: PhoneFieldProps) {
-  const selected = findCountryByDialPrefix(value);
+  // Country choice can't be derived purely from `value`: while no digits
+  // are typed yet, the composed value stays '' (so the phone remains
+  // optional), and `findCountryByDialPrefix('')` always falls back to
+  // Sénégal — deriving `selected` straight from `value` would silently
+  // discard a country picked before any digit was typed. Kept as local
+  // state instead, only re-synced from `value` when it's non-empty (e.g.
+  // loading an existing client's stored international number).
+  const [selected, setSelected] = useState<CountryDialCode>(() => findCountryByDialPrefix(value));
+  useEffect(() => {
+    if (value.startsWith('+')) setSelected(findCountryByDialPrefix(value));
+  }, [value]);
+
   const localDigits = value.startsWith('+') ? value.slice(1 + selected.dialCode.length) : '';
 
   const [open, setOpen] = useState(false);
@@ -56,6 +71,7 @@ export function PhoneField({
   function selectCountry(country: CountryDialCode) {
     setOpen(false);
     setSearch('');
+    setSelected(country);
     onChange(localDigits ? `+${country.dialCode}${localDigits}` : '');
   }
 
@@ -73,7 +89,7 @@ export function PhoneField({
 
   return (
     <div>
-      {!compact && (
+      {showLabel && (
         <div className="text-xs font-headings font-bold uppercase tracking-wide text-foreground mb-2">
           {label}
         </div>

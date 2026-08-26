@@ -9,6 +9,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { GoogleSignInButton } from '@/components/jurali/GoogleSignInButton';
+import { PhoneField } from '@/components/jurali/PhoneField';
 
 const ERROR_MESSAGES: Record<string, string> = {
   PHONE_ALREADY_EXISTS: 'Ce numéro est déjà utilisé — connecte-toi plutôt.',
@@ -24,7 +25,7 @@ export default function SignupPage() {
   const { refresh } = useAuth();
 
   const [name, setName] = useState('');
-  const [localPhone, setLocalPhone] = useState('');
+  const [phone, setPhone] = useState('');
   const [shopName, setShopName] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -34,7 +35,7 @@ export default function SignupPage() {
 
   const canSubmit =
     name.trim().length > 0 &&
-    localPhone.replace(/\s/g, '').length >= 8 &&
+    phone.length > 0 &&
     shopName.trim().length > 0 &&
     password.length > 0 &&
     acceptedTerms &&
@@ -50,7 +51,7 @@ export default function SignupPage() {
         method: 'POST',
         body: {
           name: name.trim(),
-          phone: `+221${localPhone.replace(/\s/g, '')}`,
+          phone,
           shopName: shopName.trim(),
           password,
         },
@@ -181,21 +182,12 @@ export default function SignupPage() {
               <label className="text-xs font-headings font-bold uppercase tracking-wide text-foreground mb-2 block">
                 Téléphone
               </label>
-              <div className="flex items-center gap-3 bg-input border border-border rounded-xl px-4 py-3.5">
-                <span className="text-base text-muted-foreground flex-shrink-0">+221</span>
-                <div className="w-px h-5 bg-border flex-shrink-0" />
-                <input
-                  value={localPhone}
-                  onChange={(e) => setLocalPhone(e.target.value)}
-                  placeholder="77 123 45 67"
-                  inputMode="tel"
-                  autoComplete="tel-national"
-                  className="flex-1 bg-transparent text-base text-foreground placeholder-muted-foreground outline-none"
-                />
-              </div>
-              <div className="text-xs text-muted-foreground mt-1.5">
-                Utilisé pour les rappels WhatsApp
-              </div>
+              <PhoneField
+                value={phone}
+                onChange={setPhone}
+                showLabel={false}
+                helper="Utilisé pour les rappels WhatsApp"
+              />
             </div>
 
             <div>

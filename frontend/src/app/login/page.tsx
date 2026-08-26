@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { GoogleSignInButton } from '@/components/jurali/GoogleSignInButton';
+import { PhoneField } from '@/components/jurali/PhoneField';
 
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Numéro ou mot de passe incorrect.',
@@ -23,13 +24,13 @@ export default function LoginPage() {
   const router = useRouter();
   const { refresh } = useAuth();
 
-  const [localPhone, setLocalPhone] = useState('');
+  const [phone, setPhone] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const canSubmit = localPhone.replace(/\s/g, '').length >= 8 && password.length > 0 && !submitting;
+  const canSubmit = phone.length > 0 && password.length > 0 && !submitting;
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -39,7 +40,7 @@ export default function LoginPage() {
     try {
       await api('/api/auth/phone-login', {
         method: 'POST',
-        body: { phone: `+221${localPhone.replace(/\s/g, '')}`, password },
+        body: { phone, password },
       });
       await refresh();
       router.push('/dashboard');
@@ -75,18 +76,7 @@ export default function LoginPage() {
             <label className="text-xs font-headings font-bold uppercase tracking-wide text-foreground mb-2 block">
               Téléphone
             </label>
-            <div className="flex items-center gap-3 bg-input border border-border rounded-xl px-4 py-3.5">
-              <span className="text-base text-muted-foreground flex-shrink-0">+221</span>
-              <div className="w-px h-5 bg-border flex-shrink-0" />
-              <input
-                value={localPhone}
-                onChange={(e) => setLocalPhone(e.target.value)}
-                placeholder="77 123 45 67"
-                inputMode="tel"
-                autoComplete="tel-national"
-                className="flex-1 bg-transparent text-base text-foreground placeholder-muted-foreground outline-none"
-              />
-            </div>
+            <PhoneField value={phone} onChange={setPhone} showLabel={false} />
           </div>
 
           <div>

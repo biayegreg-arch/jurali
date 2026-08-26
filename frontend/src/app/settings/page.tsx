@@ -255,7 +255,7 @@ function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<
               placeholder="Nom de la boutique"
               className="bg-input border border-border rounded-lg px-3 py-2.5 text-sm text-foreground outline-none"
             />
-            <PhoneField value={phone} onChange={setPhone} compact />
+            <PhoneField value={phone} onChange={setPhone} showLabel={false} compact />
             <input
               value={address}
               onChange={(e) => setAddress(e.target.value)}
