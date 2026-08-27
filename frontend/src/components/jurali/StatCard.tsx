@@ -1,4 +1,6 @@
+import { motion } from 'framer-motion';
 import { Icon } from './Icon';
+import { hoverLift, tapScale } from '@/lib/motion';
 
 // KPI card for /stats — Banani's `StatisticsDesktop` screen (3-card grid).
 // Distinct from `SummaryStat` (sidebar tiles: compact, no icon box) — this
@@ -7,7 +9,7 @@ import { Icon } from './Icon';
 // component (2 real screens, 2 real axes of variation each).
 export interface StatCardProps {
   label: string;
-  value: string;
+  value: React.ReactNode;
   unit: string;
   sub: string;
   icon: string;
@@ -28,7 +30,11 @@ const TONE_ICON_BOX_CLASS: Record<NonNullable<StatCardProps['tone']>, string> = 
 
 export function StatCard({ label, value, unit, sub, icon, tone = 'default' }: StatCardProps) {
   return (
-    <div className="bg-background border border-border rounded-xl p-6">
+    <motion.div
+      className="bg-background border border-border rounded-xl p-6"
+      whileHover={hoverLift}
+      whileTap={tapScale}
+    >
       <div className="flex items-start justify-between mb-4">
         <div className="min-w-0">
           <div className="text-xs font-headings font-bold uppercase tracking-wide text-muted-foreground">
@@ -46,6 +52,6 @@ export function StatCard({ label, value, unit, sub, icon, tone = 'default' }: St
         </div>
       </div>
       <div className="text-xs text-muted-foreground">{sub}</div>
-    </div>
+    </motion.div>
   );
 }

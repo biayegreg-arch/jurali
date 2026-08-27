@@ -2,9 +2,11 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { motion } from 'framer-motion';
 import { Icon } from './Icon';
-import { formatPrice } from '@/lib/utils';
+import { AnimatedNumber } from './AnimatedNumber';
 import { CLIENT_FREE_TIER_LIMIT } from '@/lib/server/jurali/client-limits';
+import { hoverLift, tapScale } from '@/lib/motion';
 
 // Desktop (lg+) sidebar shared by /clients, /dashboard, /debts/new and
 // /stats — Banani's "Dashboard Desktop" screen family, scoped to these
@@ -156,24 +158,26 @@ export function DesktopSidebar({
       <div className="px-4 mt-8 flex flex-col gap-3">
         <SidebarStat
           label="Total dû"
-          value={loading ? '…' : formatPrice(totalDueFcfa)}
+          value={loading ? '…' : <AnimatedNumber value={totalDueFcfa} />}
           sub={loading ? '' : `${debtorCount} clients`}
         />
         <SidebarStat
           label="En retard"
-          value={loading ? '…' : formatPrice(overdueDueFcfa)}
+          value={loading ? '…' : <AnimatedNumber value={overdueDueFcfa} />}
           sub={loading ? '' : `${overdueDebtorCount} urgents`}
         />
       </div>
 
       <div className="px-4 mt-auto pb-8 pt-6">
-        <Link
-          href="/debts/new"
-          className="w-full flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-3.5 rounded-xl"
-        >
-          <Icon i="plus" size={20} />
-          Nouvelle dette
-        </Link>
+        <motion.div whileTap={tapScale}>
+          <Link
+            href="/debts/new"
+            className="w-full flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-3.5 rounded-xl"
+          >
+            <Icon i="plus" size={20} />
+            Nouvelle dette
+          </Link>
+        </motion.div>
       </div>
     </div>
   );
@@ -184,14 +188,26 @@ export function DesktopSidebar({
 // (a contrast bug in the Banani source — it reuses the light-page tile on
 // a dark panel). Same semi-transparent-white treatment already used for
 // the stat card on /signup's dark brand panel.
-function SidebarStat({ label, value, sub }: { label: string; value: string; sub: string }) {
+function SidebarStat({
+  label,
+  value,
+  sub,
+}: {
+  label: string;
+  value: React.ReactNode;
+  sub: string;
+}) {
   return (
-    <div className="rounded-xl px-4 py-3 bg-primary-foreground/10">
+    <motion.div
+      className="rounded-xl px-4 py-3 bg-primary-foreground/10"
+      whileHover={hoverLift}
+      whileTap={tapScale}
+    >
       <div className="text-xs font-body mb-1 text-secondary">{label}</div>
       <div className="font-headings font-bold text-2xl leading-none text-primary-foreground">
         {value}
       </div>
       <div className="text-xs mt-1 font-body text-secondary">FCFA{sub ? ` · ${sub}` : ''}</div>
-    </div>
+    </motion.div>
   );
 }

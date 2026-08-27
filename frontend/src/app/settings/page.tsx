@@ -14,8 +14,10 @@ import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
+import { PageTransition } from '@/components/jurali/PageTransition';
 import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSection';
 import { PhoneField } from '@/components/jurali/PhoneField';
+import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
 import { useExportDebtsCsv } from '@/lib/useExportDebtsCsv';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { OVERDUE_ALERT_THRESHOLD_DAYS } from '@/lib/server/jurali/overdue-alert';
@@ -77,86 +79,90 @@ export default function SettingsPage() {
   const sharedProps = { user, isPremium, autoReminder, overdueAlert, refresh, logout };
 
   return (
-    <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-      <DesktopSidebar
-        displayName={displayName}
-        fullName={user.name}
-        totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-        debtorCount={dashboard?.debtorCount ?? 0}
-        overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-        overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-        loading={dashboardLoading}
-        totalClientCount={dashboard?.totalClientCount ?? 0}
-        isPremium={isPremium}
-      />
+    <PageTransition>
+      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
+        <DesktopSidebar
+          displayName={displayName}
+          fullName={user.name}
+          totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
+          debtorCount={dashboard?.debtorCount ?? 0}
+          overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
+          overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
+          loading={dashboardLoading}
+          totalClientCount={dashboard?.totalClientCount ?? 0}
+          isPremium={isPremium}
+        />
 
-      {/* Mobile/tablet (< lg) — single column, unchanged structure */}
-      <div className="flex-1 flex flex-col lg:hidden">
-        <div className="bg-primary px-4 pt-10 pb-6">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-            >
-              <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-            </Link>
-            <div>
-              <div className="font-headings font-bold text-lg text-primary-foreground">
-                Paramètres
-              </div>
-              <div className="text-xs text-secondary">Gérer ton compte</div>
-            </div>
-          </div>
-        </div>
-
-        <div className="px-4 pt-5 pb-8 flex flex-col gap-6 max-w-lg w-full mx-auto">
-          <ProfileSection {...sharedProps} />
-          <SecuritySection {...sharedProps} />
-          <NotificationsSection {...sharedProps} />
-          <SettingsSection title="Analyse">
-            <Link href="/stats" className="w-full flex items-center gap-4 px-5 py-4">
-              <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-                <Icon i="bar-chart-2" size={18} className="text-primary" />
-              </div>
-              <div className="flex-1 min-w-0 text-left">
-                <div className="font-headings font-bold text-sm text-foreground">Statistiques</div>
-                <div className="text-xs text-muted-foreground mt-0.5">
-                  Taux de recouvrement, tendances sur 6 mois
+        {/* Mobile/tablet (< lg) — single column, unchanged structure */}
+        <div className="flex-1 flex flex-col lg:hidden">
+          <div className="bg-primary px-4 pt-10 pb-6">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard"
+                className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+              >
+                <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+              </Link>
+              <div>
+                <div className="font-headings font-bold text-lg text-primary-foreground">
+                  Paramètres
                 </div>
+                <div className="text-xs text-secondary">Gérer ton compte</div>
               </div>
-              <Icon i="chevron-right" size={16} className="text-muted-foreground flex-shrink-0" />
-            </Link>
-          </SettingsSection>
-          <DataSection isPremium={isPremium} />
-          <AppInfoBlock />
-        </div>
-      </div>
-
-      {/* Desktop (lg+) — Parametres.jsx 2-column layout */}
-      <div className="hidden lg:flex flex-1 flex-col">
-        <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-          <div>
-            <div className="font-headings font-bold text-2xl text-foreground">Paramètres</div>
-            <div className="text-sm text-muted-foreground mt-0.5">
-              Gérer ton compte et tes préférences
             </div>
           </div>
-          <NotificationBell count={notifData?.count} />
-        </div>
 
-        <div className="flex gap-8 px-8 pt-8 pb-8">
-          <div className="flex-1 flex flex-col gap-6">
+          <div className="px-4 pt-5 pb-8 flex flex-col gap-6 max-w-lg w-full mx-auto">
             <ProfileSection {...sharedProps} />
-            <NotificationsSection {...sharedProps} />
-          </div>
-          <div className="flex flex-col gap-6 w-[400px] flex-shrink-0">
             <SecuritySection {...sharedProps} />
+            <NotificationsSection {...sharedProps} />
+            <SettingsSection title="Analyse">
+              <Link href="/stats" className="w-full flex items-center gap-4 px-5 py-4">
+                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                  <Icon i="bar-chart-2" size={18} className="text-primary" />
+                </div>
+                <div className="flex-1 min-w-0 text-left">
+                  <div className="font-headings font-bold text-sm text-foreground">
+                    Statistiques
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-0.5">
+                    Taux de recouvrement, tendances sur 6 mois
+                  </div>
+                </div>
+                <Icon i="chevron-right" size={16} className="text-muted-foreground flex-shrink-0" />
+              </Link>
+            </SettingsSection>
             <DataSection isPremium={isPremium} />
             <AppInfoBlock />
           </div>
         </div>
+
+        {/* Desktop (lg+) — Parametres.jsx 2-column layout */}
+        <div className="hidden lg:flex flex-1 flex-col">
+          <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+            <div>
+              <div className="font-headings font-bold text-2xl text-foreground">Paramètres</div>
+              <div className="text-sm text-muted-foreground mt-0.5">
+                Gérer ton compte et tes préférences
+              </div>
+            </div>
+            <NotificationBell count={notifData?.count} />
+          </div>
+
+          <div className="flex gap-8 px-8 pt-8 pb-8">
+            <div className="flex-1 flex flex-col gap-6">
+              <ProfileSection {...sharedProps} />
+              <NotificationsSection {...sharedProps} />
+            </div>
+            <div className="flex flex-col gap-6 w-[400px] flex-shrink-0">
+              <SecuritySection {...sharedProps} />
+              <DataSection isPremium={isPremium} />
+              <AppInfoBlock />
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }
 
@@ -298,6 +304,7 @@ function SecuritySection({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   const hasPassword = user.hasPassword;
   const googleLinked = user.linkedProviders.includes('google');
@@ -440,7 +447,7 @@ function SecuritySection({
 
       <button
         type="button"
-        onClick={() => void logout()}
+        onClick={() => setShowLogoutConfirm(true)}
         className="w-full flex items-center gap-4 px-5 py-4"
       >
         <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
@@ -450,6 +457,20 @@ function SecuritySection({
           Se déconnecter
         </div>
       </button>
+
+      <ConfirmDialog
+        open={showLogoutConfirm}
+        title="Se déconnecter ?"
+        message="Souhaites-tu vraiment te déconnecter de ton compte Jurali ? Tu pourras te reconnecter à tout moment."
+        confirmLabel="Se déconnecter"
+        cancelLabel="Annuler"
+        variant="danger"
+        onCancel={() => setShowLogoutConfirm(false)}
+        onConfirm={() => {
+          setShowLogoutConfirm(false);
+          void logout();
+        }}
+      />
     </SettingsSection>
   );
 }

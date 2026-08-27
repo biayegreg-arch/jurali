@@ -2,10 +2,12 @@
 // the Dashboard and Liste des débiteurs screens — identical in both Banani
 // sources (JuraliDashboard.jsx / DashboardAll.jsx), extracted here rather
 // than duplicated.
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { Icon } from './Icon';
 import { SummaryStat } from './SummaryStat';
-import { formatPrice } from '@/lib/utils';
+import { AnimatedNumber } from './AnimatedNumber';
 import { useApi } from '@/lib/useApi';
 
 export interface TopBarProps {
@@ -59,13 +61,13 @@ export function TopBar({
         <div className="flex gap-3">
           <SummaryStat
             label="Total dû"
-            value={loading ? '…' : formatPrice(totalDueFcfa)}
+            value={loading ? '…' : <AnimatedNumber value={totalDueFcfa} />}
             sub={loading ? '' : `${debtorCount} clients`}
             accent
           />
           <SummaryStat
             label="En retard"
-            value={loading ? '…' : formatPrice(overdueDueFcfa)}
+            value={loading ? '…' : <AnimatedNumber value={overdueDueFcfa} />}
             sub={loading ? '' : `${overdueDebtorCount} urgents`}
           />
         </div>
@@ -83,13 +85,28 @@ export function NotificationBell({
     skip: countOverride !== undefined,
   });
   const count = countOverride ?? data?.count ?? 0;
+  const prevCount = useRef(count);
+  const [pulse, setPulse] = useState(false);
+
+  useEffect(() => {
+    if (count > prevCount.current) {
+      setPulse(true);
+      const timer = setTimeout(() => setPulse(false), 400);
+      prevCount.current = count;
+      return () => clearTimeout(timer);
+    }
+    prevCount.current = count;
+    return undefined;
+  }, [count]);
 
   return (
     <Link
       href="/notifications"
       className="relative w-8 h-8 rounded-lg bg-secondary flex items-center justify-center"
     >
-      <Icon i="bell" size={16} className="text-primary" />
+      <motion.span animate={pulse ? { scale: [1, 1.2, 1] } : {}} transition={{ duration: 0.4 }}>
+        <Icon i="bell" size={16} className="text-primary" />
+      </motion.span>
       {count > 0 && (
         <span className="absolute -top-1 -right-1 min-w-[16px] h-4 px-1 rounded-full bg-accent text-accent-foreground text-[10px] font-headings font-bold flex items-center justify-center">
           {count > 9 ? '9+' : count}

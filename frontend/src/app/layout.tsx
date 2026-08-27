@@ -1,8 +1,10 @@
 import type { Metadata } from 'next';
 import { DM_Sans, Space_Grotesk } from 'next/font/google';
+import { MotionConfig } from 'framer-motion';
 import './globals.css';
 import { ToastProvider } from '@/contexts/ToastContext';
 import { AuthProvider } from '@/contexts/AuthContext';
+import { EASE_PREMIUM } from '@/lib/motion';
 
 // Jurali's typography, per the Banani design tokens (globals.css @theme):
 // DM Sans for body text, Space Grotesk for headings.
@@ -30,9 +32,11 @@ export default function RootLayout({
   return (
     <html lang="fr" className={`${dmSans.variable} ${spaceGrotesk.variable}`}>
       <body className={`${dmSans.className} font-body`}>
-        <ToastProvider>
-          <AuthProvider>{children}</AuthProvider>
-        </ToastProvider>
+        <MotionConfig reducedMotion="user" transition={{ duration: 0.3, ease: EASE_PREMIUM }}>
+          <ToastProvider>
+            <AuthProvider>{children}</AuthProvider>
+          </ToastProvider>
+        </MotionConfig>
       </body>
     </html>
   );

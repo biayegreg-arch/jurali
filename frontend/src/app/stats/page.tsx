@@ -7,12 +7,15 @@
 // 2026-08-26), so a free-tier user sees an upsell instead of the real page,
 // and `/api/stats` is never even called for them.
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { useUser } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { TopBar, NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { StatCard } from '@/components/jurali/StatCard';
+import { PageTransition } from '@/components/jurali/PageTransition';
+import { AnimatedNumber } from '@/components/jurali/AnimatedNumber';
 import { formatPrice } from '@/lib/utils';
 
 interface SubscriptionData {
@@ -67,66 +70,68 @@ export default function StatsPage() {
   const displayName = user.shopName || user.email;
 
   return (
-    <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-      <DesktopSidebar
-        displayName={displayName}
-        fullName={user.name}
-        totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-        debtorCount={dashboard?.debtorCount ?? 0}
-        overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-        overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-        loading={dashboardLoading}
-        totalClientCount={dashboard?.totalClientCount ?? 0}
-        isPremium={isPremium}
-      />
-
-      {/* Mobile/tablet (< lg) */}
-      <div className="flex-1 flex flex-col lg:hidden">
-        <TopBar
+    <PageTransition>
+      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
+        <DesktopSidebar
           displayName={displayName}
+          fullName={user.name}
           totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
           debtorCount={dashboard?.debtorCount ?? 0}
           overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
           overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
           loading={dashboardLoading}
-          notificationCount={notificationCount}
+          totalClientCount={dashboard?.totalClientCount ?? 0}
+          isPremium={isPremium}
         />
-        <div className="max-w-2xl w-full mx-auto flex flex-col px-4 pt-5 pb-8">
-          <div className="font-headings font-bold text-xl text-foreground mb-4">Statistiques</div>
-          {subLoading ? (
-            <div className="text-sm text-muted-foreground">Chargement…</div>
-          ) : isPremium ? (
-            <StatsBody />
-          ) : (
-            <StatsUpsell />
-          )}
-        </div>
-      </div>
 
-      {/* Desktop (lg+) */}
-      <div className="hidden lg:flex flex-1 flex-col">
-        <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-          <div>
-            <div className="font-headings font-bold text-2xl text-foreground">Statistiques</div>
-            <div className="text-sm text-muted-foreground mt-0.5">
-              {new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(
-                new Date(),
-              )}
-            </div>
+        {/* Mobile/tablet (< lg) */}
+        <div className="flex-1 flex flex-col lg:hidden">
+          <TopBar
+            displayName={displayName}
+            totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
+            debtorCount={dashboard?.debtorCount ?? 0}
+            overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
+            overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
+            loading={dashboardLoading}
+            notificationCount={notificationCount}
+          />
+          <div className="max-w-2xl w-full mx-auto flex flex-col px-4 pt-5 pb-8">
+            <div className="font-headings font-bold text-xl text-foreground mb-4">Statistiques</div>
+            {subLoading ? (
+              <div className="text-sm text-muted-foreground">Chargement…</div>
+            ) : isPremium ? (
+              <StatsBody />
+            ) : (
+              <StatsUpsell />
+            )}
           </div>
-          <NotificationBell count={notificationCount} />
         </div>
-        <div className="px-8 pt-8 pb-8 flex-1">
-          {subLoading ? (
-            <div className="text-sm text-muted-foreground">Chargement…</div>
-          ) : isPremium ? (
-            <StatsBody />
-          ) : (
-            <StatsUpsell />
-          )}
+
+        {/* Desktop (lg+) */}
+        <div className="hidden lg:flex flex-1 flex-col">
+          <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+            <div>
+              <div className="font-headings font-bold text-2xl text-foreground">Statistiques</div>
+              <div className="text-sm text-muted-foreground mt-0.5">
+                {new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(
+                  new Date(),
+                )}
+              </div>
+            </div>
+            <NotificationBell count={notificationCount} />
+          </div>
+          <div className="px-8 pt-8 pb-8 flex-1">
+            {subLoading ? (
+              <div className="text-sm text-muted-foreground">Chargement…</div>
+            ) : isPremium ? (
+              <StatsBody />
+            ) : (
+              <StatsUpsell />
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }
 
@@ -164,14 +169,14 @@ function StatsBody() {
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
         <StatCard
           label="Total dû"
-          value={formatPrice(stats.totalDueFcfa)}
+          value={<AnimatedNumber value={stats.totalDueFcfa} />}
           unit="FCFA"
           sub={`${stats.debtorCount} client${stats.debtorCount === 1 ? '' : 's'}`}
           icon="wallet"
         />
         <StatCard
           label="En retard"
-          value={formatPrice(stats.overdueDueFcfa)}
+          value={<AnimatedNumber value={stats.overdueDueFcfa} />}
           unit="FCFA"
           sub={`${stats.overdueDebtorCount} client${stats.overdueDebtorCount === 1 ? '' : 's'} urgent${stats.overdueDebtorCount === 1 ? '' : 's'}`}
           icon="alert-circle"
@@ -179,7 +184,9 @@ function StatsBody() {
         />
         <StatCard
           label="Taux de recouvrement"
-          value={`${stats.recoveryRatePercent}%`}
+          value={
+            <AnimatedNumber value={stats.recoveryRatePercent} format={(n) => `${Math.round(n)}%`} />
+          }
           unit="collecté"
           sub={`Moyenne ${formatPrice(stats.averageDebtFcfa)}`}
           icon="trending-up"
@@ -211,13 +218,17 @@ function MonthlyTrendChart({ trend }: { trend: MonthlyTrendBucket[] }) {
           return (
             <div key={m.month} className="flex-1 flex flex-col gap-2 min-w-[32px]">
               <div className="flex gap-1 lg:gap-1.5 items-end h-24 lg:h-40">
-                <div
+                <motion.div
                   className="flex-1 bg-secondary rounded-t-md"
-                  style={{ height: `${debtHeight}%` }}
+                  initial={{ height: 0 }}
+                  animate={{ height: `${debtHeight}%` }}
+                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                 />
-                <div
+                <motion.div
                   className="flex-1 bg-primary rounded-t-md"
-                  style={{ height: `${recoveredHeight}%` }}
+                  initial={{ height: 0 }}
+                  animate={{ height: `${recoveredHeight}%` }}
+                  transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
                 />
               </div>
               <div className="text-xs font-headings font-bold text-center text-foreground">

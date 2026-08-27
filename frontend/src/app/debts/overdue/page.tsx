@@ -10,6 +10,7 @@
 // reuses the existing CSV export).
 import { useState } from 'react';
 import Link from 'next/link';
+import { motion } from 'framer-motion';
 import { useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useApi, invalidateAllCache } from '@/lib/useApi';
@@ -17,9 +18,12 @@ import { api } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
+import { PageTransition } from '@/components/jurali/PageTransition';
+import { AnimatedNumber } from '@/components/jurali/AnimatedNumber';
 import { useExportDebtsCsv } from '@/lib/useExportDebtsCsv';
 import { formatPrice } from '@/lib/utils';
 import { formatDateFr } from '@/lib/jurali-format';
+import { listItem } from '@/lib/motion';
 
 interface DashboardData {
   totalDueFcfa: number;
@@ -113,117 +117,131 @@ export default function OverdueDebtsPage() {
   const sharedProps = { items, isPremium, markingPaid, onMarkAllPaid: markAllPaid };
 
   return (
-    <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-      <DesktopSidebar
-        displayName={displayName}
-        fullName={user.name}
-        totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-        debtorCount={dashboard?.debtorCount ?? 0}
-        overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-        overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-        loading={dashboardLoading}
-        totalClientCount={dashboard?.totalClientCount ?? 0}
-        isPremium={isPremium}
-      />
+    <PageTransition>
+      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
+        <DesktopSidebar
+          displayName={displayName}
+          fullName={user.name}
+          totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
+          debtorCount={dashboard?.debtorCount ?? 0}
+          overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
+          overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
+          loading={dashboardLoading}
+          totalClientCount={dashboard?.totalClientCount ?? 0}
+          isPremium={isPremium}
+        />
 
-      {/* Mobile/tablet (< lg) */}
-      <div className="flex-1 flex flex-col lg:hidden">
-        <div className="bg-primary px-4 pt-10 pb-6">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/dashboard"
-              className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-            >
-              <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-            </Link>
+        {/* Mobile/tablet (< lg) */}
+        <div className="flex-1 flex flex-col lg:hidden">
+          <div className="bg-primary px-4 pt-10 pb-6">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/dashboard"
+                className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+              >
+                <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+              </Link>
+              <div>
+                <div className="font-headings font-bold text-lg text-primary-foreground">
+                  Dettes en retard
+                </div>
+                <div className="text-xs text-secondary">
+                  {overdue
+                    ? `${overdue.affectedClientCount} client${overdue.affectedClientCount === 1 ? '' : 's'} avec paiements en retard`
+                    : ''}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-4 pt-5 pb-8 flex flex-col gap-4 max-w-lg w-full mx-auto">
+            {loading || !overdue ? (
+              <div className="text-sm text-muted-foreground">Chargement…</div>
+            ) : (
+              <>
+                <SummaryStats overdue={overdue} />
+                <OverdueList {...sharedProps} />
+                <BottomActions {...sharedProps} />
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* Desktop (lg+) */}
+        <div className="hidden lg:flex flex-1 flex-col">
+          <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
             <div>
-              <div className="font-headings font-bold text-lg text-primary-foreground">
+              <div className="font-headings font-bold text-2xl text-foreground">
                 Dettes en retard
               </div>
-              <div className="text-xs text-secondary">
+              <div className="text-sm text-muted-foreground mt-0.5">
                 {overdue
                   ? `${overdue.affectedClientCount} client${overdue.affectedClientCount === 1 ? '' : 's'} avec paiements en retard`
                   : ''}
               </div>
             </div>
-          </div>
-        </div>
-
-        <div className="px-4 pt-5 pb-8 flex flex-col gap-4 max-w-lg w-full mx-auto">
-          {loading || !overdue ? (
-            <div className="text-sm text-muted-foreground">Chargement…</div>
-          ) : (
-            <>
-              <SummaryStats overdue={overdue} />
-              <OverdueList {...sharedProps} />
-              <BottomActions {...sharedProps} />
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* Desktop (lg+) */}
-      <div className="hidden lg:flex flex-1 flex-col">
-        <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-          <div>
-            <div className="font-headings font-bold text-2xl text-foreground">Dettes en retard</div>
-            <div className="text-sm text-muted-foreground mt-0.5">
-              {overdue
-                ? `${overdue.affectedClientCount} client${overdue.affectedClientCount === 1 ? '' : 's'} avec paiements en retard`
-                : ''}
+            <div className="flex items-center gap-2">
+              <ExportButton isPremium={isPremium} />
+              <NotificationBell count={notifData?.count} />
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <ExportButton isPremium={isPremium} />
-            <NotificationBell count={notifData?.count} />
+
+          <div className="flex-1 px-8 pt-8 pb-8 flex flex-col">
+            {loading || !overdue ? (
+              <div className="text-sm text-muted-foreground">Chargement…</div>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-6 mb-8">
+                  <StatCardBlock
+                    label="Total en retard"
+                    value={<AnimatedNumber value={overdue.totalOverdueFcfa} />}
+                    unit="FCFA"
+                    sub={`${overdue.items.length} dette${overdue.items.length === 1 ? '' : 's'} urgente${overdue.items.length === 1 ? '' : 's'}`}
+                    icon="alert-circle"
+                    tone="danger"
+                  />
+                  <StatCardBlock
+                    label="Jours en retard (moy)"
+                    value={
+                      <AnimatedNumber
+                        value={overdue.averageDaysOverdue}
+                        format={(n) => String(Math.round(n))}
+                      />
+                    }
+                    unit="jours"
+                    sub="Ancienneté moyenne des dettes en retard"
+                    icon="clock"
+                  />
+                  <StatCardBlock
+                    label="Clients affectés"
+                    value={
+                      <AnimatedNumber
+                        value={overdue.affectedClientCount}
+                        format={(n) => String(Math.round(n))}
+                      />
+                    }
+                    unit={`sur ${overdue.totalClientCount}`}
+                    sub={
+                      overdue.totalClientCount > 0
+                        ? `${Math.round((overdue.affectedClientCount / overdue.totalClientCount) * 1000) / 10}% des clients`
+                        : '—'
+                    }
+                    icon="users"
+                    tone="primary"
+                  />
+                </div>
+
+                <OverdueTable {...sharedProps} />
+
+                <div className="flex gap-3 mt-6">
+                  <MarkAllPaidButton {...sharedProps} />
+                </div>
+              </>
+            )}
           </div>
         </div>
-
-        <div className="flex-1 px-8 pt-8 pb-8 flex flex-col">
-          {loading || !overdue ? (
-            <div className="text-sm text-muted-foreground">Chargement…</div>
-          ) : (
-            <>
-              <div className="grid grid-cols-3 gap-6 mb-8">
-                <StatCardBlock
-                  label="Total en retard"
-                  value={formatPrice(overdue.totalOverdueFcfa)}
-                  unit="FCFA"
-                  sub={`${overdue.items.length} dette${overdue.items.length === 1 ? '' : 's'} urgente${overdue.items.length === 1 ? '' : 's'}`}
-                  icon="alert-circle"
-                  tone="danger"
-                />
-                <StatCardBlock
-                  label="Jours en retard (moy)"
-                  value={String(overdue.averageDaysOverdue)}
-                  unit="jours"
-                  sub="Ancienneté moyenne des dettes en retard"
-                  icon="clock"
-                />
-                <StatCardBlock
-                  label="Clients affectés"
-                  value={String(overdue.affectedClientCount)}
-                  unit={`sur ${overdue.totalClientCount}`}
-                  sub={
-                    overdue.totalClientCount > 0
-                      ? `${Math.round((overdue.affectedClientCount / overdue.totalClientCount) * 1000) / 10}% des clients`
-                      : '—'
-                  }
-                  icon="users"
-                  tone="primary"
-                />
-              </div>
-
-              <OverdueTable {...sharedProps} />
-
-              <div className="flex gap-3 mt-6">
-                <MarkAllPaidButton {...sharedProps} />
-              </div>
-            </>
-          )}
-        </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }
 
@@ -232,19 +250,35 @@ function SummaryStats({ overdue }: { overdue: OverdueData }) {
     <div className="grid grid-cols-2 gap-3">
       <StatTile
         label="Total en retard"
-        value={formatPrice(overdue.totalOverdueFcfa)}
+        value={<AnimatedNumber value={overdue.totalOverdueFcfa} />}
         sub="FCFA"
         danger
       />
-      <StatTile label="Jours (moy)" value={String(overdue.averageDaysOverdue)} sub="jours" />
+      <StatTile
+        label="Jours (moy)"
+        value={
+          <AnimatedNumber
+            value={overdue.averageDaysOverdue}
+            format={(n) => String(Math.round(n))}
+          />
+        }
+        sub="jours"
+      />
       <StatTile
         label="Clients affectés"
-        value={String(overdue.affectedClientCount)}
+        value={
+          <AnimatedNumber
+            value={overdue.affectedClientCount}
+            format={(n) => String(Math.round(n))}
+          />
+        }
         sub={`sur ${overdue.totalClientCount}`}
       />
       <StatTile
         label="Dettes urgentes"
-        value={String(overdue.items.length)}
+        value={
+          <AnimatedNumber value={overdue.items.length} format={(n) => String(Math.round(n))} />
+        }
         sub="au total"
         danger
       />
@@ -259,7 +293,7 @@ function StatTile({
   danger = false,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   sub: string;
   danger?: boolean;
 }) {
@@ -285,7 +319,7 @@ function StatCardBlock({
   tone = 'default',
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   unit: string;
   sub: string;
   icon: string;
@@ -332,8 +366,15 @@ function OverdueList({ items }: ListProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      {items.map((item) => (
-        <div key={item.id} className="bg-background border border-border rounded-xl p-4">
+      {items.map((item, i) => (
+        <motion.div
+          key={item.id}
+          variants={listItem}
+          initial="hidden"
+          animate="show"
+          custom={i}
+          className="bg-background border border-border rounded-xl p-4"
+        >
           <div className="flex items-center gap-3 mb-2">
             <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
               <span className="font-headings font-bold text-sm text-secondary-foreground">
@@ -358,7 +399,7 @@ function OverdueList({ items }: ListProps) {
             </div>
             <SendReminderButton clientId={item.clientId} clientPhone={item.clientPhone} />
           </div>
-        </div>
+        </motion.div>
       ))}
     </div>
   );
@@ -397,9 +438,13 @@ function OverdueTable({ items }: ListProps) {
       </div>
 
       <div className="divide-y divide-border">
-        {items.map((item) => (
-          <div
+        {items.map((item, i) => (
+          <motion.div
             key={item.id}
+            variants={listItem}
+            initial="hidden"
+            animate="show"
+            custom={i}
             className="grid items-center px-6 py-4 hover:bg-input"
             style={{ gridTemplateColumns: '140px 1fr 120px 100px 80px' }}
           >
@@ -428,7 +473,7 @@ function OverdueTable({ items }: ListProps) {
             <div className="flex justify-center">
               <SendReminderButton clientId={item.clientId} clientPhone={item.clientPhone} compact />
             </div>
-          </div>
+          </motion.div>
         ))}
       </div>
     </div>

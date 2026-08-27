@@ -14,6 +14,9 @@ import { DebtorRow } from '@/components/jurali/DebtorRow';
 import { MonthPicker } from '@/components/jurali/MonthPicker';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { DesktopDebtorWorkspace } from '@/components/jurali/DesktopDebtorWorkspace';
+import { PageTransition } from '@/components/jurali/PageTransition';
+import { MotionLink } from '@/components/jurali/MotionLink';
+import { tapScale } from '@/lib/motion';
 import { toDebtorRowProps } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
 import { formatMonthParam } from '@/lib/server/jurali/month-range';
@@ -85,147 +88,155 @@ export default function DashboardPage() {
   const displayName = user.shopName || user.email;
 
   return (
-    <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-      <DesktopSidebar
-        displayName={displayName}
-        fullName={user.name}
-        totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-        debtorCount={dashboard?.debtorCount ?? 0}
-        overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-        overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-        loading={dashboardLoading}
-        totalClientCount={dashboard?.totalClientCount ?? 0}
-        isPremium={subscription?.isActive ?? false}
-      />
-
-      {/* Mobile/tablet (< lg) — unchanged KPI-hero + preview layout */}
-      <div className="flex-1 flex flex-col lg:hidden">
-        <TopBar
+    <PageTransition>
+      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
+        <DesktopSidebar
           displayName={displayName}
+          fullName={user.name}
           totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
           debtorCount={dashboard?.debtorCount ?? 0}
           overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
           overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
           loading={dashboardLoading}
-          notificationCount={notificationCount}
+          totalClientCount={dashboard?.totalClientCount ?? 0}
+          isPremium={subscription?.isActive ?? false}
         />
 
-        <div className="max-w-2xl w-full mx-auto flex flex-col">
-          {/* Search bar — navigates to the full client list (search happens there) */}
-          <Link href="/clients" className="px-4 pt-4 pb-2 block">
-            <div className="flex items-center gap-2 bg-input border border-border rounded-xl px-3 py-2.5">
-              <Icon i="search" size={16} className="text-muted-foreground flex-shrink-0" />
-              <span className="text-sm text-muted-foreground">Chercher un client...</span>
-            </div>
-          </Link>
+        {/* Mobile/tablet (< lg) — unchanged KPI-hero + preview layout */}
+        <div className="flex-1 flex flex-col lg:hidden">
+          <TopBar
+            displayName={displayName}
+            totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
+            debtorCount={dashboard?.debtorCount ?? 0}
+            overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
+            overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
+            loading={dashboardLoading}
+            notificationCount={notificationCount}
+          />
 
-          {/* Filter chips — navigate to the full list (unrelated to the
+          <div className="max-w-2xl w-full mx-auto flex flex-col">
+            {/* Search bar — navigates to the full client list (search happens there) */}
+            <Link href="/clients" className="px-4 pt-4 pb-2 block">
+              <div className="flex items-center gap-2 bg-input border border-border rounded-xl px-3 py-2.5">
+                <Icon i="search" size={16} className="text-muted-foreground flex-shrink-0" />
+                <span className="text-sm text-muted-foreground">Chercher un client...</span>
+              </div>
+            </Link>
+
+            {/* Filter chips — navigate to the full list (unrelated to the
               month-picker below, which scopes the recovered/new-debts
               figures, not this debtor-row list). */}
-          <div className="flex gap-2 px-4 py-2">
-            <Link
-              href="/clients"
-              className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg"
-            >
-              Tous
-            </Link>
-            <Link
-              href="/clients?filter=overdue"
-              className="bg-surface border border-border text-foreground text-xs px-3 py-1.5 rounded-lg"
-            >
-              En retard
-            </Link>
-          </div>
-
-          <div className="flex items-center justify-between px-4 pt-3 pb-1">
-            <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
-              Débiteurs
+            <div className="flex gap-2 px-4 py-2">
+              <Link
+                href="/clients"
+                className="bg-primary text-primary-foreground text-xs font-bold px-3 py-1.5 rounded-lg"
+              >
+                Tous
+              </Link>
+              <Link
+                href="/clients?filter=overdue"
+                className="bg-surface border border-border text-foreground text-xs px-3 py-1.5 rounded-lg"
+              >
+                En retard
+              </Link>
             </div>
-            <Link href="/clients?sort=amount" className="text-xs text-muted-foreground">
-              Trier par montant
-            </Link>
-          </div>
 
-          <div className="mx-4 bg-background border border-border rounded-xl overflow-hidden">
-            {clientsLoading ? (
-              <div className="px-4 py-6 text-sm text-muted-foreground">Chargement…</div>
-            ) : recentClients.length === 0 ? (
-              <div className="px-4 py-6 text-sm text-muted-foreground">
-                Aucun client pour l&rsquo;instant — ajoute ton premier client en enregistrant une
-                dette.
+            <div className="flex items-center justify-between px-4 pt-3 pb-1">
+              <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
+                Débiteurs
               </div>
-            ) : (
-              recentClients.map((c, i) => <DebtorRow key={c.id} {...toDebtorRowProps(c, i)} />)
-            )}
-          </div>
+              <Link href="/clients?sort=amount" className="text-xs text-muted-foreground">
+                Trier par montant
+              </Link>
+            </div>
 
-          {/* Historique mensuel — Phase 9 (Banani's MonthPickerView, a UI
+            <div className="mx-4 bg-background border border-border rounded-xl overflow-hidden">
+              {clientsLoading ? (
+                <div className="px-4 py-6 text-sm text-muted-foreground">Chargement…</div>
+              ) : recentClients.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-muted-foreground">
+                  Aucun client pour l&rsquo;instant — ajoute ton premier client en enregistrant une
+                  dette.
+                </div>
+              ) : (
+                recentClients.map((c, i) => <DebtorRow key={c.id} {...toDebtorRowProps(c, i)} />)
+              )}
+            </div>
+
+            {/* Historique mensuel — Phase 9 (Banani's MonthPickerView, a UI
               affordance for browsing history, not a PRD requirement). */}
-          <div className="px-4 pt-4 flex flex-col gap-2">
-            <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
-              Historique mensuel
-            </div>
-            <MonthPicker month={historyMonth} onChange={setHistoryMonth} />
-            <div className="grid grid-cols-2 gap-3 mt-1">
-              <div className="bg-background border border-border rounded-xl px-4 py-4">
-                <div className="text-xs text-muted-foreground mb-1">Récupéré</div>
-                <div className="font-headings font-bold text-lg text-foreground">
-                  {dashboardLoading ? '…' : formatPrice(dashboard?.selectedMonthRecoveredFcfa ?? 0)}
-                </div>
-                <div className="text-xs text-muted-foreground">FCFA</div>
+            <div className="px-4 pt-4 flex flex-col gap-2">
+              <div className="font-headings font-bold text-sm text-foreground uppercase tracking-wide">
+                Historique mensuel
               </div>
-              <div className="bg-background border border-border rounded-xl px-4 py-4">
-                <div className="text-xs text-muted-foreground mb-1">Nouvelles dettes</div>
-                <div className="font-headings font-bold text-lg text-foreground">
-                  {dashboardLoading ? '…' : formatPrice(dashboard?.selectedMonthNewDebtsFcfa ?? 0)}
+              <MonthPicker month={historyMonth} onChange={setHistoryMonth} />
+              <div className="grid grid-cols-2 gap-3 mt-1">
+                <div className="bg-background border border-border rounded-xl px-4 py-4">
+                  <div className="text-xs text-muted-foreground mb-1">Récupéré</div>
+                  <div className="font-headings font-bold text-lg text-foreground">
+                    {dashboardLoading
+                      ? '…'
+                      : formatPrice(dashboard?.selectedMonthRecoveredFcfa ?? 0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">FCFA</div>
                 </div>
-                <div className="text-xs text-muted-foreground">FCFA</div>
+                <div className="bg-background border border-border rounded-xl px-4 py-4">
+                  <div className="text-xs text-muted-foreground mb-1">Nouvelles dettes</div>
+                  <div className="font-headings font-bold text-lg text-foreground">
+                    {dashboardLoading
+                      ? '…'
+                      : formatPrice(dashboard?.selectedMonthNewDebtsFcfa ?? 0)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">FCFA</div>
+                </div>
               </div>
             </div>
-          </div>
 
-          {/* PRD 3.2/§4: 2 always-visible large action buttons (P0). Banani's
+            {/* PRD 3.2/§4: 2 always-visible large action buttons (P0). Banani's
               mockup only shows "Nouvelle dette" + an inert Statistiques icon
               (no screen designed for that, Phase 9) — "Paiement reçu" replaces
               it here since the PRD explicitly requires both. */}
-          <div className="px-4 pt-4 pb-8 flex gap-3">
-            <Link
-              href="/debts/new"
-              className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-4 rounded-xl"
-            >
-              <Icon i="plus" size={20} />
-              Nouvelle dette
-            </Link>
-            <Link
-              href="/payments/new"
-              className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-base py-4 rounded-xl"
-            >
-              <Icon i="check" size={20} />
-              Paiement reçu
-            </Link>
+            <div className="px-4 pt-4 pb-8 flex gap-3">
+              <MotionLink
+                href="/debts/new"
+                whileTap={tapScale}
+                className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-4 rounded-xl"
+              >
+                <Icon i="plus" size={20} />
+                Nouvelle dette
+              </MotionLink>
+              <MotionLink
+                href="/payments/new"
+                whileTap={tapScale}
+                className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-base py-4 rounded-xl"
+              >
+                <Icon i="check" size={20} />
+                Paiement reçu
+              </MotionLink>
+            </div>
           </div>
         </div>
-      </div>
 
-      {/* Desktop (lg+) — same sidebar + full-width debtor table as
+        {/* Desktop (lg+) — same sidebar + full-width debtor table as
           /clients (see dashboard.md § Desktop sidebar + table: the user
           confirmed this exact Banani screen belongs on /dashboard, not
           only /clients). */}
-      <DesktopDebtorWorkspace
-        query={debtorQuery}
-        onQueryChange={setDebtorQuery}
-        debouncedQuery={debouncedDebtorQuery}
-        monthActive={debtorMonthActive}
-        onSelectAllTime={() => setDebtorMonthActive(false)}
-        onSelectMonth={() => setDebtorMonthActive(true)}
-        month={debtorMonth}
-        onMonthChange={setDebtorMonth}
-        overdueOnly={debtorOverdueOnly}
-        onToggleOverdueOnly={() => setDebtorOverdueOnly((v) => !v)}
-        items={debtorItems}
-        clientsLoading={debtorItemsLoading}
-        notificationCount={notificationCount}
-      />
-    </div>
+        <DesktopDebtorWorkspace
+          query={debtorQuery}
+          onQueryChange={setDebtorQuery}
+          debouncedQuery={debouncedDebtorQuery}
+          monthActive={debtorMonthActive}
+          onSelectAllTime={() => setDebtorMonthActive(false)}
+          onSelectMonth={() => setDebtorMonthActive(true)}
+          month={debtorMonth}
+          onMonthChange={setDebtorMonth}
+          overdueOnly={debtorOverdueOnly}
+          onToggleOverdueOnly={() => setDebtorOverdueOnly((v) => !v)}
+          items={debtorItems}
+          clientsLoading={debtorItemsLoading}
+          notificationCount={notificationCount}
+        />
+      </div>
+    </PageTransition>
   );
 }

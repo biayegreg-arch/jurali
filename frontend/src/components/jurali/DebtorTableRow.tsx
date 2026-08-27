@@ -1,5 +1,6 @@
-import Link from 'next/link';
+import { MotionLink } from './MotionLink';
 import type { DebtorRowProps } from './DebtorRow';
+import { listItem } from '@/lib/motion';
 
 /**
  * Desktop table-row rendering of the same debtor data `DebtorRow` renders
@@ -15,9 +16,17 @@ export function DebtorTableRow({
   daysAgo,
   lastItem,
   isOverdue,
+  index,
 }: DebtorRowProps) {
   return (
-    <Link href={`/clients/${id}`} className="flex items-center px-6 py-4 hover:bg-input">
+    <MotionLink
+      href={`/clients/${id}`}
+      className="flex items-center px-6 py-4 hover:bg-input"
+      variants={listItem}
+      initial="hidden"
+      animate="show"
+      custom={index}
+    >
       <div className="w-12 flex-shrink-0">
         <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center">
           <span className="font-headings font-bold text-base text-secondary-foreground">
@@ -60,6 +69,6 @@ export function DebtorTableRow({
           </span>
         )}
       </div>
-    </Link>
+    </MotionLink>
   );
 }

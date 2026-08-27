@@ -16,6 +16,8 @@ import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { DebtHistoryRow } from '@/components/jurali/DebtHistoryRow';
+import { PageTransition } from '@/components/jurali/PageTransition';
+import { AnimatedNumber } from '@/components/jurali/AnimatedNumber';
 import { formatDateFr } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
 import {
@@ -99,97 +101,99 @@ export default function ClientFichePage() {
   const displayName = user.shopName || user.email;
 
   return (
-    <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-      <DesktopSidebar
-        displayName={displayName}
-        fullName={user.name}
-        totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-        debtorCount={dashboard?.debtorCount ?? 0}
-        overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-        overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-        loading={dashboardLoading}
-        totalClientCount={dashboard?.totalClientCount ?? 0}
-        isPremium={isPremium}
-      />
+    <PageTransition>
+      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
+        <DesktopSidebar
+          displayName={displayName}
+          fullName={user.name}
+          totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
+          debtorCount={dashboard?.debtorCount ?? 0}
+          overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
+          overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
+          loading={dashboardLoading}
+          totalClientCount={dashboard?.totalClientCount ?? 0}
+          isPremium={isPremium}
+        />
 
-      <div className="flex-1 flex flex-col min-w-0">
-        {/* Mobile top bar (< lg) — unchanged */}
-        <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/clients"
-              className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-            >
-              <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-            </Link>
-            <div>
-              <div className="font-headings font-bold text-lg text-primary-foreground">
-                Fiche client
-              </div>
-              <div className="text-xs text-secondary">Historique complet des dettes</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Desktop top bar (lg+) */}
-        <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/clients"
-              className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
-            >
-              <Icon i="chevron-left" size={20} className="text-foreground" />
-            </Link>
-            <div>
-              <div className="font-headings font-bold text-2xl text-foreground">Fiche client</div>
-              <div className="text-sm text-muted-foreground mt-0.5">
-                Historique complet des dettes
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <NotificationBell count={notifData?.count} />
-            {client && client.phone && client.balanceFcfa > 0 && (
-              <a
-                href="#reminder-card"
-                className="flex items-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
-              >
-                <Icon i="message-circle" size={16} />
-                Envoyer WhatsApp
-              </a>
-            )}
-            {client && (
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Mobile top bar (< lg) — unchanged */}
+          <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
+            <div className="flex items-center gap-3">
               <Link
-                href={`/debts/new?clientId=${client.id}`}
-                className="flex items-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
+                href="/clients"
+                className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
               >
-                <Icon i="plus" size={16} />
-                Ajouter dette
+                <Icon i="chevron-left" size={20} className="text-primary-foreground" />
               </Link>
-            )}
+              <div>
+                <div className="font-headings font-bold text-lg text-primary-foreground">
+                  Fiche client
+                </div>
+                <div className="text-xs text-secondary">Historique complet des dettes</div>
+              </div>
+            </div>
           </div>
-        </div>
 
-        {loading ? (
-          <div className="px-4 lg:px-8 py-8 text-sm text-muted-foreground">Chargement…</div>
-        ) : error || !client ? (
-          <div className="px-4 lg:px-8 py-8 flex flex-col items-center gap-3 text-center">
-            <div className="text-sm text-muted-foreground">Client introuvable.</div>
-            <Link href="/clients" className="text-sm text-primary font-bold">
-              Retour à la liste
-            </Link>
+          {/* Desktop top bar (lg+) */}
+          <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+            <div className="flex items-center gap-3">
+              <Link
+                href="/clients"
+                className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
+              >
+                <Icon i="chevron-left" size={20} className="text-foreground" />
+              </Link>
+              <div>
+                <div className="font-headings font-bold text-2xl text-foreground">Fiche client</div>
+                <div className="text-sm text-muted-foreground mt-0.5">
+                  Historique complet des dettes
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <NotificationBell count={notifData?.count} />
+              {client && client.phone && client.balanceFcfa > 0 && (
+                <a
+                  href="#reminder-card"
+                  className="flex items-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
+                >
+                  <Icon i="message-circle" size={16} />
+                  Envoyer WhatsApp
+                </a>
+              )}
+              {client && (
+                <Link
+                  href={`/debts/new?clientId=${client.id}`}
+                  className="flex items-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
+                >
+                  <Icon i="plus" size={16} />
+                  Ajouter dette
+                </Link>
+              )}
+            </div>
           </div>
-        ) : (
-          <ClientFicheContent
-            client={client}
-            isPremium={isPremium}
-            autoReminderEnabled={autoReminderSettings?.enabled ?? false}
-            shopName={user.shopName}
-            onRefresh={refreshAll}
-          />
-        )}
+
+          {loading ? (
+            <div className="px-4 lg:px-8 py-8 text-sm text-muted-foreground">Chargement…</div>
+          ) : error || !client ? (
+            <div className="px-4 lg:px-8 py-8 flex flex-col items-center gap-3 text-center">
+              <div className="text-sm text-muted-foreground">Client introuvable.</div>
+              <Link href="/clients" className="text-sm text-primary font-bold">
+                Retour à la liste
+              </Link>
+            </div>
+          ) : (
+            <ClientFicheContent
+              client={client}
+              isPremium={isPremium}
+              autoReminderEnabled={autoReminderSettings?.enabled ?? false}
+              shopName={user.shopName}
+              onRefresh={refreshAll}
+            />
+          )}
+        </div>
       </div>
-    </div>
+    </PageTransition>
   );
 }
 
@@ -510,14 +514,18 @@ function DesktopFicheBody({
         <div className="grid grid-cols-2 gap-3">
           <StatTile
             label="Total dû"
-            value={formatPrice(client.balanceFcfa)}
+            value={<AnimatedNumber value={client.balanceFcfa} />}
             danger={client.isOverdue}
           />
-          <StatTile label="Total payé" value={formatPrice(totalPaidFcfa)} />
-          <StatTile label="Nb dettes" value={String(debtCount)} sub="au total" />
+          <StatTile label="Total payé" value={<AnimatedNumber value={totalPaidFcfa} />} />
+          <StatTile
+            label="Nb dettes"
+            value={<AnimatedNumber value={debtCount} format={(n) => String(n)} />}
+            sub="au total"
+          />
           <StatTile
             label="En retard"
-            value={String(overdueCount)}
+            value={<AnimatedNumber value={overdueCount} format={(n) => String(n)} />}
             sub="à régler"
             danger={overdueCount > 0}
           />
@@ -985,7 +993,7 @@ function StatTile({
   danger = false,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   sub?: string;
   danger?: boolean;
 }) {

@@ -1,8 +1,10 @@
+import { motion } from 'framer-motion';
 import { cn } from '@/lib/utils';
+import { hoverLift, tapScale } from '@/lib/motion';
 
 export interface SummaryStatProps {
   label: string;
-  value: string;
+  value: React.ReactNode;
   currency?: string;
   sub?: string;
   accent?: boolean;
@@ -17,11 +19,13 @@ export function SummaryStat({
   accent = false,
 }: SummaryStatProps) {
   return (
-    <div
+    <motion.div
       className={cn(
         'flex-1 rounded-xl px-4 py-3',
         accent ? 'bg-primary' : 'bg-surface border border-border',
       )}
+      whileHover={hoverLift}
+      whileTap={tapScale}
     >
       <div
         className={cn(
@@ -48,6 +52,6 @@ export function SummaryStat({
         {currency}
         {sub ? ` · ${sub}` : ''}
       </div>
-    </div>
+    </motion.div>
   );
 }

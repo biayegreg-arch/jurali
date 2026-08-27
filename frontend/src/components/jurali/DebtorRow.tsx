@@ -1,4 +1,5 @@
-import Link from 'next/link';
+import { MotionLink } from './MotionLink';
+import { listItem, tapScale } from '@/lib/motion';
 
 export interface DebtorRowProps {
   id: string;
@@ -26,9 +27,14 @@ export function DebtorRow({
   index,
 }: DebtorRowProps) {
   return (
-    <Link
+    <MotionLink
       href={`/clients/${id}`}
       className={`flex items-center gap-3 px-4 py-3 ${index !== 0 ? 'border-t border-border' : ''}`}
+      variants={listItem}
+      initial="hidden"
+      animate="show"
+      custom={index}
+      whileTap={tapScale}
     >
       <div className="w-10 h-10 rounded-xl bg-secondary flex items-center justify-center flex-shrink-0">
         <span className="font-headings font-bold text-base text-secondary-foreground">
@@ -59,6 +65,6 @@ export function DebtorRow({
                 : `${daysAgo}j`}
         </span>
       </div>
-    </Link>
+    </MotionLink>
   );
 }
