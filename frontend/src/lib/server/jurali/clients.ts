@@ -6,6 +6,7 @@
 // have one implementation, not two copies that could diverge).
 import 'server-only';
 import type { Prisma } from '@prisma/client';
+import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/server/prisma';
 import { computeClientBalance, isOverdue as computeIsOverdue } from './balance';
 
@@ -70,4 +71,33 @@ export async function listClientSummaries(
     },
   });
   return rows.map(summarizeClient);
+}
+
+/**
+ * The "does this client exist AND belong to this user?" ownership check —
+ * duplicated by hand across every `/api/clients/[id]/*` route, each with
+ * its own tailored `select`. A future route that copies the comparison
+ * wrong (or skips it) would leak or let a user mutate another shopkeeper's
+ * client — centralizing the check here means there's exactly one place to
+ * get it right. Never distinguish "doesn't exist" from "belongs to someone
+ * else" on the wire (same existence-leak principle CLAUDE.md documents for
+ * org membership) — both produce the same 404.
+ *
+ * Callers keep their own `prisma.client.findUnique({ select })` (the
+ * generic preserves whatever shape they selected) and pass the result
+ * straight through: `const owned = requireOwnedClient(client, ...); if
+ * (owned instanceof NextResponse) return owned;`.
+ */
+export function requireOwnedClient<T extends { ownerId: string } | null>(
+  client: T,
+  ownerId: string,
+  requestId: string,
+): NextResponse | Exclude<T, null> {
+  if (!client || client.ownerId !== ownerId) {
+    return NextResponse.json(
+      { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
+      { status: 404, headers: { 'x-request-id': requestId } },
+    );
+  }
+  return client as Exclude<T, null>;
 }

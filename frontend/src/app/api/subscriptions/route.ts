@@ -18,6 +18,7 @@ export const runtime = 'nodejs';
 
 import 'server-only';
 import { randomUUID } from 'node:crypto';
+import { Prisma } from '@prisma/client';
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
@@ -33,6 +34,8 @@ import {
   isSubscriptionActive,
   PREMIUM_MONTHLY_PRICE_FCFA,
 } from '@/lib/server/subscriptions/guards';
+import { lockUserTx } from '@/lib/server/withdrawals/lock';
+import { isTransientConflict } from '@/lib/server/prisma-errors';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -63,34 +66,6 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    const existing = await prisma.subscription.findUnique({ where: { ownerId: auth.user.sub } });
-
-    if (isSubscriptionActive(existing)) {
-      return NextResponse.json(
-        { error: 'ALREADY_SUBSCRIBED', message: 'Already on an active Premium subscription.' },
-        { status: 409, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
-
-    if (existing?.status === 'PENDING') {
-      if (existing.paymentUrl) {
-        // Replay — same in-flight checkout, don't double-charge.
-        return NextResponse.json(
-          { status: 'PENDING', paymentUrl: existing.paymentUrl },
-          { status: 200, headers: { 'x-request-id': ctx.requestId } },
-        );
-      }
-      // Crash-race guard (mirrors /api/orders WR-01): a prior attempt
-      // created the row but never got a paymentUrl back.
-      return NextResponse.json(
-        { error: 'PAYMENT_IN_FLIGHT', message: 'Prior attempt did not complete; retry shortly.' },
-        {
-          status: 503,
-          headers: { 'x-request-id': ctx.requestId, 'Retry-After': '5' },
-        },
-      );
-    }
-
     let provider;
     try {
       provider = getProvider();
@@ -116,20 +91,83 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     const publicUrl = envPublicUrl ?? 'http://localhost:3000';
 
-    const subscription = await prisma.subscription.upsert({
-      where: { ownerId: auth.user.sub },
-      create: {
-        ownerId: auth.user.sub,
-        status: 'PENDING',
-        planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
-      },
-      update: {
-        status: 'PENDING',
-        planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
-        providerChargeId: null,
-        paymentUrl: null,
-      },
-    });
+    // The read-then-upsert below used to run unguarded: two concurrent POSTs
+    // could both read a non-PENDING `existing` row before either upsert
+    // committed, and both would go on to call provider.charge() — a real
+    // double charge. The lock serializes them so the second request sees
+    // the first's just-created PENDING row and exits via one of the early
+    // branches below instead of ever reaching provider.charge().
+    let gate;
+    try {
+      gate = await prisma.$transaction(
+        async (tx) => {
+          await lockUserTx(tx, auth.user.sub);
+          const existing = await tx.subscription.findUnique({ where: { ownerId: auth.user.sub } });
+
+          if (isSubscriptionActive(existing)) {
+            return { kind: 'already-subscribed' as const };
+          }
+          if (existing?.status === 'PENDING') {
+            if (existing.paymentUrl) {
+              // Replay — same in-flight checkout, don't double-charge.
+              return { kind: 'pending-replay' as const, paymentUrl: existing.paymentUrl };
+            }
+            // Crash-race guard (mirrors /api/orders WR-01): a prior attempt
+            // created the row but never got a paymentUrl back.
+            return { kind: 'in-flight' as const };
+          }
+
+          const row = await tx.subscription.upsert({
+            where: { ownerId: auth.user.sub },
+            create: {
+              ownerId: auth.user.sub,
+              status: 'PENDING',
+              planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
+            },
+            update: {
+              status: 'PENDING',
+              planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
+              providerChargeId: null,
+              paymentUrl: null,
+            },
+          });
+          return { kind: 'proceed' as const, subscription: row };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (err) {
+      if (isTransientConflict(err)) {
+        return NextResponse.json(
+          { error: 'TRANSIENT_CONFLICT', message: 'Please retry' },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      throw err;
+    }
+
+    if (gate.kind === 'already-subscribed') {
+      return NextResponse.json(
+        { error: 'ALREADY_SUBSCRIBED', message: 'Already on an active Premium subscription.' },
+        { status: 409, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    if (gate.kind === 'pending-replay') {
+      return NextResponse.json(
+        { status: 'PENDING', paymentUrl: gate.paymentUrl },
+        { status: 200, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    if (gate.kind === 'in-flight') {
+      return NextResponse.json(
+        { error: 'PAYMENT_IN_FLIGHT', message: 'Prior attempt did not complete; retry shortly.' },
+        {
+          status: 503,
+          headers: { 'x-request-id': ctx.requestId, 'Retry-After': '5' },
+        },
+      );
+    }
+
+    const subscription = gate.subscription;
 
     try {
       // externalRef must be unique PER CHECKOUT ATTEMPT (Bictorys treats it

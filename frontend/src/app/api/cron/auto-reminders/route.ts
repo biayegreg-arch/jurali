@@ -22,6 +22,7 @@ import { createLogger } from '@/lib/server/logger';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeClientBalance, oldestUnpaidDebtDate } from '@/lib/server/jurali/balance';
 import { isDueForAutoReminder } from '@/lib/server/jurali/auto-reminder';
+import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
 import { createNotification } from '@/lib/server/notifications';
 import { autoReminderDue } from '@/lib/server/notifications/templates';
 
@@ -41,12 +42,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await withLease(redis ?? undefined, 'auto-reminders', LEASE_TTL_MS, async () => {
       const now = new Date();
       const users = await prisma.user.findMany({
-        where: {
-          autoReminderEnabled: true,
-          subscription: { status: 'ACTIVE', renewsAt: { gt: now } },
-        },
+        where: { autoReminderEnabled: true },
         select: {
           id: true,
+          subscription: { select: { status: true, renewsAt: true } },
           clients: {
             select: {
               id: true,
@@ -58,36 +57,44 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
         },
       });
-      usersScanned = users.length;
+      // "Active" is only ever computed via isSubscriptionActive — never a
+      // raw status/renewsAt filter — so this cron can't drift from the
+      // free-tier gate's own definition of Premium.
+      const activeUsers = users.filter((u) => isSubscriptionActive(u.subscription, now));
+      usersScanned = activeUsers.length;
 
-      for (const user of users) {
+      const notifications: Promise<unknown>[] = [];
+      for (const user of activeUsers) {
         for (const client of user.clients) {
           clientsScanned += 1;
           const transactions = client.transactions.map((t) => ({
             ...t,
             type: t.type as 'DEBT' | 'PAYMENT',
           }));
+          const debtDate = oldestUnpaidDebtDate(transactions);
           const due = isDueForAutoReminder(
             {
               phone: client.phone,
               balanceFcfa: computeClientBalance(transactions),
-              oldestUnpaidDebtDate: oldestUnpaidDebtDate(transactions),
+              oldestUnpaidDebtDate: debtDate,
               lastReminderSentAt: client.lastReminderSentAt,
             },
             now,
           );
-          if (!due) continue;
+          if (!due || !debtDate) continue; // debtDate null-check narrows for TS; `due` already guarantees it
 
-          const debtDate = oldestUnpaidDebtDate(transactions);
-          if (!debtDate) continue; // narrows for TS; `due` already guarantees this
-
-          await createNotification(
-            prisma,
-            autoReminderDue(user.id, client.id, client.firstName, debtDate),
+          notifications.push(
+            createNotification(
+              prisma,
+              autoReminderDue(user.id, client.id, client.firstName, debtDate),
+            ),
           );
           notified += 1;
         }
       }
+      // Each insert is independent (own dedupeKey, no shared transaction) —
+      // no reason to await them one at a time inside the scan loop.
+      await Promise.all(notifications);
 
       log.info('auto-reminders tick', {
         usersScanned,

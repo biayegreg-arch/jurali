@@ -4,6 +4,8 @@
 // WhatsApp with the text pre-filled but NOT sent — the boutiquier still
 // taps send inside WhatsApp, which is what satisfies US-07's "peut
 // visualiser le message avant envoi" criterion without extra UI.
+import { formatPrice } from '@/lib/utils';
+
 export interface ReminderMessageInput {
   firstName: string;
   balanceFcfa: number;
@@ -15,7 +17,7 @@ export function buildReminderMessage({
   balanceFcfa,
   shopName,
 }: ReminderMessageInput): string {
-  const amount = balanceFcfa.toLocaleString('fr-FR').replace(/\s/g, ' ');
+  const amount = formatPrice(balanceFcfa);
   const shop = shopName?.trim() || 'la boutique';
   return `Bonjour ${firstName}, tu as un solde de ${amount} FCFA chez ${shop}. Merci de passer régler dès que possible !`;
 }

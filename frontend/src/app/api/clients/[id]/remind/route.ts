@@ -19,7 +19,8 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeClientBalance } from '@/lib/server/jurali/balance';
 import { buildReminderMessage, buildWhatsAppReminderUrl } from '@/lib/server/jurali/reminder';
-import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
+import { requirePremium } from '@/lib/server/subscriptions/guards';
+import { requireOwnedClient } from '@/lib/server/jurali/clients';
 
 export async function POST(
   req: NextRequest,
@@ -33,21 +34,16 @@ export async function POST(
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    const subscription = await prisma.subscription.findUnique({
-      where: { ownerId: auth.user.sub },
-    });
-    if (!isSubscriptionActive(subscription)) {
-      return NextResponse.json(
-        {
-          error: 'PREMIUM_REQUIRED',
-          message: 'WhatsApp reminders require an active Premium subscription.',
-        },
-        { status: 403, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
+    const premiumFail = await requirePremium(
+      prisma,
+      auth.user.sub,
+      ctx.requestId,
+      'WhatsApp reminders require an active Premium subscription.',
+    );
+    if (premiumFail) return premiumFail;
 
     const { id } = await routeCtx.params;
-    const client = await prisma.client.findUnique({
+    const found = await prisma.client.findUnique({
       where: { id },
       select: {
         id: true,
@@ -57,13 +53,8 @@ export async function POST(
         transactions: { select: { type: true, amountFcfa: true } },
       },
     });
-
-    if (!client || client.ownerId !== auth.user.sub) {
-      return NextResponse.json(
-        { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
-        { status: 404, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
+    const client = requireOwnedClient(found, auth.user.sub, ctx.requestId);
+    if (client instanceof NextResponse) return client;
 
     if (!client.phone) {
       return NextResponse.json(

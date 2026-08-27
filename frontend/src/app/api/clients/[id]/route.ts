@@ -14,6 +14,7 @@ import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeClientBalance, isOverdue as computeIsOverdue } from '@/lib/server/jurali/balance';
+import { requireOwnedClient } from '@/lib/server/jurali/clients';
 import { zPhone, zEmail } from '@/lib/server/zod-helpers';
 
 // Phase 9 — desktop "Fiche client"'s "Modifier" button. All fields
@@ -37,7 +38,7 @@ export async function GET(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = await routeCtx.params;
-    const client = await prisma.client.findUnique({
+    const found = await prisma.client.findUnique({
       where: { id },
       select: {
         id: true,
@@ -54,13 +55,8 @@ export async function GET(
         },
       },
     });
-
-    if (!client || client.ownerId !== auth.user.sub) {
-      return NextResponse.json(
-        { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
-        { status: 404, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
+    const client = requireOwnedClient(found, auth.user.sub, ctx.requestId);
+    if (client instanceof NextResponse) return client;
 
     // Prisma's `type` column is a plain String (see schema.prisma comment);
     // cast once since every row was written through POST /api/transactions'
@@ -102,17 +98,12 @@ export async function PATCH(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = await routeCtx.params;
-    const existing = await prisma.client.findUnique({
+    const found = await prisma.client.findUnique({
       where: { id },
       select: { id: true, ownerId: true },
     });
-
-    if (!existing || existing.ownerId !== auth.user.sub) {
-      return NextResponse.json(
-        { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
-        { status: 404, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
+    const existing = requireOwnedClient(found, auth.user.sub, ctx.requestId);
+    if (existing instanceof NextResponse) return existing;
 
     const parsed = PatchBody.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {

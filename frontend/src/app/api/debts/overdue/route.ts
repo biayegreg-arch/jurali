@@ -14,9 +14,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
-import { listOverdueDebts } from '@/lib/server/jurali/balance';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
+import { listOverdueDebts, DAY_MS } from '@/lib/server/jurali/balance';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);

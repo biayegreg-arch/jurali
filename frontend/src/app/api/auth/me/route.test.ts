@@ -282,6 +282,25 @@ describe('PATCH /api/auth/me', () => {
     );
   });
 
+  it('returns 409 PHONE_ALREADY_EXISTS (not 500) when update() races past the pre-check (P2002)', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      tokenVersion: 0,
+      phone: '+221771111111',
+      email: 'a@b.com',
+      emailVerifiedAt: new Date(),
+      oauthAccounts: [],
+    } as never);
+    prismaMock.user.findFirst.mockResolvedValue(null); // pre-check passes...
+    prismaMock.user.update.mockRejectedValue(
+      Object.assign(new Error('unique violation'), { code: 'P2002' }),
+    ); // ...but a concurrent request wins the race
+
+    const res = await PATCH(makePatchReq({ phone: '+221772222222' }, { bearer: 'tok' }));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('PHONE_ALREADY_EXISTS');
+  });
+
   it('does not touch email when a real-email account changes phone', async () => {
     prismaMock.user.findUnique.mockResolvedValue({
       id: 'u1',

@@ -4,6 +4,8 @@
 // this only decides whether to surface it. Callers (the cron route) are
 // responsible for the Premium + `autoReminderEnabled` gates, which are
 // per-user, not per-client.
+import { DAY_MS } from '@/lib/server/jurali/balance';
+
 export const AUTO_REMINDER_THRESHOLD_DAYS = 7;
 
 export interface AutoReminderCandidate {
@@ -21,7 +23,7 @@ export function isDueForAutoReminder(
   if (candidate.balanceFcfa <= 0) return false;
   if (!candidate.oldestUnpaidDebtDate) return false;
 
-  const thresholdMs = AUTO_REMINDER_THRESHOLD_DAYS * 24 * 60 * 60 * 1000;
+  const thresholdMs = AUTO_REMINDER_THRESHOLD_DAYS * DAY_MS;
   const ageMs = now.getTime() - candidate.oldestUnpaidDebtDate.getTime();
   if (ageMs < thresholdMs) return false;
 

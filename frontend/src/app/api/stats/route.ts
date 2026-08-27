@@ -17,7 +17,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
-import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
+import { requirePremium } from '@/lib/server/subscriptions/guards';
 import { listClientSummaries } from '@/lib/server/jurali/clients';
 import { monthBounds, shiftMonth } from '@/lib/server/jurali/month-range';
 import { computeRecoveryRatePercent, bucketMonthlyTrend } from '@/lib/server/jurali/stats';
@@ -30,18 +30,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    const subscription = await prisma.subscription.findUnique({
-      where: { ownerId: auth.user.sub },
-    });
-    if (!isSubscriptionActive(subscription)) {
-      return NextResponse.json(
-        {
-          error: 'PREMIUM_REQUIRED',
-          message: 'Statistics require an active Premium subscription.',
-        },
-        { status: 403, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
+    const premiumFail = await requirePremium(
+      prisma,
+      auth.user.sub,
+      ctx.requestId,
+      'Statistics require an active Premium subscription.',
+    );
+    if (premiumFail) return premiumFail;
 
     const summaries = await listClientSummaries(auth.user.sub);
 

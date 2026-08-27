@@ -5,7 +5,7 @@
 // (see .planning/banani/dashboard.md § Desktop sidebar + table). Extracted
 // once both pages needed the identical search/sort/overdue/month state and
 // the same `/api/clients` fetch, rather than duplicating it a second time.
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApi } from './useApi';
 import { formatMonthParam } from './server/jurali/month-range';
 import type { ClientSummary } from './server/jurali/clients';
@@ -37,7 +37,10 @@ export function useDebtorListState(opts: { skip: boolean; initialOverdueOnly?: b
     skip: opts.skip,
   });
 
-  const items = (clients?.items ?? []).filter((c) => !overdueOnly || c.isOverdue);
+  const items = useMemo(
+    () => (clients?.items ?? []).filter((c) => !overdueOnly || c.isOverdue),
+    [clients, overdueOnly],
+  );
 
   function resetToAll() {
     setMonthActive(false);

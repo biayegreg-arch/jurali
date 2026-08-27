@@ -34,8 +34,11 @@ function makeReq(): NextRequest {
 
 const day = (offsetDays: number) => new Date(Date.now() - offsetDays * 24 * 60 * 60 * 1000);
 
-function userWith(clients: unknown[]) {
-  return [{ id: 'user-1', clients }];
+function userWith(
+  clients: unknown[],
+  subscription: unknown = { status: 'ACTIVE', renewsAt: day(-30) },
+) {
+  return [{ id: 'user-1', clients, subscription }];
 }
 
 describe('POST /api/cron/auto-reminders', () => {
@@ -49,18 +52,37 @@ describe('POST /api/cron/auto-reminders', () => {
     expect(res.status).toBe(401);
   });
 
-  it('only queries users with autoReminderEnabled + an active Premium subscription', async () => {
+  it('only queries users with autoReminderEnabled, then filters to an active Premium subscription in-app', async () => {
     findMany.mockResolvedValueOnce([]);
     const { POST } = await import('./route');
     await POST(makeReq());
     expect(findMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: {
-          autoReminderEnabled: true,
-          subscription: { status: 'ACTIVE', renewsAt: { gt: expect.any(Date) } },
-        },
+        where: { autoReminderEnabled: true },
       }),
     );
+  });
+
+  it('excludes a fetched user whose subscription has lapsed (isSubscriptionActive, not a raw status filter)', async () => {
+    findMany.mockResolvedValueOnce(
+      userWith(
+        [
+          {
+            id: 'client-1',
+            firstName: 'Awa',
+            phone: '+221771234567',
+            lastReminderSentAt: null,
+            transactions: [{ type: 'DEBT', amountFcfa: 12_500, createdAt: day(10) }],
+          },
+        ],
+        { status: 'ACTIVE', renewsAt: day(1) }, // renewsAt in the past — lapsed
+      ),
+    );
+    const { POST } = await import('./route');
+    const res = await POST(makeReq());
+    const body = await res.json();
+    expect(body).toMatchObject({ usersScanned: 0, clientsScanned: 0, notified: 0 });
+    expect(notificationCreate).not.toHaveBeenCalled();
   });
 
   it('creates a notification for a client 7+ days overdue with no reminder sent', async () => {

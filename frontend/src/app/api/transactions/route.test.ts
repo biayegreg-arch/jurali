@@ -116,4 +116,57 @@ describe('POST /api/transactions', () => {
     expect(json.error).toBe('PAYMENT_EXCEEDS_BALANCE');
     expect(prismaMock.transaction.create).not.toHaveBeenCalled();
   });
+
+  describe('markOverdueOnly (server-recomputed amount, ignores a stale client clock)', () => {
+    it('ignores the client-submitted amountFcfa and uses the server-computed overdue balance', async () => {
+      const oldDebt = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
+      prismaMock.client.findUnique.mockResolvedValue({
+        ownerId: 'user-1',
+        transactions: [{ type: 'DEBT', amountFcfa: 12_500, createdAt: oldDebt }],
+      } as never);
+      prismaMock.transaction.create.mockResolvedValue({
+        id: 'tx-3',
+        clientId: 'c-1',
+        type: 'PAYMENT',
+        amountFcfa: 12_500,
+        note: null,
+        createdAt: new Date(),
+      } as never);
+
+      // A device with a wrong clock submits a bogus amount — the server
+      // must recompute it from its own `now`, not trust this value.
+      const res = await POST(
+        makePost({
+          clientId: 'c-1',
+          type: 'PAYMENT',
+          amountFcfa: 999_999,
+          markOverdueOnly: true,
+        }),
+      );
+      expect(res.status).toBe(201);
+      expect(prismaMock.transaction.create).toHaveBeenCalledWith(
+        expect.objectContaining({ data: expect.objectContaining({ amountFcfa: 12_500 }) }),
+      );
+    });
+
+    it('returns 422 NOTHING_OVERDUE when no debt is actually overdue', async () => {
+      const recentDebt = new Date();
+      prismaMock.client.findUnique.mockResolvedValue({
+        ownerId: 'user-1',
+        transactions: [{ type: 'DEBT', amountFcfa: 12_500, createdAt: recentDebt }],
+      } as never);
+
+      const res = await POST(
+        makePost({
+          clientId: 'c-1',
+          type: 'PAYMENT',
+          amountFcfa: 12_500,
+          markOverdueOnly: true,
+        }),
+      );
+      expect(res.status).toBe(422);
+      expect((await res.json()).error).toBe('NOTHING_OVERDUE');
+      expect(prismaMock.transaction.create).not.toHaveBeenCalled();
+    });
+  });
 });

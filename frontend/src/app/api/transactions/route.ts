@@ -23,13 +23,21 @@ import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
-import { computeClientBalance } from '@/lib/server/jurali/balance';
+import { computeClientBalance, computeOverdueBalance } from '@/lib/server/jurali/balance';
+import { requireOwnedClient } from '@/lib/server/jurali/clients';
 
 const Body = z.object({
   clientId: z.string().min(1),
   type: z.enum(['DEBT', 'PAYMENT']),
   amountFcfa: z.number().int().positive(),
   note: z.string().trim().max(280).optional(),
+  // "Marquer les dettes en retard comme payées" (fiche client) computes the
+  // overdue amount client-side, off the device's own clock, and used to
+  // submit that figure straight through as `amountFcfa` — a wrong device
+  // clock could record a payment that doesn't match what's actually 30+
+  // days overdue by the server's clock. When set, the server ignores the
+  // submitted amountFcfa and recomputes it itself.
+  markOverdueOnly: z.literal(true).optional(),
 });
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -52,29 +60,36 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    const { clientId, type, amountFcfa, note } = parsed.data;
+    const { clientId, type, note, markOverdueOnly } = parsed.data;
+    let { amountFcfa } = parsed.data;
 
-    const client = await prisma.client.findUnique({
+    const found = await prisma.client.findUnique({
       where: { id: clientId },
       select: {
         ownerId: true,
-        transactions: { select: { type: true, amountFcfa: true } },
+        transactions: { select: { type: true, amountFcfa: true, createdAt: true } },
       },
     });
-    if (!client || client.ownerId !== auth.user.sub) {
-      return NextResponse.json(
-        { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
-        { status: 404, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
+    const client = requireOwnedClient(found, auth.user.sub, ctx.requestId);
+    if (client instanceof NextResponse) return client;
+
+    // Prisma's `type` column is a plain String (see schema.prisma comment);
+    // cast since every row was written through this same route's
+    // `z.enum(['DEBT', 'PAYMENT'])` contract.
+    const aging = client.transactions.map((t) => ({ ...t, type: t.type as 'DEBT' | 'PAYMENT' }));
 
     if (type === 'PAYMENT') {
-      // Prisma's `type` column is a plain String (see schema.prisma
-      // comment); cast since every row was written through this same
-      // route's `z.enum(['DEBT', 'PAYMENT'])` contract.
-      const currentBalance = computeClientBalance(
-        client.transactions.map((t) => ({ ...t, type: t.type as 'DEBT' | 'PAYMENT' })),
-      );
+      if (markOverdueOnly) {
+        amountFcfa = computeOverdueBalance(aging, new Date());
+        if (amountFcfa <= 0) {
+          return NextResponse.json(
+            { error: 'NOTHING_OVERDUE', message: 'No overdue balance left to settle.' },
+            { status: 422, headers: { 'x-request-id': ctx.requestId } },
+          );
+        }
+      }
+
+      const currentBalance = computeClientBalance(aging);
       if (amountFcfa > currentBalance) {
         return NextResponse.json(
           {

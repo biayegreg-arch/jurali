@@ -27,6 +27,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { zPhone } from '@/lib/server/zod-helpers';
 import { isSyntheticEmail, syntheticEmail } from '@/lib/server/auth/synthetic-email';
+import { isUniqueConstraintViolation } from '@/lib/server/prisma-errors';
 
 // Phase 9 — desktop /settings "Modifier" button (Parametres.jsx's "Profil
 // & Boutique"). All fields optional/independent (partial update).
@@ -176,11 +177,26 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       data.phone = nextPhone;
     }
 
-    const updated = await prisma.user.update({
-      where: { id: auth.user.sub },
-      data,
-      select: { name: true, shopName: true, phone: true, address: true },
-    });
+    let updated;
+    try {
+      updated = await prisma.user.update({
+        where: { id: auth.user.sub },
+        data,
+        select: { name: true, shopName: true, phone: true, address: true },
+      });
+    } catch (err) {
+      // TOCTOU: two concurrent PATCHes to the same new phone can both pass
+      // the pre-check above; the unique constraint on `phone` is the real
+      // guard, and this turns its P2002 into the same graceful 409 instead
+      // of an uncaught 500.
+      if (isUniqueConstraintViolation(err)) {
+        return NextResponse.json(
+          { error: 'PHONE_ALREADY_EXISTS', message: 'This phone number is already registered.' },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      throw err;
+    }
 
     return NextResponse.json({ user: updated }, { headers: { 'x-request-id': ctx.requestId } });
   });

@@ -96,7 +96,7 @@ describe('GET /api/dashboard', () => {
     expect(json.overdueDebtorCount).toBe(1);
   });
 
-  it('queries recoveredThisMonthFcfa scoped to the owner, PAYMENT type, and the calendar-month start', async () => {
+  it('queries recoveredThisMonthFcfa scoped to the owner, PAYMENT type, and the calendar-month bounds', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-24T10:00:00Z'));
     prismaMock.client.findMany.mockResolvedValue([]);
@@ -105,15 +105,20 @@ describe('GET /api/dashboard', () => {
     const res = await GET(makeGet());
     const json = (await res.json()) as { recoveredThisMonthFcfa: number };
     expect(json.recoveredThisMonthFcfa).toBe(45_000);
+    // No ?month= means the requested month IS the current month, so
+    // recoveredThisMonthFcfa is served straight from that one bounded
+    // query — no separate unbounded query is issued (efficiency: avoids a
+    // second round-trip for the same number in the common case).
     expect(prismaMock.transaction.aggregate).toHaveBeenCalledWith(
       expect.objectContaining({
         where: expect.objectContaining({
           ownerId: 'user-1',
           type: 'PAYMENT',
-          createdAt: { gte: new Date(2026, 7, 1) },
+          createdAt: { gte: new Date(2026, 7, 1), lt: new Date(2026, 8, 1) },
         }),
       }),
     );
+    expect(prismaMock.transaction.aggregate).toHaveBeenCalledTimes(2); // PAYMENT + DEBT, no 3rd query
   });
 
   it('returns 0 for recoveredThisMonthFcfa when there are no payments this month', async () => {
@@ -138,12 +143,14 @@ describe('GET /api/dashboard — month-picker (Phase 9)', () => {
     expect(json.selectedMonth).toBe('2026-08');
   });
 
-  it('scopes selectedMonthRecoveredFcfa/selectedMonthNewDebtsFcfa to the requested ?month=', async () => {
+  it('scopes selectedMonthRecoveredFcfa/selectedMonthNewDebtsFcfa to the requested ?month=, and recoveredThisMonthFcfa stays the real current month', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-08-24T10:00:00Z'));
     prismaMock.client.findMany.mockResolvedValue([]);
     prismaMock.transaction.aggregate
-      .mockResolvedValueOnce({ _sum: { amountFcfa: 10_000 } } as never) // recoveredThisMonthFcfa (unbounded)
-      .mockResolvedValueOnce({ _sum: { amountFcfa: 30_000 } } as never) // selectedMonthRecoveredFcfa
-      .mockResolvedValueOnce({ _sum: { amountFcfa: 45_000 } } as never); // selectedMonthNewDebtsFcfa
+      .mockResolvedValueOnce({ _sum: { amountFcfa: 30_000 } } as never) // selectedMonthRecoveredFcfa (March, PAYMENT)
+      .mockResolvedValueOnce({ _sum: { amountFcfa: 45_000 } } as never) // selectedMonthNewDebtsFcfa (March, DEBT)
+      .mockResolvedValueOnce({ _sum: { amountFcfa: 10_000 } } as never); // recoveredThisMonthFcfa (real current month, unbounded)
     prismaMock.transaction.count.mockResolvedValue(7);
 
     const res = await GET(makeGet('2026-03'));
@@ -152,15 +159,19 @@ describe('GET /api/dashboard — month-picker (Phase 9)', () => {
       selectedMonthRecoveredFcfa: number;
       selectedMonthNewDebtsFcfa: number;
       selectedMonthTransactionCount: number;
+      recoveredThisMonthFcfa: number;
     };
     expect(json.selectedMonth).toBe('2026-03');
     expect(json.selectedMonthRecoveredFcfa).toBe(30_000);
     expect(json.selectedMonthNewDebtsFcfa).toBe(45_000);
     expect(json.selectedMonthTransactionCount).toBe(7);
+    // A ?month= in the past must NOT affect recoveredThisMonthFcfa, which
+    // always tracks the real current calendar month.
+    expect(json.recoveredThisMonthFcfa).toBe(10_000);
 
-    // 2nd aggregate call: PAYMENT bounded to March 2026
+    // 1st aggregate call: PAYMENT bounded to March 2026
     expect(prismaMock.transaction.aggregate).toHaveBeenNthCalledWith(
-      2,
+      1,
       expect.objectContaining({
         where: expect.objectContaining({
           ownerId: 'user-1',
@@ -169,14 +180,25 @@ describe('GET /api/dashboard — month-picker (Phase 9)', () => {
         }),
       }),
     );
-    // 3rd aggregate call: DEBT bounded to March 2026
+    // 2nd aggregate call: DEBT bounded to March 2026
     expect(prismaMock.transaction.aggregate).toHaveBeenNthCalledWith(
-      3,
+      2,
       expect.objectContaining({
         where: expect.objectContaining({
           ownerId: 'user-1',
           type: 'DEBT',
           createdAt: { gte: new Date(2026, 2, 1), lt: new Date(2026, 3, 1) },
+        }),
+      }),
+    );
+    // 3rd aggregate call: PAYMENT unbounded from the real current month's start
+    expect(prismaMock.transaction.aggregate).toHaveBeenNthCalledWith(
+      3,
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerId: 'user-1',
+          type: 'PAYMENT',
+          createdAt: { gte: new Date(2026, 7, 1) },
         }),
       }),
     );

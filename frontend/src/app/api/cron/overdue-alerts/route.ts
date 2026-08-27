@@ -19,6 +19,7 @@ import { createLogger } from '@/lib/server/logger';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { oldestUnpaidDebtDate } from '@/lib/server/jurali/balance';
 import { countClientsOverdue } from '@/lib/server/jurali/overdue-alert';
+import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
 import { createNotification } from '@/lib/server/notifications';
 import { overdueAlertDue } from '@/lib/server/notifications/templates';
 
@@ -37,12 +38,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     await withLease(redis ?? undefined, 'overdue-alerts', LEASE_TTL_MS, async () => {
       const now = new Date();
       const users = await prisma.user.findMany({
-        where: {
-          overdueAlertsEnabled: true,
-          subscription: { status: 'ACTIVE', renewsAt: { gt: now } },
-        },
+        where: { overdueAlertsEnabled: true },
         select: {
           id: true,
+          subscription: { select: { status: true, renewsAt: true } },
           clients: {
             select: {
               id: true,
@@ -51,9 +50,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           },
         },
       });
-      usersScanned = users.length;
+      // "Active" is only ever computed via isSubscriptionActive — never a
+      // raw status/renewsAt filter — so this cron can't drift from the
+      // free-tier gate's own definition of Premium.
+      const activeUsers = users.filter((u) => isSubscriptionActive(u.subscription, now));
+      usersScanned = activeUsers.length;
 
-      for (const user of users) {
+      const notifications: Promise<unknown>[] = [];
+      for (const user of activeUsers) {
         const candidates = user.clients.map((client) => ({
           oldestUnpaidDebtDate: oldestUnpaidDebtDate(
             client.transactions.map((t) => ({ ...t, type: t.type as 'DEBT' | 'PAYMENT' })),
@@ -62,9 +66,12 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         const overdueCount = countClientsOverdue(candidates, undefined, now);
         if (overdueCount === 0) continue;
 
-        await createNotification(prisma, overdueAlertDue(user.id, overdueCount, now));
+        notifications.push(createNotification(prisma, overdueAlertDue(user.id, overdueCount, now)));
         usersNotified += 1;
       }
+      // Each insert is independent (own dedupeKey, no shared transaction) —
+      // no reason to await them one at a time inside the scan loop.
+      await Promise.all(notifications);
 
       log.info('overdue-alerts tick', { usersScanned, usersNotified, requestId: ctx.requestId });
     });

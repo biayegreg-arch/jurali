@@ -48,35 +48,50 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     // shopkeeper mid-month doesn't care about timezone edge cases at
     // midnight — this is a display aggregate, not a financial ledger cutoff.
     const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const recovered = await prisma.transaction.aggregate({
-      where: { ownerId: auth.user.sub, type: 'PAYMENT', createdAt: { gte: startOfMonth } },
-      _sum: { amountFcfa: true },
-    });
-
     const { year, month } = parseMonthParam(req.nextUrl.searchParams.get('month'), now);
     const { start: monthStart, end: monthEnd } = monthBounds(year, month);
-    const [monthRecovered, monthNewDebts, monthTransactionCount] = await Promise.all([
-      prisma.transaction.aggregate({
-        where: {
-          ownerId: auth.user.sub,
-          type: 'PAYMENT',
-          createdAt: { gte: monthStart, lt: monthEnd },
-        },
-        _sum: { amountFcfa: true },
-      }),
-      prisma.transaction.aggregate({
-        where: {
-          ownerId: auth.user.sub,
-          type: 'DEBT',
-          createdAt: { gte: monthStart, lt: monthEnd },
-        },
-        _sum: { amountFcfa: true },
-      }),
-      prisma.transaction.count({
-        where: { ownerId: auth.user.sub, createdAt: { gte: monthStart, lt: monthEnd } },
-      }),
-    ]);
+    const isCurrentMonth = year === now.getFullYear() && month === now.getMonth();
+
+    const [monthRecovered, monthNewDebts, monthTransactionCount, currentMonthRecovered] =
+      await Promise.all([
+        prisma.transaction.aggregate({
+          where: {
+            ownerId: auth.user.sub,
+            type: 'PAYMENT',
+            createdAt: { gte: monthStart, lt: monthEnd },
+          },
+          _sum: { amountFcfa: true },
+        }),
+        prisma.transaction.aggregate({
+          where: {
+            ownerId: auth.user.sub,
+            type: 'DEBT',
+            createdAt: { gte: monthStart, lt: monthEnd },
+          },
+          _sum: { amountFcfa: true },
+        }),
+        prisma.transaction.count({
+          where: { ownerId: auth.user.sub, createdAt: { gte: monthStart, lt: monthEnd } },
+        }),
+        // `recoveredThisMonthFcfa` always means the CURRENT calendar month,
+        // independent of `?month=` — the common case (no ?month= passed)
+        // means this is identical to `monthRecovered` above; only query it
+        // separately when a past/future ?month= was explicitly requested.
+        isCurrentMonth
+          ? Promise.resolve(null)
+          : prisma.transaction.aggregate({
+              where: {
+                ownerId: auth.user.sub,
+                type: 'PAYMENT',
+                createdAt: { gte: new Date(now.getFullYear(), now.getMonth(), 1) },
+              },
+              _sum: { amountFcfa: true },
+            }),
+      ]);
+
+    const recoveredThisMonthFcfa = isCurrentMonth
+      ? (monthRecovered._sum.amountFcfa ?? 0)
+      : (currentMonthRecovered?._sum.amountFcfa ?? 0);
 
     return NextResponse.json(
       {
@@ -89,7 +104,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         // those currently owing money (debtorCount above excludes
         // balanceFcfa <= 0). `summaries` already has one row per client.
         totalClientCount: summaries.length,
-        recoveredThisMonthFcfa: recovered._sum.amountFcfa ?? 0,
+        recoveredThisMonthFcfa,
         selectedMonth: formatMonthParam(year, month),
         selectedMonthRecoveredFcfa: monthRecovered._sum.amountFcfa ?? 0,
         selectedMonthNewDebtsFcfa: monthNewDebts._sum.amountFcfa ?? 0,

@@ -5,11 +5,12 @@
 // of the same screen (2026-08-26) — sidebar + 2-column layout with a debt
 // history TABLE (filter tabs) instead of a card list. Both share the same
 // fetched `client`/derived data — see .planning/banani/fiche-client.md.
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
 import { useApi, invalidateAllCache } from '@/lib/useApi';
+import { useAsyncAction } from '@/lib/useAsyncAction';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
@@ -203,7 +204,7 @@ interface FicheDerived {
   oldestDebtProgress: OldestDebtProgress | null;
 }
 
-function useFicheDerived(client: ClientDetail): FicheDerived {
+function deriveFicheData(client: ClientDetail): FicheDerived {
   const debts: DebtTransaction[] = client.transactions
     .filter((t): t is ClientTransaction & { type: 'DEBT' } => t.type === 'DEBT')
     .map((t) => ({
@@ -263,7 +264,7 @@ function ClientFicheContent({
   shopName: string | null;
   onRefresh: () => void;
 }) {
-  const derived = useFicheDerived(client);
+  const derived = useMemo(() => deriveFicheData(client), [client]);
   const nextEligibleDate =
     isPremium && autoReminderEnabled ? derived.nextEligibleReminderDate : null;
 
@@ -691,8 +692,7 @@ function ReminderCard({
   nextEligibleDate: Date | null;
   onReminderSent: () => void;
 }) {
-  const [sending, setSending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { pending: sending, error, run } = useAsyncAction();
 
   if (!isPremium) {
     return (
@@ -714,23 +714,19 @@ function ReminderCard({
   }
 
   async function sendReminder() {
-    setSending(true);
-    setError(null);
-    try {
-      const res = await api<{ url: string }>(`/api/clients/${client.id}/remind`, {
-        method: 'POST',
-      });
-      window.open(res.url, '_blank', 'noopener,noreferrer');
-      onReminderSent();
-    } catch (err) {
-      setError(
+    await run(
+      async () => {
+        const res = await api<{ url: string }>(`/api/clients/${client.id}/remind`, {
+          method: 'POST',
+        });
+        window.open(res.url, '_blank', 'noopener,noreferrer');
+        onReminderSent();
+      },
+      (err) =>
         err instanceof ApiError
           ? (REMINDER_ERROR_MESSAGES[err.code] ?? err.message)
           : 'Erreur réseau. Réessaie.',
-      );
-    } finally {
-      setSending(false);
-    }
+    );
   }
 
   return (
@@ -778,8 +774,7 @@ function PaymentTrackingCard({
   onRefresh: () => void;
 }) {
   const [amount, setAmount] = useState<number | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { pending: submitting, error, run } = useAsyncAction();
 
   if (!progress) return null;
 
@@ -789,20 +784,14 @@ function PaymentTrackingCard({
 
   async function addPayment() {
     if (!amount || amount <= 0) return;
-    setSubmitting(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api('/api/transactions', {
         method: 'POST',
         body: { clientId, type: 'PAYMENT', amountFcfa: amount },
       });
       setAmount(null);
       onRefresh();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erreur réseau. Réessaie.');
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   return (
@@ -920,13 +909,10 @@ function MarkOverdueAsPaidButton({
   overdueBalanceFcfa: number;
   onDone: () => void;
 }) {
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { pending: submitting, error, run } = useAsyncAction();
 
   async function markPaid() {
-    setSubmitting(true);
-    setError(null);
-    try {
+    await run(async () => {
       await api('/api/transactions', {
         method: 'POST',
         body: {
@@ -934,14 +920,11 @@ function MarkOverdueAsPaidButton({
           type: 'PAYMENT',
           amountFcfa: overdueBalanceFcfa,
           note: 'Dettes en retard réglées',
+          markOverdueOnly: true,
         },
       });
       onDone();
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : 'Erreur réseau. Réessaie.');
-    } finally {
-      setSubmitting(false);
-    }
+    });
   }
 
   return (

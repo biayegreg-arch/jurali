@@ -16,37 +16,84 @@ export function computeClientBalance(transactions: BalanceTransaction[]): number
   );
 }
 
+export const DAY_MS = 24 * 60 * 60 * 1000;
+
+export interface DebtPaymentEvent {
+  paymentId: string;
+  amountAppliedFcfa: number;
+  remainingAfterFcfa: number;
+  createdAt: Date;
+}
+
+interface FifoEntry {
+  id?: string;
+  amountRemaining: number;
+  originalAmount: number;
+  createdAt: Date;
+  note: string | null;
+  events: DebtPaymentEvent[];
+}
+
+/**
+ * Shared FIFO core: payments clear the oldest debts first. Returns every
+ * debt still carrying an unpaid remainder, oldest first, after applying
+ * every payment in `transactions`. Every FIFO-derived function below builds
+ * its public shape from this single allocation loop — this is
+ * money-correctness-critical logic, so a fix to the allocation rule (e.g.
+ * tie-breaking, overpayment handling) only has to be made once. Regression
+ * safety net: this loop is exercised end-to-end by every case in
+ * balance.test.ts (all five public functions below share it).
+ */
+function allocateFifo(
+  transactions: (AgingTransaction & { id?: string; note?: string | null })[],
+): FifoEntry[] {
+  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const unpaid: FifoEntry[] = [];
+
+  for (const tx of sorted) {
+    if (tx.type === 'DEBT') {
+      unpaid.push({
+        ...(tx.id !== undefined ? { id: tx.id } : {}),
+        amountRemaining: tx.amountFcfa,
+        originalAmount: tx.amountFcfa,
+        createdAt: tx.createdAt,
+        note: tx.note ?? null,
+        events: [],
+      });
+      continue;
+    }
+
+    let remaining = tx.amountFcfa;
+    while (remaining > 0 && unpaid.length > 0) {
+      const oldest = unpaid[0]!;
+      const applied = Math.min(oldest.amountRemaining, remaining);
+      oldest.amountRemaining -= applied;
+      remaining -= applied;
+      if (tx.id !== undefined) {
+        oldest.events.push({
+          paymentId: tx.id,
+          amountAppliedFcfa: applied,
+          remainingAfterFcfa: oldest.amountRemaining,
+          createdAt: tx.createdAt,
+        });
+      }
+      if (oldest.amountRemaining === 0) unpaid.shift();
+    }
+    // Overpayment (remaining > 0 with no unpaid debts left) is rejected at
+    // the API layer (Phase 2) — this pure function only tracks aging.
+  }
+
+  return unpaid;
+}
+
 /**
  * FIFO aging: payments clear the oldest debts first. Returns the createdAt
  * of the oldest debt that isn't fully covered yet, or null if every debt
  * has been paid off.
  */
 export function oldestUnpaidDebtDate(transactions: AgingTransaction[]): Date | null {
-  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const unpaidDebts: { amountRemaining: number; createdAt: Date }[] = [];
-
-  for (const tx of sorted) {
-    if (tx.type === 'DEBT') {
-      unpaidDebts.push({ amountRemaining: tx.amountFcfa, createdAt: tx.createdAt });
-      continue;
-    }
-
-    let remaining = tx.amountFcfa;
-    while (remaining > 0 && unpaidDebts.length > 0) {
-      const oldest = unpaidDebts[0]!;
-      if (oldest.amountRemaining <= remaining) {
-        remaining -= oldest.amountRemaining;
-        unpaidDebts.shift();
-      } else {
-        oldest.amountRemaining -= remaining;
-        remaining = 0;
-      }
-    }
-    // Overpayment (remaining > 0 with no unpaid debts left) is rejected at
-    // the API layer (Phase 2) — this pure function only tracks aging.
-  }
-
-  return unpaidDebts.length > 0 ? unpaidDebts[0]!.createdAt : null;
+  const unpaid = allocateFifo(transactions);
+  return unpaid.length > 0 ? unpaid[0]!.createdAt : null;
 }
 
 export type DebtStatus = 'PAID' | 'UNPAID' | 'OVERDUE';
@@ -66,34 +113,19 @@ export function computeDebtStatuses(
   now: Date = new Date(),
   thresholdDays = 30,
 ): Map<string, DebtStatus> {
-  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const unpaidDebts: { id: string; amountRemaining: number; createdAt: Date }[] = [];
+  const unpaid = allocateFifo(transactions);
+  const unpaidById = new Map(unpaid.map((d) => [d.id!, d]));
   const statuses = new Map<string, DebtStatus>();
 
-  for (const tx of sorted) {
-    if (tx.type === 'DEBT') {
-      unpaidDebts.push({ id: tx.id, amountRemaining: tx.amountFcfa, createdAt: tx.createdAt });
-      statuses.set(tx.id, 'UNPAID');
+  for (const tx of transactions) {
+    if (tx.type !== 'DEBT') continue;
+    const entry = unpaidById.get(tx.id);
+    if (!entry) {
+      statuses.set(tx.id, 'PAID');
       continue;
     }
-
-    let remaining = tx.amountFcfa;
-    while (remaining > 0 && unpaidDebts.length > 0) {
-      const oldest = unpaidDebts[0]!;
-      if (oldest.amountRemaining <= remaining) {
-        remaining -= oldest.amountRemaining;
-        statuses.set(oldest.id, 'PAID');
-        unpaidDebts.shift();
-      } else {
-        oldest.amountRemaining -= remaining;
-        remaining = 0;
-      }
-    }
-  }
-
-  for (const debt of unpaidDebts) {
-    const ageDays = (now.getTime() - debt.createdAt.getTime()) / (1000 * 60 * 60 * 24);
-    if (ageDays > thresholdDays) statuses.set(debt.id, 'OVERDUE');
+    const ageDays = (now.getTime() - entry.createdAt.getTime()) / DAY_MS;
+    statuses.set(tx.id, ageDays > thresholdDays ? 'OVERDUE' : 'UNPAID');
   }
 
   return statuses;
@@ -111,30 +143,9 @@ export function computeOverdueBalance(
   now: Date = new Date(),
   thresholdDays = 30,
 ): number {
-  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const unpaidDebts: { amountRemaining: number; createdAt: Date }[] = [];
-
-  for (const tx of sorted) {
-    if (tx.type === 'DEBT') {
-      unpaidDebts.push({ amountRemaining: tx.amountFcfa, createdAt: tx.createdAt });
-      continue;
-    }
-
-    let remaining = tx.amountFcfa;
-    while (remaining > 0 && unpaidDebts.length > 0) {
-      const oldest = unpaidDebts[0]!;
-      if (oldest.amountRemaining <= remaining) {
-        remaining -= oldest.amountRemaining;
-        unpaidDebts.shift();
-      } else {
-        oldest.amountRemaining -= remaining;
-        remaining = 0;
-      }
-    }
-  }
-
-  const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
-  return unpaidDebts
+  const unpaid = allocateFifo(transactions);
+  const thresholdMs = thresholdDays * DAY_MS;
+  return unpaid
     .filter((d) => now.getTime() - d.createdAt.getTime() > thresholdMs)
     .reduce((sum, d) => sum + d.amountRemaining, 0);
 }
@@ -154,64 +165,23 @@ export interface OverdueDebtRow {
 /**
  * Itemized version of `computeOverdueBalance` (Phase 9, "Dettes en retard"
  * page) — one row per currently-overdue debt (FIFO remaining amount) rather
- * than a single summed total. Deliberately NOT refactored to share the loop
- * with `computeOverdueBalance` — both are money-correctness-critical and
- * already independently tested; a shared-core refactor would widen the
- * blast radius of touching either for no behavioral gain.
+ * than a single summed total.
  */
 export function listOverdueDebts(
   transactions: TransactionWithNote[],
   now: Date = new Date(),
   thresholdDays = 30,
 ): OverdueDebtRow[] {
-  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const unpaidDebts: {
-    id: string;
-    amountRemaining: number;
-    note: string | null;
-    createdAt: Date;
-  }[] = [];
-
-  for (const tx of sorted) {
-    if (tx.type === 'DEBT') {
-      unpaidDebts.push({
-        id: tx.id,
-        amountRemaining: tx.amountFcfa,
-        note: tx.note,
-        createdAt: tx.createdAt,
-      });
-      continue;
-    }
-
-    let remaining = tx.amountFcfa;
-    while (remaining > 0 && unpaidDebts.length > 0) {
-      const oldest = unpaidDebts[0]!;
-      if (oldest.amountRemaining <= remaining) {
-        remaining -= oldest.amountRemaining;
-        unpaidDebts.shift();
-      } else {
-        oldest.amountRemaining -= remaining;
-        remaining = 0;
-      }
-    }
-  }
-
-  const thresholdMs = thresholdDays * 24 * 60 * 60 * 1000;
-  return unpaidDebts
+  const unpaid = allocateFifo(transactions);
+  const thresholdMs = thresholdDays * DAY_MS;
+  return unpaid
     .filter((d) => now.getTime() - d.createdAt.getTime() > thresholdMs)
     .map((d) => ({
-      id: d.id,
+      id: d.id!,
       amountFcfa: d.amountRemaining,
       note: d.note,
       createdAt: d.createdAt,
     }));
-}
-
-export interface DebtPaymentEvent {
-  paymentId: string;
-  amountAppliedFcfa: number;
-  remainingAfterFcfa: number;
-  createdAt: Date;
 }
 
 export interface OldestDebtProgress {
@@ -239,47 +209,11 @@ export interface IdentifiedTransaction extends AgingTransaction {
 export function computeOldestDebtProgress(
   transactions: IdentifiedTransaction[],
 ): OldestDebtProgress | null {
-  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-  const unpaidDebts: {
-    id: string;
-    originalAmount: number;
-    amountRemaining: number;
-    createdAt: Date;
-    events: DebtPaymentEvent[];
-  }[] = [];
-
-  for (const tx of sorted) {
-    if (tx.type === 'DEBT') {
-      unpaidDebts.push({
-        id: tx.id,
-        originalAmount: tx.amountFcfa,
-        amountRemaining: tx.amountFcfa,
-        createdAt: tx.createdAt,
-        events: [],
-      });
-      continue;
-    }
-
-    let remaining = tx.amountFcfa;
-    while (remaining > 0 && unpaidDebts.length > 0) {
-      const oldest = unpaidDebts[0]!;
-      const applied = Math.min(oldest.amountRemaining, remaining);
-      oldest.amountRemaining -= applied;
-      remaining -= applied;
-      oldest.events.push({
-        paymentId: tx.id,
-        amountAppliedFcfa: applied,
-        remainingAfterFcfa: oldest.amountRemaining,
-        createdAt: tx.createdAt,
-      });
-      if (oldest.amountRemaining === 0) unpaidDebts.shift();
-    }
-  }
-
-  const target = unpaidDebts[0];
+  const unpaid = allocateFifo(transactions);
+  const target = unpaid[0];
   if (!target) return null;
   return {
-    debtId: target.id,
+    debtId: target.id!,
     originalAmountFcfa: target.originalAmount,
     remainingFcfa: target.amountRemaining,
     createdAt: target.createdAt,
@@ -294,6 +228,6 @@ export function isOverdue(
 ): boolean {
   const oldest = oldestUnpaidDebtDate(transactions);
   if (!oldest) return false;
-  const ageDays = (now.getTime() - oldest.getTime()) / (1000 * 60 * 60 * 24);
+  const ageDays = (now.getTime() - oldest.getTime()) / DAY_MS;
   return ageDays > thresholdDays;
 }

@@ -16,6 +16,7 @@
 export const runtime = 'nodejs';
 
 import 'server-only';
+import { Prisma } from '@prisma/client';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
@@ -27,6 +28,8 @@ import { zPhone, zEmail } from '@/lib/server/zod-helpers';
 import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
 import { parseMonthParam, monthBounds } from '@/lib/server/jurali/month-range';
 import { CLIENT_FREE_TIER_LIMIT } from '@/lib/server/jurali/client-limits';
+import { lockUserTx } from '@/lib/server/withdrawals/lock';
+import { isTransientConflict } from '@/lib/server/prisma-errors';
 
 const Q_MAX_LEN = 200;
 
@@ -114,12 +117,48 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
 
-    const existingCount = await prisma.client.count({ where: { ownerId: auth.user.sub } });
-    if (existingCount >= CLIENT_FREE_TIER_LIMIT) {
-      const subscription = await prisma.subscription.findUnique({
-        where: { ownerId: auth.user.sub },
-      });
-      if (!isSubscriptionActive(subscription)) {
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          // Count-then-create was a TOCTOU race: two concurrent POSTs at
+          // 9/10 clients could both pass the cap check. The lock serializes
+          // them so the second sees the first's just-created row.
+          await lockUserTx(tx, auth.user.sub);
+
+          const existingCount = await tx.client.count({ where: { ownerId: auth.user.sub } });
+          if (existingCount >= CLIENT_FREE_TIER_LIMIT) {
+            const subscription = await tx.subscription.findUnique({
+              where: { ownerId: auth.user.sub },
+            });
+            if (!isSubscriptionActive(subscription)) {
+              return { ok: false as const };
+            }
+          }
+
+          const created = await tx.client.create({
+            data: {
+              ownerId: auth.user.sub,
+              firstName: parsed.data.firstName,
+              phone: parsed.data.phone || null,
+              email: parsed.data.email || null,
+              address: parsed.data.address || null,
+            },
+            select: {
+              id: true,
+              firstName: true,
+              phone: true,
+              email: true,
+              address: true,
+              createdAt: true,
+            },
+          });
+
+          return { ok: true as const, client: created };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+
+      if (!result.ok) {
         return NextResponse.json(
           {
             error: 'CLIENT_LIMIT_REACHED',
@@ -128,29 +167,25 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           { status: 409, headers: { 'x-request-id': ctx.requestId } },
         );
       }
+
+      return NextResponse.json(
+        {
+          ...result.client,
+          balanceFcfa: 0,
+          isOverdue: false,
+          lastActivityAt: null,
+          lastNote: null,
+        },
+        { status: 201, headers: { 'x-request-id': ctx.requestId } },
+      );
+    } catch (err) {
+      if (isTransientConflict(err)) {
+        return NextResponse.json(
+          { error: 'TRANSIENT_CONFLICT', message: 'Please retry' },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      throw err;
     }
-
-    const client = await prisma.client.create({
-      data: {
-        ownerId: auth.user.sub,
-        firstName: parsed.data.firstName,
-        phone: parsed.data.phone || null,
-        email: parsed.data.email || null,
-        address: parsed.data.address || null,
-      },
-      select: {
-        id: true,
-        firstName: true,
-        phone: true,
-        email: true,
-        address: true,
-        createdAt: true,
-      },
-    });
-
-    return NextResponse.json(
-      { ...client, balanceFcfa: 0, isOverdue: false, lastActivityAt: null, lastNote: null },
-      { status: 201, headers: { 'x-request-id': ctx.requestId } },
-    );
   });
 }

@@ -13,6 +13,8 @@ vi.mock('@/lib/server/middleware', () => ({
   requireAuth: vi.fn(),
 }));
 
+vi.mock('@/lib/server/withdrawals/lock', () => ({ lockUserTx: vi.fn() }));
+
 vi.mock('@/lib/server/payments/provider-singleton', () => ({
   getProvider: vi.fn(),
   breaker: { execute: vi.fn() },
@@ -32,11 +34,13 @@ import {
   PaymentProviderUnconfiguredError,
 } from '@/lib/server/payments/provider-singleton';
 import { CircuitOpenError } from '@/lib/server/payments/circuit-breaker';
+import { lockUserTx } from '@/lib/server/withdrawals/lock';
 import { GET, POST } from './route';
 
 const mockRequireAuth = vi.mocked(requireAuth);
 const mockGetProvider = vi.mocked(getProvider);
 const mockExecute = vi.mocked(breaker.execute);
+const mockLockUserTx = vi.mocked(lockUserTx);
 
 const authedCtx = { user: { sub: 'user-1', email: 'me@example.com' } };
 
@@ -86,6 +90,14 @@ beforeEach(() => {
     })),
   } as never);
   mockExecute.mockImplementation(async (fn: () => unknown) => fn());
+  // Default $transaction passes the prismaMock as `tx` so writes within the
+  // callback hit the same mocks as the outer client (mockDeep proxies them).
+  prismaMock.$transaction.mockImplementation((cb: unknown) => {
+    if (typeof cb === 'function') {
+      return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+    }
+    return Promise.resolve(cb);
+  });
 });
 
 describe('GET /api/subscriptions', () => {
@@ -133,6 +145,32 @@ describe('POST /api/subscriptions — happy path', () => {
     expect(prismaMock.subscription.upsert).toHaveBeenCalledWith(
       expect.objectContaining({ where: { ownerId: 'user-1' } }),
     );
+  });
+
+  it('guards the read-then-upsert gate with the per-user advisory lock (prevents double-charge race)', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    prismaMock.subscription.upsert.mockResolvedValue(seededSub() as never);
+    prismaMock.subscription.update.mockResolvedValue(seededSub() as never);
+
+    await POST(makePost());
+
+    expect(mockLockUserTx).toHaveBeenCalledWith(expect.anything(), 'user-1');
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'Serializable' }),
+    );
+  });
+
+  it('returns 409 TRANSIENT_CONFLICT when the gate transaction aborts (P2034), without charging', async () => {
+    prismaMock.$transaction.mockRejectedValue(
+      Object.assign(new Error('conflict'), { code: 'P2034' }),
+    );
+
+    const res = await POST(makePost());
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('TRANSIENT_CONFLICT');
+    expect(mockExecute).not.toHaveBeenCalled();
   });
 
   it('allows re-checkout after a CANCELED subscription', async () => {

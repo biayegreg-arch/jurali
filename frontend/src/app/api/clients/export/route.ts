@@ -11,7 +11,7 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { requireAuth } from '@/lib/server/middleware';
 import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
-import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
+import { requirePremium } from '@/lib/server/subscriptions/guards';
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -19,18 +19,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    const subscription = await prisma.subscription.findUnique({
-      where: { ownerId: auth.user.sub },
-    });
-    if (!isSubscriptionActive(subscription)) {
-      return NextResponse.json(
-        {
-          error: 'PREMIUM_REQUIRED',
-          message: 'Exporting all debts requires an active Premium subscription.',
-        },
-        { status: 403, headers: { 'x-request-id': ctx.requestId } },
-      );
-    }
+    const premiumFail = await requirePremium(
+      prisma,
+      auth.user.sub,
+      ctx.requestId,
+      'Exporting all debts requires an active Premium subscription.',
+    );
+    if (premiumFail) return premiumFail;
 
     const clients = await prisma.client.findMany({
       where: { ownerId: auth.user.sub },

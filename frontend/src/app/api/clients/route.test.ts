@@ -9,9 +9,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 
 vi.mock('@/lib/server/middleware', () => ({ requireAuth: vi.fn() }));
+vi.mock('@/lib/server/withdrawals/lock', () => ({ lockUserTx: vi.fn() }));
 
 import { requireAuth } from '@/lib/server/middleware';
+import { lockUserTx } from '@/lib/server/withdrawals/lock';
 import { GET, POST } from './route';
+
+const mockLockUserTx = vi.mocked(lockUserTx);
 
 const mockRequireAuth = vi.mocked(requireAuth);
 const authedCtx = { user: { sub: 'user-1', email: 'me@example.com' } };
@@ -53,6 +57,14 @@ function client(
 beforeEach(() => {
   vi.clearAllMocks();
   mockRequireAuth.mockResolvedValue(authedCtx);
+  // Default $transaction passes the prismaMock as `tx` so writes within the
+  // callback hit the same mocks as the outer client (mockDeep proxies them).
+  prismaMock.$transaction.mockImplementation((cb: unknown) => {
+    if (typeof cb === 'function') {
+      return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+    }
+    return Promise.resolve(cb);
+  });
 });
 
 describe('GET /api/clients', () => {
@@ -313,5 +325,29 @@ describe('POST /api/clients', () => {
 
     expect(res.status).toBe(409);
     expect(prismaMock.client.create).not.toHaveBeenCalled();
+  });
+
+  it('guards the count-then-create cap check with the per-user advisory lock', async () => {
+    prismaMock.client.count.mockResolvedValue(0);
+    prismaMock.client.create.mockResolvedValue(client() as never);
+
+    await POST(makePost({ firstName: 'Fatou' }));
+
+    expect(mockLockUserTx).toHaveBeenCalledWith(expect.anything(), 'user-1');
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'Serializable' }),
+    );
+  });
+
+  it('returns 409 TRANSIENT_CONFLICT when the Serializable transaction aborts (P2034)', async () => {
+    prismaMock.$transaction.mockRejectedValue(
+      Object.assign(new Error('conflict'), { code: 'P2034' }),
+    );
+
+    const res = await POST(makePost({ firstName: 'Fatou' }));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('TRANSIENT_CONFLICT');
   });
 });

@@ -70,6 +70,18 @@ describe('POST /api/auth/phone-signup', () => {
     expect(__cookieStore.has('app-csrf')).toBe(true);
   });
 
+  it('returns 409 PHONE_ALREADY_EXISTS (not 500) when create() races past the pre-check (P2002)', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockRejectedValue(
+      Object.assign(new Error('unique violation'), { code: 'P2002' }),
+    );
+
+    const res = await POST(makeReq(validBody));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('PHONE_ALREADY_EXISTS');
+  });
+
   it('returns 409 PHONE_ALREADY_EXISTS for a phone already registered (not enumeration-resistant)', async () => {
     prismaMock.user.findUnique.mockResolvedValue({ id: 'existing' } as never);
 

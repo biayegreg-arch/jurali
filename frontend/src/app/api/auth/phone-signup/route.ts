@@ -32,6 +32,7 @@ import {
 import { isBanned } from '@/lib/server/auth/banned-passwords';
 import { isPwned } from '@/lib/server/auth/hibp';
 import { syntheticEmail } from '@/lib/server/auth/synthetic-email';
+import { isUniqueConstraintViolation } from '@/lib/server/prisma-errors';
 
 const PASSWORD_MIN = Number(process.env.AUTH_PASSWORD_MIN_LENGTH ?? 10);
 
@@ -111,10 +112,27 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const passwordHash = await hashPassword(password);
-    const user = await prisma.user.create({
-      data: { email: syntheticEmail(phone), phone, name, shopName, passwordHash },
-      select: { id: true, tokenVersion: true },
-    });
+    let user;
+    try {
+      user = await prisma.user.create({
+        data: { email: syntheticEmail(phone), phone, name, shopName, passwordHash },
+        select: { id: true, tokenVersion: true },
+      });
+    } catch (err) {
+      // TOCTOU: two concurrent signups for the same phone can both pass the
+      // `existing` pre-check above; the unique constraint on `phone` is the
+      // real guard, and this turns its P2002 into the same graceful 409
+      // instead of an uncaught 500.
+      if (isUniqueConstraintViolation(err)) {
+        const res = NextResponse.json(
+          { error: 'PHONE_ALREADY_EXISTS', message: 'This phone number is already registered.' },
+          { status: 409 },
+        );
+        res.headers.set('x-request-id', ctx.requestId);
+        return res;
+      }
+      throw err;
+    }
 
     const accessToken = await createAccessToken({
       sub: user.id,
