@@ -24,15 +24,17 @@ interface SubscriptionData {
 
 const FREE_FEATURES = ['Jusqu’à 10 clients', 'Suivi des dettes et paiements', 'Historique complet'];
 
+// Every entry here must correspond to a real, server-enforced gate — no
+// aspirational features. See POST /api/clients (client cap), POST
+// /api/clients/[id]/remind + cron/auto-reminders (WhatsApp), cron/
+// overdue-alerts (retard digest), GET /api/stats, GET /api/clients/export
+// + the fiche-client PDF export.
 const PREMIUM_FEATURES: { label: string; icon: string }[] = [
   { label: 'Clients illimités', icon: 'users' },
-  { label: 'Rappels WhatsApp automatiques', icon: 'message-circle' },
+  { label: 'Rappels WhatsApp (manuel + automatique)', icon: 'message-circle' },
+  { label: 'Alertes dettes en retard (résumé quotidien)', icon: 'bell' },
   { label: 'Statistiques avancées', icon: 'bar-chart-2' },
-  { label: 'Historique complet illimité', icon: 'clock' },
   { label: 'Export CSV & PDF', icon: 'download' },
-  { label: 'Synchronisation multi-appareils', icon: 'refresh-cw' },
-  { label: 'Accès prioritaire au support', icon: 'headphones' },
-  { label: 'Sauvegarde automatique cloud', icon: 'cloud' },
 ];
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -175,7 +177,7 @@ export default function PremiumPage() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-2.5">
-                  {PREMIUM_FEATURES.slice(0, 6).map((f) => (
+                  {PREMIUM_FEATURES.map((f) => (
                     <div key={f.label} className="flex items-center gap-2">
                       <Icon i="check" size={14} className="text-accent flex-shrink-0" />
                       <span className="text-sm text-primary-foreground">{f.label}</span>
