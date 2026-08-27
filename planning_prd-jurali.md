@@ -136,7 +136,7 @@ Chaque jour, des milliers de boutiquiers de quartier au Sénégal vendent à cr�
 
 **3.8 — Page d'abonnement Premium**
 - **Rôle** : Présenter l'offre Premium et permettre au boutiquier de s'abonner.
-- **Qui y accède** : Le boutiquier qui atteint la limite de 10 clients OU qui tente d'utiliser une fonctionnalité Premium (rappels, export…).
+- **Qui y accède** : Le boutiquier qui atteint la limite de 5 clients OU qui tente d'utiliser une fonctionnalité Premium (rappels, export…).
 - **Actions clés** :
   - Voir la comparaison gratuit vs Premium
   - Choisir son moyen de paiement (Wave, Orange Money)
@@ -197,7 +197,7 @@ Chaque jour, des milliers de boutiquiers de quartier au Sénégal vendent à cr�
 
 | Feature | Description | Priorité |
 |---|---|---|
-| **Limite gratuite à 10 clients** | Au-delà de 10 clients créés, l'ajout d'un nouveau client déclenche l'écran d'upgrade Premium. Les 10 clients existants restent fonctionnels. | P0 |
+| **Limite gratuite à 5 clients** | Au-delà de 5 clients créés, l'ajout d'un nouveau client déclenche l'écran d'upgrade Premium. Les 5 clients existants restent fonctionnels. | P0 |
 | **Page d'abonnement Premium** | Comparaison visuelle gratuit vs Premium. Mise en avant du prix barré (~~5 000 FCFA~~ → 2 500 FCFA/mois). Bouton de paiement. | P0 |
 | **Paiement via mobile money** | Le boutiquier s'abonne en payant via Wave ou Orange Money. Processus intégré, pas de redirection externe complexe. | P0 |
 | **Gestion de l'abonnement** | Le boutiquier peut voir son statut (gratuit/Premium), la date de renouvellement, et annuler depuis les paramètres. | P1 |
@@ -206,7 +206,7 @@ Chaque jour, des milliers de boutiquiers de quartier au Sénégal vendent à cr�
 
 | Feature | Description | Priorité |
 |---|---|---|
-| **Clients illimités** | Suppression de la limite de 10 clients. | P0 |
+| **Clients illimités** | Suppression de la limite de 5 clients. | P0 |
 | **Rappels WhatsApp** | Le boutiquier peut envoyer un rappel automatique à un client via WhatsApp, avec un message pré-rédigé incluant le montant dû. Le client reçoit un message du type : "Bonjour Awa, vous avez un solde de 15 500 FCFA chez Boutique Mamadou. Merci de passer régler." | P1 |
 | **Historique complet** | En gratuit, l'historique est limité aux 30 derniers jours. En Premium, accès à tout l'historique sans limite. | P1 |
 | **Sync multi-appareils** | Le boutiquier accède à ses données depuis un autre téléphone ou un navigateur. Utile si le téléphone tombe en panne ou s'il partage la boutique avec un associé. | P2 |
@@ -270,16 +270,16 @@ Chaque jour, des milliers de boutiquiers de quartier au Sénégal vendent à cr�
 - Après la création, le flux d'ajout de dette continue immédiatement (pas de retour à l'écran précédent)
 - Le nouveau client apparaît ensuite dans la liste des clients et dans les clients récents
 
-### US-06 : Être bloqué à 10 clients et comprendre pourquoi
+### US-06 : Être bloqué à 5 clients et comprendre pourquoi
 
-> En tant que **Mamadou (boutiquier en version gratuite)**, je veux **comprendre clairement pourquoi je ne peux pas ajouter de 11e client et comment débloquer cette limite** afin de **décider en connaissance de cause si le Premium vaut le coup**.
+> En tant que **Mamadou (boutiquier en version gratuite)**, je veux **comprendre clairement pourquoi je ne peux pas ajouter de 6e client et comment débloquer cette limite** afin de **décider en connaissance de cause si le Premium vaut le coup**.
 
 **Critères d'acceptation :**
-- Lorsque le boutiquier tente d'ajouter un 11e client, un écran d'upgrade s'affiche (pas une simple erreur)
+- Lorsque le boutiquier tente d'ajouter un 6e client, un écran d'upgrade s'affiche (pas une simple erreur)
 - L'écran compare clairement gratuit vs Premium
 - Le prix est affiché avec un prix barré (~~5 000 FCFA~~ → 2 500 FCFA/mois)
 - Le boutiquier peut payer directement via Wave ou Orange Money depuis cet écran
-- Le boutiquier peut fermer cet écran et revenir à son utilisation normale (il n'est pas bloqué — ses 10 clients restent fonctionnels)
+- Le boutiquier peut fermer cet écran et revenir à son utilisation normale (il n'est pas bloqué — ses 5 clients restent fonctionnels)
 
 ### US-07 : Envoyer un rappel WhatsApp à un client
 
@@ -325,12 +325,12 @@ Le boutiquier utilise Jurali gratuitement pour résoudre son problème de base (
 | **Sync multi-appareils** | ❌ | ✅ |
 | **Export PDF/Excel** | ❌ | ✅ |
 
-### Pourquoi cette limite de 10 clients fonctionne
+### Pourquoi cette limite de 5 clients fonctionne
 
-Un boutiquier actif a facilement 30 à 50 clients débiteurs. Avec 10 clients gratuits, il peut :
+Un boutiquier actif a facilement 30 à 50 clients débiteurs. Avec 5 clients gratuits, il peut :
 - Tester le produit et voir la valeur immédiatement
-- Créer l'habitude d'utilisation (2-3 semaines suffisent)
-- Constater la douleur quand le 11e client demande du crédit et qu'il doit sortir le cahier papier pour celui-là
+- Créer l'habitude d'utilisation (quelques jours à 1-2 semaines suffisent)
+- Constater la douleur quand le 6e client demande du crédit et qu'il doit sortir le cahier papier pour celui-là
 
 La friction est naturelle, pas artificielle.
 
@@ -367,7 +367,7 @@ La friction est naturelle, pas artificielle.
 | **Taux d'activation J+1** | > 40% | Un boutiquier qui a enregistré au moins 1 dette dans les 24h suivant l'inscription est "activé". Le produit doit être assez simple pour ça. |
 | **Taux de rétention J+7** | > 30% | Le boutiquier revient au moins 1 fois dans les 7 jours suivant l'inscription pour enregistrer une transaction. |
 | **Dettes enregistrées par utilisateur actif par semaine** | > 5 | Prouve que le produit remplace le cahier dans le quotidien réel. |
-| **Conversion gratuit → Premium** | 3-5% | Cible standard pour un freemium B2C à faible coût. Acceptable dès M2 (les utilisateurs ont besoin de 3-4 semaines pour atteindre la limite de 10 clients). |
+| **Conversion gratuit → Premium** | 3-5% | Cible standard pour un freemium B2C à faible coût. Acceptable dès M2 (les utilisateurs ont besoin de 1-2 semaines pour atteindre la limite de 5 clients). |
 | **Revenu mensuel récurrent (MRR)** | 20 000 FCFA à M3 | Preuve de willingness-to-pay, pas un objectif de rentabilité. |
 
 ### Métriques produit (en continu)
@@ -419,7 +419,7 @@ Le cahier papier est gratuit, ne nécessite pas de batterie, et fonctionne depui
 2 500 FCFA/mois n'est pas cher, mais payer un abonnement mensuel pour un outil digital est un comportement nouveau pour cette cible.
 
 **Mitigation** :
-- La limite de 10 clients est le levier principal. Si un boutiquier a 10 clients dans Jurali et un 11e arrive, il ne va pas retourner au cahier — il va payer.
+- La limite de 5 clients est le levier principal. Si un boutiquier a 5 clients dans Jurali et un 6e arrive, il ne va pas retourner au cahier — il va payer.
 - Les rappels WhatsApp sont la "killer feature" payante : si un seul rappel permet de récupérer 15 000 FCFA oubliés, l'abonnement à 2 500 FCFA se rembourse 6x.
 - Offrir le premier mois gratuit en Premium aux 50 premiers utilisateurs pour créer l'habitude et les témoignages.
 

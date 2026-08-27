@@ -13,6 +13,7 @@ vi.mock('@/lib/server/withdrawals/lock', () => ({ lockUserTx: vi.fn() }));
 
 import { requireAuth } from '@/lib/server/middleware';
 import { lockUserTx } from '@/lib/server/withdrawals/lock';
+import { CLIENT_FREE_TIER_LIMIT } from '@/lib/server/jurali/client-limits';
 import { GET, POST } from './route';
 
 const mockLockUserTx = vi.mocked(lockUserTx);
@@ -289,9 +290,9 @@ describe('POST /api/clients', () => {
     );
   });
 
-  it('returns 409 CLIENT_LIMIT_REACHED at the free-tier cap of 10 clients', async () => {
-    prismaMock.client.count.mockResolvedValue(10);
-    const res = await POST(makePost({ firstName: 'Onzième Client' }));
+  it(`returns 409 CLIENT_LIMIT_REACHED at the free-tier cap of ${CLIENT_FREE_TIER_LIMIT} clients`, async () => {
+    prismaMock.client.count.mockResolvedValue(CLIENT_FREE_TIER_LIMIT);
+    const res = await POST(makePost({ firstName: 'Sixième Client' }));
     expect(res.status).toBe(409);
     const json = (await res.json()) as { error: string };
     expect(json.error).toBe('CLIENT_LIMIT_REACHED');
@@ -299,29 +300,29 @@ describe('POST /api/clients', () => {
   });
 
   it('Phase 7 — waives the free-tier cap for an active Premium subscription', async () => {
-    prismaMock.client.count.mockResolvedValue(10);
+    prismaMock.client.count.mockResolvedValue(CLIENT_FREE_TIER_LIMIT);
     prismaMock.subscription.findUnique.mockResolvedValue({
       status: 'ACTIVE',
       renewsAt: new Date(Date.now() + 30 * 86_400_000),
     } as never);
     prismaMock.client.create.mockResolvedValue(
-      client({ id: 'client-11', firstName: 'Onzième Client' }) as never,
+      client({ id: 'client-6', firstName: 'Sixième Client' }) as never,
     );
 
-    const res = await POST(makePost({ firstName: 'Onzième Client' }));
+    const res = await POST(makePost({ firstName: 'Sixième Client' }));
 
     expect(res.status).toBe(201);
     expect(prismaMock.client.create).toHaveBeenCalled();
   });
 
   it('Phase 7 — still 409s at the cap when the subscription has lapsed (renewsAt passed)', async () => {
-    prismaMock.client.count.mockResolvedValue(10);
+    prismaMock.client.count.mockResolvedValue(CLIENT_FREE_TIER_LIMIT);
     prismaMock.subscription.findUnique.mockResolvedValue({
       status: 'ACTIVE',
       renewsAt: new Date(Date.now() - 86_400_000),
     } as never);
 
-    const res = await POST(makePost({ firstName: 'Onzième Client' }));
+    const res = await POST(makePost({ firstName: 'Sixième Client' }));
 
     expect(res.status).toBe(409);
     expect(prismaMock.client.create).not.toHaveBeenCalled();

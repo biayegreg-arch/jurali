@@ -23,7 +23,7 @@ import {
 } from '@/components/jurali/ClientForm';
 
 const ERROR_MESSAGES: Record<string, string> = {
-  CLIENT_LIMIT_REACHED: 'Limite de 10 clients gratuits atteinte — passe à Premium pour continuer.',
+  CLIENT_LIMIT_REACHED: 'Limite de 5 clients gratuits atteinte — passe à Premium pour continuer.',
   VALIDATION_FAILED: 'Vérifie les champs du formulaire (numéro de téléphone ou email invalide).',
 };
 

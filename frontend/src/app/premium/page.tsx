@@ -22,7 +22,7 @@ interface SubscriptionData {
   planAmountFcfa: number;
 }
 
-const FREE_FEATURES = ['Jusqu’à 10 clients', 'Suivi des dettes et paiements', 'Historique complet'];
+const FREE_FEATURES = ['Jusqu’à 5 clients', 'Suivi des dettes et paiements', 'Historique complet'];
 
 // Every entry here must correspond to a real, server-enforced gate — no
 // aspirational features. See POST /api/clients (client cap), POST

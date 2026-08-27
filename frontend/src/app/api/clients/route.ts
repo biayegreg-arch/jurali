@@ -10,7 +10,7 @@
 // so an in-memory sort avoids building computed-column SQL for no real
 // scale benefit (YAGNI).
 //
-// POST: creates a client. Enforces the PRD §4/§6 free-tier cap (10 clients)
+// POST: creates a client. Enforces the PRD §4/§6 free-tier cap (5 clients)
 // with a stable 409 CLIENT_LIMIT_REACHED code — waived for a user with an
 // active Premium Subscription (Phase 7, `isSubscriptionActive`).
 export const runtime = 'nodejs';
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       const result = await prisma.$transaction(
         async (tx) => {
           // Count-then-create was a TOCTOU race: two concurrent POSTs at
-          // 9/10 clients could both pass the cap check. The lock serializes
+          // 4/5 clients could both pass the cap check. The lock serializes
           // them so the second sees the first's just-created row.
           await lockUserTx(tx, auth.user.sub);
 

@@ -82,7 +82,7 @@ const TESTIMONIALS = [
   },
 ];
 
-const FREE_FEATURES = ['Jusqu’à 10 clients', 'Enregistrement des dettes', 'Historique complet'];
+const FREE_FEATURES = ['Jusqu’à 5 clients', 'Enregistrement des dettes', 'Historique complet'];
 const PREMIUM_FEATURES = [
   'Clients illimités',
   'Rappels WhatsApp',

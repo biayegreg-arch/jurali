@@ -3,4 +3,4 @@
 // the two can never drift on what the limit actually is. Not `server-only`
 // on purpose: the sidebar is a client component and needs the same number
 // to compute a real (non-fabricated) progress bar.
-export const CLIENT_FREE_TIER_LIMIT = 10;
+export const CLIENT_FREE_TIER_LIMIT = 5;

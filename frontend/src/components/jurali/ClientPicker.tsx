@@ -175,7 +175,7 @@ export function ClientPicker({
 
       {limitReached && (
         <div className="text-xs text-danger mt-2">
-          Limite de 10 clients gratuits atteinte —{' '}
+          Limite de 5 clients gratuits atteinte —{' '}
           <a href="/premium" className="underline font-semibold">
             passer à Premium
           </a>
