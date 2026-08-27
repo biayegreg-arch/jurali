@@ -132,3 +132,35 @@ export async function PATCH(
     return NextResponse.json(updated, { headers: { 'x-request-id': ctx.requestId } });
   });
 }
+
+// Desktop/mobile debtor-list "Supprimer" action. Transaction rows cascade
+// via Prisma's `onDelete: Cascade` on Transaction.client, so no manual
+// cleanup is needed here.
+export async function DELETE(
+  req: NextRequest,
+  routeCtx: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    const csrfFail = verifyCsrf(req);
+    if (csrfFail) return csrfFail;
+
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
+    const { id } = await routeCtx.params;
+    const found = await prisma.client.findUnique({
+      where: { id },
+      select: { id: true, ownerId: true },
+    });
+    const existing = requireOwnedClient(found, auth.user.sub, ctx.requestId);
+    if (existing instanceof NextResponse) return existing;
+
+    await prisma.client.delete({ where: { id } });
+
+    return NextResponse.json(
+      { ok: true },
+      { status: 200, headers: { 'x-request-id': ctx.requestId } },
+    );
+  });
+}

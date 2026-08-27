@@ -6,8 +6,10 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useUser } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { useApi } from '@/lib/useApi';
 import { useDebtorListState } from '@/lib/useDebtorListState';
+import { useDeleteClient } from '@/lib/useDeleteClient';
 import { Icon } from '@/components/jurali/Icon';
 import { TopBar } from '@/components/jurali/TopBar';
 import { DebtorRow } from '@/components/jurali/DebtorRow';
@@ -16,6 +18,7 @@ import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { DesktopDebtorWorkspace } from '@/components/jurali/DesktopDebtorWorkspace';
 import { PageTransition } from '@/components/jurali/PageTransition';
 import { MotionLink } from '@/components/jurali/MotionLink';
+import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
 import { tapScale } from '@/lib/motion';
 import { toDebtorRowProps } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
@@ -44,15 +47,20 @@ function currentMonthParam(): string {
 
 export default function DashboardPage() {
   const user = useUser();
+  const { toast } = useToast();
   const [historyMonth, setHistoryMonth] = useState(currentMonthParam);
-  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>(
-    `/api/dashboard?month=${historyMonth}`,
-    { skip: !user },
-  );
-  const { data: clients, loading: clientsLoading } = useApi<{ items: ClientSummary[] }>(
-    '/api/clients?sort=activity&order=desc&limit=5',
-    { skip: !user },
-  );
+  const {
+    data: dashboard,
+    loading: dashboardLoading,
+    refresh: refreshDashboard,
+  } = useApi<DashboardData>(`/api/dashboard?month=${historyMonth}`, { skip: !user });
+  const {
+    data: clients,
+    loading: clientsLoading,
+    refresh: refreshRecentClients,
+  } = useApi<{ items: ClientSummary[] }>('/api/clients?sort=activity&order=desc&limit=5', {
+    skip: !user,
+  });
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
   // Desktop (lg+) sidebar + full debtor table — same shared state/fetch as
   // `/clients`' desktop view (see .planning/banani/dashboard.md § Desktop
@@ -72,7 +80,14 @@ export default function DashboardPage() {
     setMonth: setDebtorMonth,
     items: debtorItems,
     clientsLoading: debtorItemsLoading,
+    refreshClients: refreshDebtorItems,
   } = useDebtorListState({ skip: !user });
+  const deleteClient = useDeleteClient(
+    async () => {
+      await Promise.all([refreshDashboard(), refreshRecentClients(), refreshDebtorItems()]);
+    },
+    (message) => toast(message, 'error'),
+  );
   // Hoisted once: the mobile TopBar's bell and the desktop workspace's bell
   // both mount simultaneously (Tailwind's hidden/lg:hidden is CSS-only,
   // not conditional rendering) — a single shared fetch avoids firing
@@ -159,7 +174,13 @@ export default function DashboardPage() {
                   dette.
                 </div>
               ) : (
-                recentClients.map((c, i) => <DebtorRow key={c.id} {...toDebtorRowProps(c, i)} />)
+                recentClients.map((c, i) => (
+                  <DebtorRow
+                    key={c.id}
+                    {...toDebtorRowProps(c, i)}
+                    onDelete={deleteClient.requestDelete}
+                  />
+                ))
               )}
             </div>
 
@@ -235,8 +256,20 @@ export default function DashboardPage() {
           items={debtorItems}
           clientsLoading={debtorItemsLoading}
           notificationCount={notificationCount}
+          onDelete={deleteClient.requestDelete}
         />
       </div>
+
+      <ConfirmDialog
+        open={deleteClient.target !== null}
+        title={`Supprimer ${deleteClient.target?.name ?? 'ce client'} ?`}
+        message="Cette action supprimera définitivement ce client et tout son historique de dettes et paiements. Cette action est irréversible."
+        confirmLabel={deleteClient.pending ? 'Suppression…' : 'Supprimer'}
+        variant="danger"
+        icon="trash-2"
+        onConfirm={deleteClient.confirmDelete}
+        onCancel={deleteClient.cancel}
+      />
     </PageTransition>
   );
 }

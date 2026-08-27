@@ -1,4 +1,5 @@
 import { MotionLink } from './MotionLink';
+import { Icon } from './Icon';
 import type { DebtorRowProps } from './DebtorRow';
 import { listItem } from '@/lib/motion';
 
@@ -17,6 +18,7 @@ export function DebtorTableRow({
   lastItem,
   isOverdue,
   index,
+  onDelete,
 }: DebtorRowProps) {
   return (
     <MotionLink
@@ -67,6 +69,23 @@ export function DebtorTableRow({
           <span className="inline-flex items-center px-2.5 py-1 rounded-lg bg-secondary text-secondary-foreground font-body font-bold text-xs">
             À jour
           </span>
+        )}
+      </div>
+
+      <div className="w-10 flex-shrink-0 flex justify-end">
+        {onDelete && (
+          <button
+            type="button"
+            aria-label={`Supprimer ${name}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDelete(id, name);
+            }}
+            className="p-2 text-muted-foreground hover:text-danger"
+          >
+            <Icon i="trash-2" size={16} />
+          </button>
         )}
       </div>
     </MotionLink>

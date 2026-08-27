@@ -25,6 +25,7 @@ export interface DesktopDebtorWorkspaceProps {
   items: ClientSummary[];
   clientsLoading: boolean;
   notificationCount: number;
+  onDelete?: (id: string, name: string) => void;
 }
 
 export function DesktopDebtorWorkspace({
@@ -41,6 +42,7 @@ export function DesktopDebtorWorkspace({
   items,
   clientsLoading,
   notificationCount,
+  onDelete,
 }: DesktopDebtorWorkspaceProps) {
   return (
     <div className="hidden lg:flex flex-1 flex-col">
@@ -131,6 +133,7 @@ export function DesktopDebtorWorkspace({
             <div className="w-32 text-right">Montant</div>
             <div className="w-24 text-right">Ancienneté</div>
             <div className="w-24 text-right">Statut</div>
+            <div className="w-10" aria-hidden="true" />
           </div>
 
           <div className="divide-y divide-border">
@@ -146,7 +149,9 @@ export function DesktopDebtorWorkspace({
                 dette.
               </div>
             ) : (
-              items.map((c, i) => <DebtorTableRow key={c.id} {...toDebtorRowProps(c, i)} />)
+              items.map((c, i) => (
+                <DebtorTableRow key={c.id} {...toDebtorRowProps(c, i)} onDelete={onDelete} />
+              ))
             )}
           </div>
         </div>

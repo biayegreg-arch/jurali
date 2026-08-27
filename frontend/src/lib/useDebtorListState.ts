@@ -33,7 +33,11 @@ export function useDebtorListState(opts: { skip: boolean; initialOverdueOnly?: b
   const listPath = `/api/clients?sort=${sort}&order=desc${
     debouncedQuery ? `&q=${encodeURIComponent(debouncedQuery)}` : ''
   }${monthActive ? `&month=${month}` : ''}`;
-  const { data: clients, loading: clientsLoading } = useApi<{ items: ClientSummary[] }>(listPath, {
+  const {
+    data: clients,
+    loading: clientsLoading,
+    refresh: refreshClients,
+  } = useApi<{ items: ClientSummary[] }>(listPath, {
     skip: opts.skip,
   });
 
@@ -62,5 +66,6 @@ export function useDebtorListState(opts: { skip: boolean; initialOverdueOnly?: b
     items,
     clientsLoading,
     resetToAll,
+    refreshClients,
   };
 }

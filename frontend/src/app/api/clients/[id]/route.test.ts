@@ -8,7 +8,7 @@ mockNextCookies();
 vi.mock('@/lib/server/middleware', () => ({ requireAuth: vi.fn() }));
 
 import { requireAuth } from '@/lib/server/middleware';
-import { GET, PATCH } from './route';
+import { GET, PATCH, DELETE } from './route';
 
 const mockRequireAuth = vi.mocked(requireAuth);
 const authedCtx = { user: { sub: 'user-1', email: 'me@example.com' } };
@@ -16,6 +16,21 @@ const authedCtx = { user: { sub: 'user-1', email: 'me@example.com' } };
 function makeGet(id: string): { req: NextRequest; routeCtx: { params: Promise<{ id: string }> } } {
   return {
     req: new NextRequest(`http://test/api/clients/${id}`),
+    routeCtx: { params: Promise.resolve({ id }) },
+  };
+}
+
+function makeDelete(
+  id: string,
+  opts: { csrf?: 'match' | 'missing' } = {},
+): { req: NextRequest; routeCtx: { params: Promise<{ id: string }> } } {
+  const headers: Record<string, string> = {};
+  if ((opts.csrf ?? 'match') === 'match') {
+    headers['x-csrf-token'] = 'csrf-tok';
+    headers['cookie'] = 'app-csrf=csrf-tok';
+  }
+  return {
+    req: new NextRequest(`http://test/api/clients/${id}`, { method: 'DELETE', headers }),
     routeCtx: { params: Promise.resolve({ id }) },
   };
 }
@@ -248,5 +263,60 @@ describe('PATCH /api/clients/[id]', () => {
         data: { address: 'Plateau, Dakar' },
       }),
     );
+  });
+});
+
+describe('DELETE /api/clients/[id]', () => {
+  beforeEach(() => {
+    prismaMock.client.findUnique.mockResolvedValue({
+      id: 'client-1',
+      ownerId: 'user-1',
+    } as never);
+    prismaMock.client.delete.mockResolvedValue({ id: 'client-1' } as never);
+  });
+
+  it('returns 401 when not authenticated', async () => {
+    mockRequireAuth.mockResolvedValue(
+      NextResponse.json({ error: 'Missing token' }, { status: 401 }),
+    );
+    const { req, routeCtx } = makeDelete('client-1');
+    const res = await DELETE(req, routeCtx);
+    expect(res.status).toBe(401);
+    expect(prismaMock.client.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns 403 when CSRF token is missing', async () => {
+    const { req, routeCtx } = makeDelete('client-1', { csrf: 'missing' });
+    const res = await DELETE(req, routeCtx);
+    expect(res.status).toBe(403);
+    expect(prismaMock.client.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 CLIENT_NOT_FOUND when the client does not exist', async () => {
+    prismaMock.client.findUnique.mockResolvedValue(null);
+    const { req, routeCtx } = makeDelete('missing');
+    const res = await DELETE(req, routeCtx);
+    expect(res.status).toBe(404);
+    expect(prismaMock.client.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns 404 (not 403) when the client belongs to a different owner', async () => {
+    prismaMock.client.findUnique.mockResolvedValue({
+      id: 'client-1',
+      ownerId: 'someone-else',
+    } as never);
+    const { req, routeCtx } = makeDelete('client-1');
+    const res = await DELETE(req, routeCtx);
+    expect(res.status).toBe(404);
+    expect(prismaMock.client.delete).not.toHaveBeenCalled();
+  });
+
+  it('deletes the client and returns 200 { ok: true }', async () => {
+    const { req, routeCtx } = makeDelete('client-1');
+    const res = await DELETE(req, routeCtx);
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean };
+    expect(json.ok).toBe(true);
+    expect(prismaMock.client.delete).toHaveBeenCalledWith({ where: { id: 'client-1' } });
   });
 });

@@ -5,8 +5,10 @@
 import { Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useUser } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { useApi } from '@/lib/useApi';
 import { useDebtorListState } from '@/lib/useDebtorListState';
+import { useDeleteClient } from '@/lib/useDeleteClient';
 import { Icon } from '@/components/jurali/Icon';
 import { TopBar } from '@/components/jurali/TopBar';
 import { DebtorRow } from '@/components/jurali/DebtorRow';
@@ -14,6 +16,7 @@ import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { DesktopDebtorWorkspace } from '@/components/jurali/DesktopDebtorWorkspace';
 import { PageTransition } from '@/components/jurali/PageTransition';
 import { MotionLink } from '@/components/jurali/MotionLink';
+import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
 import { tapScale } from '@/lib/motion';
 import { toDebtorRowProps } from '@/lib/jurali-format';
 
@@ -40,6 +43,7 @@ export default function ClientsPage() {
 function ClientsPageContent() {
   const user = useUser();
   const params = useSearchParams();
+  const { toast } = useToast();
 
   const {
     query,
@@ -55,11 +59,22 @@ function ClientsPageContent() {
     setMonth,
     items,
     clientsLoading,
+    refreshClients,
   } = useDebtorListState({ skip: !user, initialOverdueOnly: params.get('filter') === 'overdue' });
 
-  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
+  const {
+    data: dashboard,
+    loading: dashboardLoading,
+    refresh: refreshDashboard,
+  } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
+  const deleteClient = useDeleteClient(
+    async () => {
+      await Promise.all([refreshClients(), refreshDashboard()]);
+    },
+    (message) => toast(message, 'error'),
+  );
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
   // Hoisted once: both the mobile TopBar's bell and the desktop content
   // bar's bell render on every load (Tailwind's hidden/lg:hidden is
@@ -168,7 +183,13 @@ function ClientsPageContent() {
                   dette.
                 </div>
               ) : (
-                items.map((c, i) => <DebtorRow key={c.id} {...toDebtorRowProps(c, i)} />)
+                items.map((c, i) => (
+                  <DebtorRow
+                    key={c.id}
+                    {...toDebtorRowProps(c, i)}
+                    onDelete={deleteClient.requestDelete}
+                  />
+                ))
               )}
             </div>
 
@@ -203,8 +224,20 @@ function ClientsPageContent() {
           items={items}
           clientsLoading={clientsLoading}
           notificationCount={notificationCount}
+          onDelete={deleteClient.requestDelete}
         />
       </div>
+
+      <ConfirmDialog
+        open={deleteClient.target !== null}
+        title={`Supprimer ${deleteClient.target?.name ?? 'ce client'} ?`}
+        message="Cette action supprimera définitivement ce client et tout son historique de dettes et paiements. Cette action est irréversible."
+        confirmLabel={deleteClient.pending ? 'Suppression…' : 'Supprimer'}
+        variant="danger"
+        icon="trash-2"
+        onConfirm={deleteClient.confirmDelete}
+        onCancel={deleteClient.cancel}
+      />
     </PageTransition>
   );
 }

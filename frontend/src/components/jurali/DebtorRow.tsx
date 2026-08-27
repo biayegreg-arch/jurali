@@ -1,4 +1,5 @@
 import { MotionLink } from './MotionLink';
+import { Icon } from './Icon';
 import { listItem, tapScale } from '@/lib/motion';
 
 export interface DebtorRowProps {
@@ -13,6 +14,9 @@ export interface DebtorRowProps {
   lastItem: string;
   isOverdue: boolean;
   index: number;
+  /** Optional: shows a trash icon that requests deletion instead of
+   * navigating (only the pages that wire up delete pass it). */
+  onDelete?: ((id: string, name: string) => void) | undefined;
 }
 
 /** A single debtor line item — ported from Banani's shared DebtorRow.jsx. */
@@ -25,6 +29,7 @@ export function DebtorRow({
   lastItem,
   isOverdue,
   index,
+  onDelete,
 }: DebtorRowProps) {
   return (
     <MotionLink
@@ -65,6 +70,21 @@ export function DebtorRow({
                 : `${daysAgo}j`}
         </span>
       </div>
+
+      {onDelete && (
+        <button
+          type="button"
+          aria-label={`Supprimer ${name}`}
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDelete(id, name);
+          }}
+          className="flex-shrink-0 p-2 -mr-2 text-muted-foreground"
+        >
+          <Icon i="trash-2" size={18} />
+        </button>
+      )}
     </MotionLink>
   );
 }
