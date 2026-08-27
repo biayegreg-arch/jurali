@@ -438,6 +438,16 @@ model Subscription {
   providerChargeId String? @unique
   paymentUrl       String?
 
+  // Renewal-reminder cron (subscription-renewal-reminders) — since Mobile
+  // Money has no auto-debit, renewal is always a manual re-checkout, so we
+  // email a heads-up before `renewsAt` lapses. `reminderStage` tracks the
+  // last stage sent ("3d" | "1d" | "expired"); `reminderStageRenewsAt` pins
+  // it to the `renewsAt` value it was computed for, so a fresh billing
+  // cycle (renewsAt changes on renewal) naturally resets the stage without
+  // any explicit cleanup.
+  reminderStage         String?
+  reminderStageRenewsAt DateTime?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
