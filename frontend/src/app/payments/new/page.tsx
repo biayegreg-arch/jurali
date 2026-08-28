@@ -18,6 +18,7 @@ import { ClientPicker, type PickedClient } from '@/components/jurali/ClientPicke
 import { AmountField } from '@/components/jurali/AmountField';
 import { PageTransition } from '@/components/jurali/PageTransition';
 import { AnimatedNumber } from '@/components/jurali/AnimatedNumber';
+import { JuraliMark } from '@/components/jurali/JuraliMark';
 
 interface Receipt {
   clientName: string;
@@ -80,7 +81,9 @@ export default function NewPaymentPage() {
           <div className="flex-1 flex items-center justify-center px-4 py-6">
             <div className="w-full bg-background border-2 border-foreground rounded-2xl px-6 py-8 max-w-sm">
               <div className="text-center mb-6 pb-6 border-b-2 border-foreground">
-                <div className="font-headings font-bold text-2xl text-foreground mb-1">JURALI</div>
+                <div className="flex justify-center mb-1">
+                  <JuraliMark size={28} textSize="text-2xl" />
+                </div>
                 <div className="text-xs text-muted-foreground">Gestion des dettes simplifiée</div>
               </div>
               <div className="mb-6 text-sm">

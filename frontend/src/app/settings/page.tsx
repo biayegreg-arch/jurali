@@ -18,6 +18,7 @@ import { PageTransition } from '@/components/jurali/PageTransition';
 import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSection';
 import { PhoneField } from '@/components/jurali/PhoneField';
 import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
+import { JuraliMark } from '@/components/jurali/JuraliMark';
 import { useExportDebtsCsv } from '@/lib/useExportDebtsCsv';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { OVERDUE_ALERT_THRESHOLD_DAYS } from '@/lib/server/jurali/overdue-alert';
@@ -626,7 +627,7 @@ function DataSection({ isPremium }: { isPremium: boolean }) {
 function AppInfoBlock() {
   return (
     <div className="bg-input border border-border rounded-xl px-5 py-4">
-      <div className="font-headings font-bold text-sm text-foreground">Jurali</div>
+      <JuraliMark size={20} textSize="text-sm" className="mb-0.5" />
       <div className="text-xs text-muted-foreground">Conçu pour les boutiquiers</div>
     </div>
   );

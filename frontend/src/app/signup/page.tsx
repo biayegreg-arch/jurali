@@ -10,6 +10,7 @@ import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { GoogleSignInButton } from '@/components/jurali/GoogleSignInButton';
 import { PhoneField } from '@/components/jurali/PhoneField';
+import { JuraliMark } from '@/components/jurali/JuraliMark';
 
 const ERROR_MESSAGES: Record<string, string> = {
   PHONE_ALREADY_EXISTS: 'Ce numéro est déjà utilisé — connecte-toi plutôt.',
@@ -74,8 +75,8 @@ export default function SignupPage() {
       {/* Brand panel — desktop only (lg+), matches Banani's 560px left panel */}
       <div className="hidden lg:flex bg-primary flex-col justify-between px-12 py-12 flex-shrink-0 w-[560px]">
         <div>
-          <Link href="/" className="font-headings font-bold text-3xl text-primary-foreground">
-            Jurali
+          <Link href="/">
+            <JuraliMark tone="inverted" size={36} textSize="text-3xl" />
           </Link>
           <div className="text-sm text-secondary mt-1">Gestion des dettes simplifiée</div>
         </div>
@@ -146,8 +147,8 @@ export default function SignupPage() {
         <div className="w-full max-w-[440px]">
           {/* Mobile-only compact wordmark (desktop shows the brand panel instead) */}
           <div className="mb-6 lg:hidden">
-            <Link href="/" className="font-headings font-bold text-2xl text-primary">
-              Jurali
+            <Link href="/">
+              <JuraliMark size={30} textSize="text-2xl" />
             </Link>
             <div className="text-xs text-muted-foreground">Gestion des dettes simplifiée</div>
           </div>

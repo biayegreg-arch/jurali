@@ -7,6 +7,7 @@
 // links removed, "Voir la démo" repointed to a real in-page anchor).
 import Link from 'next/link';
 import { Icon } from '@/components/jurali/Icon';
+import { JuraliMark } from '@/components/jurali/JuraliMark';
 
 const PROBLEMS = [
   {
@@ -97,7 +98,7 @@ export default function LandingPage() {
       {/* === HEADER / NAV === */}
       <header className="sticky top-0 z-50 bg-background border-b border-border">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 md:py-5 flex items-center justify-between">
-          <div className="font-headings font-bold text-xl md:text-2xl text-primary">Jurali</div>
+          <JuraliMark size={30} textSize="text-xl md:text-2xl" />
           <nav className="hidden md:flex items-center gap-8">
             <a href="#fonctionnalites" className="text-sm font-body text-foreground">
               Fonctionnalités
@@ -410,7 +411,7 @@ export default function LandingPage() {
       <footer className="bg-input border-t border-border px-4 md:px-8 py-10 md:py-12">
         <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
-            <div className="font-headings font-bold text-lg text-foreground mb-3">Jurali</div>
+            <JuraliMark size={24} textSize="text-lg" className="mb-3" />
             <p className="text-xs text-muted-foreground">Pour les boutiquiers du Sénégal</p>
           </div>
           <div>

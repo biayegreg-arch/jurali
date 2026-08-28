@@ -11,6 +11,7 @@ import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { GoogleSignInButton } from '@/components/jurali/GoogleSignInButton';
 import { PhoneField } from '@/components/jurali/PhoneField';
+import { JuraliMark } from '@/components/jurali/JuraliMark';
 
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Numéro ou mot de passe incorrect.',
@@ -59,11 +60,8 @@ export default function LoginPage() {
     <div className="min-h-dvh bg-background font-body flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-[440px]">
         <div className="mb-8">
-          <Link
-            href="/"
-            className="font-headings font-bold text-2xl text-primary mb-1 inline-block"
-          >
-            Jurali
+          <Link href="/" className="mb-1 inline-block">
+            <JuraliMark size={30} textSize="text-2xl" />
           </Link>
           <div className="font-headings font-bold text-2xl text-foreground mb-2">Se connecter</div>
           <div className="text-sm text-muted-foreground">
