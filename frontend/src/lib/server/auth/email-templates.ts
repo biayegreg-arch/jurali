@@ -19,6 +19,7 @@
 // rendered TTL matches `AUTH_VERIFICATION_TTL_MIN` (was hardcoded "15 minutes"
 // which lied when operators tuned the env var).
 import 'server-only';
+import { htmlEscape } from '@/lib/server/html-escape';
 
 export interface EmailTemplate {
   subject: string;
@@ -38,21 +39,6 @@ export interface ResetPasswordEmailArgs {
   email: string;
   /** Optional ISO-8601 expiry; falls back to "soon" wording when omitted. */
   expiresAt?: string;
-}
-
-/**
- * Minimal HTML escape for template interpolation. Covers the OWASP-recommended
- * five-character set (`& < > " '`). Apply to EVERY user-controlled (or
- * potentially user-controlled) value before interpolating into an HTML
- * template string.
- */
-function htmlEscape(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 /**

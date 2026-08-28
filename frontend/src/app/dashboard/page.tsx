@@ -18,7 +18,7 @@ import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { DesktopDebtorWorkspace } from '@/components/jurali/DesktopDebtorWorkspace';
 import { PageTransition } from '@/components/jurali/PageTransition';
 import { MotionLink } from '@/components/jurali/MotionLink';
-import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
+import { DeleteClientConfirmDialog } from '@/components/jurali/DeleteClientConfirmDialog';
 import { tapScale } from '@/lib/motion';
 import { toDebtorRowProps } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
@@ -260,16 +260,7 @@ export default function DashboardPage() {
         />
       </div>
 
-      <ConfirmDialog
-        open={deleteClient.target !== null}
-        title={`Supprimer ${deleteClient.target?.name ?? 'ce client'} ?`}
-        message="Cette action supprimera définitivement ce client et tout son historique de dettes et paiements. Cette action est irréversible."
-        confirmLabel={deleteClient.pending ? 'Suppression…' : 'Supprimer'}
-        variant="danger"
-        icon="trash-2"
-        onConfirm={deleteClient.confirmDelete}
-        onCancel={deleteClient.cancel}
-      />
+      <DeleteClientConfirmDialog deleteClient={deleteClient} />
     </PageTransition>
   );
 }

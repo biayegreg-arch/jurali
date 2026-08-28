@@ -8,20 +8,12 @@
 import 'server-only';
 import { formatPrice } from '@/lib/utils';
 import { CLIENT_FREE_TIER_LIMIT } from '@/lib/server/jurali/client-limits';
+import { htmlEscape } from '@/lib/server/html-escape';
 
 export interface EmailTemplate {
   subject: string;
   html: string;
   text: string;
-}
-
-function htmlEscape(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
 }
 
 export interface SubscriptionExpiringEmailArgs {

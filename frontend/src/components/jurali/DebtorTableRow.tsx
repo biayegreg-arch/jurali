@@ -1,5 +1,5 @@
 import { MotionLink } from './MotionLink';
-import { Icon } from './Icon';
+import { DeleteClientButton } from './DeleteClientButton';
 import type { DebtorRowProps } from './DebtorRow';
 import { listItem } from '@/lib/motion';
 
@@ -74,18 +74,13 @@ export function DebtorTableRow({
 
       <div className="w-10 flex-shrink-0 flex justify-end">
         {onDelete && (
-          <button
-            type="button"
-            aria-label={`Supprimer ${name}`}
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              onDelete(id, name);
-            }}
+          <DeleteClientButton
+            id={id}
+            name={name}
+            onDelete={onDelete}
+            size={16}
             className="p-2 text-muted-foreground hover:text-danger"
-          >
-            <Icon i="trash-2" size={16} />
-          </button>
+          />
         )}
       </div>
     </MotionLink>

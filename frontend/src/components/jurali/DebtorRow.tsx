@@ -1,5 +1,5 @@
 import { MotionLink } from './MotionLink';
-import { Icon } from './Icon';
+import { DeleteClientButton } from './DeleteClientButton';
 import { listItem, tapScale } from '@/lib/motion';
 
 export interface DebtorRowProps {
@@ -72,18 +72,12 @@ export function DebtorRow({
       </div>
 
       {onDelete && (
-        <button
-          type="button"
-          aria-label={`Supprimer ${name}`}
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            onDelete(id, name);
-          }}
+        <DeleteClientButton
+          id={id}
+          name={name}
+          onDelete={onDelete}
           className="flex-shrink-0 p-2 -mr-2 text-muted-foreground"
-        >
-          <Icon i="trash-2" size={18} />
-        </button>
+        />
       )}
     </MotionLink>
   );
