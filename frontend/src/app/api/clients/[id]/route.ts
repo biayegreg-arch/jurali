@@ -15,6 +15,7 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeClientBalance, isOverdue as computeIsOverdue } from '@/lib/server/jurali/balance';
 import { requireOwnedClient } from '@/lib/server/jurali/clients';
+import { isRecordNotFound } from '@/lib/server/prisma-errors';
 import { zPhone, zEmail } from '@/lib/server/zod-helpers';
 
 // Phase 9 — desktop "Fiche client"'s "Modifier" button. All fields
@@ -156,7 +157,22 @@ export async function DELETE(
     const existing = requireOwnedClient(found, auth.user.sub, ctx.requestId);
     if (existing instanceof NextResponse) return existing;
 
-    await prisma.client.delete({ where: { id } });
+    try {
+      await prisma.client.delete({ where: { id } });
+    } catch (err) {
+      // The ownership lookup above and this delete aren't in one
+      // transaction — a second concurrent DELETE for the same client
+      // (double-click, or two tabs) can see the row vanish in between and
+      // hit Prisma's P2025 here. Same 404 shape as "never existed", not a
+      // 500 — the end state (client gone) is identical either way.
+      if (isRecordNotFound(err)) {
+        return NextResponse.json(
+          { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
+          { status: 404, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      throw err;
+    }
 
     return NextResponse.json(
       { ok: true },

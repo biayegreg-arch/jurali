@@ -167,4 +167,19 @@ describe('POST /api/cron/subscription-renewal-reminders', () => {
     expect((await res.json()).sent).toBe(0);
     expect(enqueue).not.toHaveBeenCalled();
   });
+
+  it('one subscription failing does not abort the tick or count it as sent', async () => {
+    findMany.mockResolvedValueOnce([
+      ...subWith({ id: 'sub-fail', renewsAt: day(3), owner: { email: 'fails@example.com' } }),
+      ...subWith({ id: 'sub-ok', renewsAt: day(3), owner: { email: 'ok@example.com' } }),
+    ]);
+    update.mockImplementationOnce(() => Promise.reject(new Error('db blip')));
+    update.mockResolvedValueOnce({});
+    const { POST } = await import('./route');
+    const res = await POST(makeReq());
+    expect(res.status).toBe(200);
+    // Only the subscription whose enqueue+update both succeeded counts.
+    expect((await res.json()).sent).toBe(1);
+    expect(enqueue).toHaveBeenCalledTimes(2);
+  });
 });

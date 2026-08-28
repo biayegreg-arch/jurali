@@ -99,23 +99,35 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
                   manageUrl,
                 });
 
-          sent += 1;
           work.push(
             (async () => {
-              await queue.enqueue({
-                to: sub.owner.email,
-                subject: tpl.subject,
-                html: tpl.html,
-                text: tpl.text,
-              });
-              await prisma.subscription.update({
-                where: { id: sub.id },
-                data: {
-                  reminderStage: stage,
-                  reminderStageRenewsAt: sub.renewsAt,
-                  ...(stage === 'expired' ? { status: 'EXPIRED' } : {}),
-                },
-              });
+              try {
+                await queue.enqueue({
+                  to: sub.owner.email,
+                  subject: tpl.subject,
+                  html: tpl.html,
+                  text: tpl.text,
+                });
+                await prisma.subscription.update({
+                  where: { id: sub.id },
+                  data: {
+                    reminderStage: stage,
+                    reminderStageRenewsAt: sub.renewsAt,
+                    ...(stage === 'expired' ? { status: 'EXPIRED' } : {}),
+                  },
+                });
+                sent += 1;
+              } catch (err) {
+                // One subscription's failure (transient DB error, queue
+                // hiccup) must not abort the whole tick — the rest of the
+                // batch still needs to send and the tick's counts still
+                // need to be logged/returned.
+                log.error('subscription-renewal-reminders: failed for one subscription', {
+                  subscriptionId: sub.id,
+                  error: err instanceof Error ? err.message : String(err),
+                  requestId: ctx.requestId,
+                });
+              }
             })(),
           );
         }

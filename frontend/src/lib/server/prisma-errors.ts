@@ -20,3 +20,11 @@ export function isTransientConflict(err: unknown): boolean {
 export function isUniqueConstraintViolation(err: unknown): boolean {
   return hasPrismaCode(err, 'P2002');
 }
+
+// P2025 — "record to delete/update does not exist". A find-then-mutate race
+// (e.g. two concurrent DELETEs for the same row) surfaces here instead of
+// at the pre-check, since the row can vanish between the ownership lookup
+// and the mutation.
+export function isRecordNotFound(err: unknown): boolean {
+  return hasPrismaCode(err, 'P2025');
+}

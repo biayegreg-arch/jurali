@@ -319,4 +319,25 @@ describe('DELETE /api/clients/[id]', () => {
     expect(json.ok).toBe(true);
     expect(prismaMock.client.delete).toHaveBeenCalledWith({ where: { id: 'client-1' } });
   });
+
+  it('returns 404 CLIENT_NOT_FOUND (not a 500) when the row vanishes between the ownership check and delete', async () => {
+    // Race: two concurrent DELETEs (double-click, or two tabs) both pass
+    // the ownership findUnique before either delete commits — the second
+    // delete then hits Prisma's P2025 "record not found".
+    prismaMock.client.delete.mockRejectedValue(
+      Object.assign(
+        new Error(
+          'An operation failed because it depends on one or more records that were required but not found.',
+        ),
+        {
+          code: 'P2025',
+        },
+      ),
+    );
+    const { req, routeCtx } = makeDelete('client-1');
+    const res = await DELETE(req, routeCtx);
+    expect(res.status).toBe(404);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe('CLIENT_NOT_FOUND');
+  });
 });
