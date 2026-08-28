@@ -139,7 +139,7 @@ function StatsUpsell() {
   return (
     <Link
       href="/premium"
-      className="bg-secondary border border-border rounded-xl px-5 py-6 flex flex-col items-center gap-3 text-center max-w-md"
+      className="bg-secondary border border-border rounded-xl px-5 py-6 flex flex-col items-center gap-3 text-center max-w-md mx-auto"
     >
       <div className="w-12 h-12 rounded-lg bg-background flex items-center justify-center">
         <Icon i="bar-chart-2" size={22} className="text-primary" />

@@ -153,7 +153,7 @@ function CreateClientPageContent() {
             <NotificationBell count={notifData?.count} />
           </div>
 
-          <div className="flex-1 px-4 lg:px-8 pt-5 lg:pt-8 pb-8 flex flex-col lg:flex-row gap-6 lg:gap-8">
+          <div className="flex-1 px-4 lg:px-8 pt-5 lg:pt-8 pb-8 flex flex-col lg:flex-row gap-6 lg:gap-8 max-w-lg lg:max-w-none w-full mx-auto lg:mx-0">
             <ClientForm
               mode="create"
               values={values}

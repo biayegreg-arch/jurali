@@ -813,7 +813,7 @@ function PaymentTrackingCard({
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-4">
+      <div className="grid grid-cols-1 gap-2 lg:grid-cols-3 lg:gap-3 mb-4">
         <div className="bg-input rounded-lg px-3 py-3">
           <div className="text-xs text-muted-foreground mb-1">Montant initial</div>
           <div className="font-headings font-bold text-base text-foreground">
@@ -852,18 +852,21 @@ function PaymentTrackingCard({
         ) : (
           <div className="flex flex-col gap-2 mb-4">
             {[...progress.events].reverse().map((e) => (
-              <div key={e.paymentId} className="flex items-center justify-between text-sm">
-                <div className="flex items-center gap-2">
+              <div
+                key={e.paymentId}
+                className="flex flex-wrap items-center justify-between gap-y-1 text-sm"
+              >
+                <div className="flex items-center gap-2 min-w-0">
                   <Icon i="arrow-down" size={12} className="text-primary flex-shrink-0" />
-                  <span className="text-muted-foreground">
+                  <span className="text-muted-foreground truncate">
                     {formatDateFr(e.createdAt.toISOString())}
                   </span>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-headings font-bold text-foreground">
+                <div className="flex items-center gap-3 min-w-0">
+                  <span className="font-headings font-bold text-foreground truncate">
                     {formatPrice(e.amountAppliedFcfa)} FCFA
                   </span>
-                  <span className="text-xs text-muted-foreground">
+                  <span className="text-xs text-muted-foreground truncate">
                     → {formatPrice(e.remainingAfterFcfa)} FCFA restant
                   </span>
                 </div>
