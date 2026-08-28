@@ -35,7 +35,7 @@ import {
 } from '@/lib/server/payments/provider-singleton';
 import { CircuitOpenError } from '@/lib/server/payments/circuit-breaker';
 import { lockUserTx } from '@/lib/server/withdrawals/lock';
-import { GET, POST } from './route';
+import { GET, POST, DELETE } from './route';
 
 const mockRequireAuth = vi.mocked(requireAuth);
 const mockGetProvider = vi.mocked(getProvider);
@@ -48,13 +48,29 @@ function makeGet(): NextRequest {
   return new NextRequest('http://test/api/subscriptions', { method: 'GET' });
 }
 
-function makePost(csrf: 'match' | 'missing' = 'match'): NextRequest {
+function makePost(
+  csrf: 'match' | 'missing' = 'match',
+  body?: { paymentMethod?: string; phone?: string },
+): NextRequest {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (csrf === 'match') {
     headers['x-csrf-token'] = 'csrf-tok';
     headers['cookie'] = 'app-csrf=csrf-tok';
   }
-  return new NextRequest('http://test/api/subscriptions', { method: 'POST', headers });
+  return new NextRequest('http://test/api/subscriptions', {
+    method: 'POST',
+    headers,
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+  });
+}
+
+function makeDelete(csrf: 'match' | 'missing' = 'match'): NextRequest {
+  const headers: Record<string, string> = {};
+  if (csrf === 'match') {
+    headers['x-csrf-token'] = 'csrf-tok';
+    headers['cookie'] = 'app-csrf=csrf-tok';
+  }
+  return new NextRequest('http://test/api/subscriptions', { method: 'DELETE', headers });
 }
 
 function seededSub(over: Partial<Record<string, unknown>> = {}) {
@@ -126,6 +142,33 @@ describe('GET /api/subscriptions', () => {
     const body = await res.json();
     expect(body).toMatchObject({ status: 'ACTIVE', isActive: false });
   });
+
+  it('returns paymentMethod/paymentPhone/createdAt for Gestion Premium', async () => {
+    const createdAt = new Date('2026-06-01T00:00:00Z');
+    prismaMock.subscription.findUnique.mockResolvedValue(
+      seededSub({
+        status: 'ACTIVE',
+        renewsAt: new Date(Date.now() + 86_400_000),
+        paymentMethod: 'WAVE',
+        paymentPhone: '+221771234567',
+        createdAt,
+      }) as never,
+    );
+    const res = await GET(makeGet());
+    const body = await res.json();
+    expect(body).toMatchObject({
+      paymentMethod: 'WAVE',
+      paymentPhone: '+221771234567',
+      createdAt: createdAt.toISOString(),
+    });
+  });
+
+  it('returns null paymentMethod/paymentPhone/createdAt when never subscribed', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    const res = await GET(makeGet());
+    const body = await res.json();
+    expect(body).toMatchObject({ paymentMethod: null, paymentPhone: null, createdAt: null });
+  });
 });
 
 describe('POST /api/subscriptions — happy path', () => {
@@ -182,6 +225,108 @@ describe('POST /api/subscriptions — happy path', () => {
 
     const res = await POST(makePost());
     expect(res.status).toBe(201);
+  });
+
+  it('threads a chosen paymentMethod/phone into the charge call and persists them', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    prismaMock.subscription.upsert.mockResolvedValue(seededSub() as never);
+    prismaMock.subscription.update.mockResolvedValue(seededSub() as never);
+    const chargeSpy = vi.fn(async () => ({
+      providerChargeId: 'bictorys_charge_sub_1',
+      paymentUrl: 'https://checkout.test/bictorys/pay/sub',
+      status: 'PENDING' as const,
+    }));
+    mockGetProvider.mockReturnValue({ name: 'bictorys', charge: chargeSpy } as never);
+
+    const res = await POST(
+      makePost('match', { paymentMethod: 'ORANGE_MONEY', phone: '+221771234567' }),
+    );
+
+    expect(res.status).toBe(201);
+    expect(chargeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        customer: expect.objectContaining({
+          email: 'me@example.com',
+          phone: '+221771234567',
+        }),
+        metadata: { paymentType: 'ORANGE_MONEY' },
+      }),
+    );
+    expect(prismaMock.subscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          paymentMethod: 'ORANGE_MONEY',
+          paymentPhone: '+221771234567',
+        }),
+        update: expect.objectContaining({
+          paymentMethod: 'ORANGE_MONEY',
+          paymentPhone: '+221771234567',
+        }),
+      }),
+    );
+  });
+
+  it('defaults to no metadata/phone when paymentMethod/phone are omitted (unchanged behavior)', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    prismaMock.subscription.upsert.mockResolvedValue(seededSub() as never);
+    prismaMock.subscription.update.mockResolvedValue(seededSub() as never);
+    const chargeSpy = vi.fn(
+      async (_input: { customer: { phone?: string }; metadata?: unknown }) => ({
+        providerChargeId: 'bictorys_charge_sub_1',
+        paymentUrl: 'https://checkout.test/bictorys/pay/sub',
+        status: 'PENDING' as const,
+      }),
+    );
+    mockGetProvider.mockReturnValue({ name: 'bictorys', charge: chargeSpy } as never);
+
+    await POST(makePost());
+
+    const call = chargeSpy.mock.calls[0]![0];
+    expect(call.customer.phone).toBeUndefined();
+    expect(call.metadata).toBeUndefined();
+  });
+
+  it('400 VALIDATION_FAILED for a malformed phone', async () => {
+    const res = await POST(makePost('match', { phone: 'not-a-phone' }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('VALIDATION_FAILED');
+  });
+});
+
+describe('DELETE /api/subscriptions', () => {
+  it('401 when unauthenticated', async () => {
+    const { NextResponse } = await import('next/server');
+    mockRequireAuth.mockResolvedValue(
+      NextResponse.json({ error: 'UNAUTHENTICATED' }, { status: 401 }) as never,
+    );
+    const res = await DELETE(makeDelete());
+    expect(res.status).toBe(401);
+  });
+
+  it('403 when CSRF token is missing', async () => {
+    const res = await DELETE(makeDelete('missing'));
+    expect(res.status).toBe(403);
+  });
+
+  it('404 SUBSCRIPTION_NOT_FOUND when the user never subscribed', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    const res = await DELETE(makeDelete());
+    expect(res.status).toBe(404);
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+  });
+
+  it('sets status to CANCELED immediately for an active subscription', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(
+      seededSub({ status: 'ACTIVE', renewsAt: new Date(Date.now() + 86_400_000) }) as never,
+    );
+    prismaMock.subscription.update.mockResolvedValue(seededSub({ status: 'CANCELED' }) as never);
+    const res = await DELETE(makeDelete());
+    expect(res.status).toBe(200);
+    expect((await res.json()).ok).toBe(true);
+    expect(prismaMock.subscription.update).toHaveBeenCalledWith({
+      where: { ownerId: 'user-1' },
+      data: { status: 'CANCELED' },
+    });
   });
 });
 

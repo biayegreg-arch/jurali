@@ -3,17 +3,19 @@
 // Jurali Premium — PRD §4/§6, US-06. Reproduces Banani's PagePremium.jsx
 // (monthly-only, no annual/trial — Phase 0.3); see
 // .planning/banani/page-premium.md for translation notes and decisions.
-import { useState } from 'react';
+// Free-tier landing/pricing page only — the CTA hands off to
+// /premium/checkout for the actual plan+payment-method flow, and an
+// already-Premium visitor is redirected to /premium/manage (see
+// .planning/banani/premium-checkout.md + premium-manage.md).
+import { useEffect } from 'react';
 import Link from 'next/link';
-import { motion } from 'framer-motion';
+import { useRouter } from 'next/navigation';
 import { useUser } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
-import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { formatPrice } from '@/lib/utils';
-import { formatDateFr } from '@/lib/jurali-format';
+import { PREMIUM_FEATURES } from '@/lib/jurali-premium';
 import { PageTransition } from '@/components/jurali/PageTransition';
-import { tapScale } from '@/lib/motion';
 
 interface SubscriptionData {
   status: string;
@@ -24,55 +26,18 @@ interface SubscriptionData {
 
 const FREE_FEATURES = ['Jusqu’à 5 clients', 'Suivi des dettes et paiements', 'Historique complet'];
 
-// Every entry here must correspond to a real, server-enforced gate — no
-// aspirational features. See POST /api/clients (client cap), POST
-// /api/clients/[id]/remind + cron/auto-reminders (WhatsApp), cron/
-// overdue-alerts (retard digest), GET /api/stats, GET /api/clients/export
-// + the fiche-client PDF export.
-const PREMIUM_FEATURES: { label: string; icon: string }[] = [
-  { label: 'Clients illimités', icon: 'users' },
-  { label: 'Rappels WhatsApp (manuel + automatique)', icon: 'message-circle' },
-  { label: 'Alertes dettes en retard (résumé quotidien)', icon: 'bell' },
-  { label: 'Statistiques avancées', icon: 'bar-chart-2' },
-  { label: 'Export CSV & PDF', icon: 'download' },
-];
-
-const ERROR_MESSAGES: Record<string, string> = {
-  ALREADY_SUBSCRIBED: 'Tu es déjà Premium.',
-  PAYMENT_PROVIDER_UNCONFIGURED: 'Le paiement n’est pas encore configuré. Réessaie plus tard.',
-  PAYMENT_PROVIDER_UNAVAILABLE:
-    'Service de paiement temporairement indisponible. Réessaie dans un instant.',
-  PAYMENT_IN_FLIGHT: 'Un paiement est déjà en cours. Réessaie dans quelques secondes.',
-  PAYMENT_FAILED: 'Le paiement a échoué. Réessaie.',
-};
-
 export default function PremiumPage() {
   const user = useUser();
+  const router = useRouter();
   const { data: sub, loading } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  if (!user) return null;
-
-  async function subscribe() {
-    setSubmitting(true);
-    setError(null);
-    try {
-      const res = await api<{ status: string; paymentUrl: string }>('/api/subscriptions', {
-        method: 'POST',
-      });
-      window.location.href = res.paymentUrl;
-    } catch (err) {
-      setError(
-        err instanceof ApiError
-          ? (ERROR_MESSAGES[err.code] ?? err.message)
-          : 'Erreur réseau. Réessaie.',
-      );
-      setSubmitting(false);
-    }
-  }
-
   const isActive = sub?.isActive ?? false;
+
+  useEffect(() => {
+    if (isActive) router.replace('/premium/manage');
+  }, [isActive, router]);
+
+  if (!user || isActive) return null;
+
   const planAmount = sub?.planAmountFcfa ?? 2500;
 
   return (
@@ -97,34 +62,18 @@ export default function PremiumPage() {
 
         <div className="px-4 pt-5 pb-8 flex flex-col gap-6 max-w-5xl w-full mx-auto lg:flex-row lg:items-start">
           <div className="flex-1 flex flex-col gap-6 min-w-0">
-            {isActive ? (
-              <div className="bg-primary rounded-2xl px-6 py-6 flex items-center gap-3">
-                <Icon i="zap" size={24} className="text-accent flex-shrink-0" />
-                <div>
-                  <div className="font-headings font-bold text-lg text-primary-foreground">
-                    Tu es Premium
-                  </div>
-                  <div className="text-sm text-secondary mt-0.5">
-                    {sub?.renewsAt
-                      ? `Renouvellement le ${formatDateFr(sub.renewsAt)}`
-                      : 'Abonnement actif'}
-                  </div>
-                </div>
+            <div className="bg-primary rounded-2xl px-6 py-6">
+              <div className="flex items-center gap-2 mb-3">
+                <Icon i="zap" size={20} className="text-accent" />
+                <span className="font-headings font-bold text-base text-primary-foreground uppercase tracking-wide">
+                  Premium
+                </span>
               </div>
-            ) : (
-              <div className="bg-primary rounded-2xl px-6 py-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Icon i="zap" size={20} className="text-accent" />
-                  <span className="font-headings font-bold text-base text-primary-foreground uppercase tracking-wide">
-                    Premium
-                  </span>
-                </div>
-                <div className="font-headings font-bold text-3xl lg:text-4xl text-primary-foreground mb-1">
-                  {formatPrice(planAmount)}{' '}
-                  <span className="text-lg lg:text-xl font-body font-normal">FCFA/mois</span>
-                </div>
+              <div className="font-headings font-bold text-3xl lg:text-4xl text-primary-foreground mb-1">
+                {formatPrice(planAmount)}{' '}
+                <span className="text-lg lg:text-xl font-body font-normal">FCFA/mois</span>
               </div>
-            )}
+            </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="bg-background border border-border rounded-xl px-6 py-6 flex flex-col gap-4">
@@ -152,19 +101,17 @@ export default function PremiumPage() {
                 </div>
                 <div className="mt-auto pt-2">
                   <div className="w-full text-center font-headings font-bold text-sm py-3 rounded-xl border border-border text-muted-foreground">
-                    {isActive ? 'Inclus dans Premium' : 'Plan actuel'}
+                    Plan actuel
                   </div>
                 </div>
               </div>
 
               <div className="bg-primary rounded-xl px-6 py-6 flex flex-col gap-4 relative overflow-hidden">
-                {!isActive && (
-                  <div className="absolute top-4 right-4">
-                    <span className="bg-accent text-accent-foreground font-headings font-bold text-xs px-2.5 py-1 rounded-lg">
-                      Recommandé
-                    </span>
-                  </div>
-                )}
+                <div className="absolute top-4 right-4">
+                  <span className="bg-accent text-accent-foreground font-headings font-bold text-xs px-2.5 py-1 rounded-lg">
+                    Recommandé
+                  </span>
+                </div>
                 <div>
                   <div className="font-headings font-bold text-lg text-primary-foreground">
                     Premium
@@ -184,17 +131,13 @@ export default function PremiumPage() {
                     </div>
                   ))}
                 </div>
-                {error && <div className="text-sm text-accent">{error}</div>}
-                <motion.button
-                  type="button"
-                  onClick={subscribe}
-                  disabled={isActive || submitting}
-                  whileTap={tapScale}
-                  className="mt-auto w-full flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-3.5 rounded-xl disabled:opacity-60"
+                <Link
+                  href="/premium/checkout"
+                  className="mt-auto w-full flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-3.5 rounded-xl"
                 >
                   <Icon i="zap" size={18} />
-                  {isActive ? 'Plan actuel' : submitting ? 'Redirection…' : 'Passer à Premium'}
-                </motion.button>
+                  Passer à Premium
+                </Link>
               </div>
             </div>
 

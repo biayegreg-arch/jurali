@@ -19,6 +19,7 @@ export const runtime = 'nodejs';
 import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
+import { z } from 'zod';
 import { NextResponse, type NextRequest } from 'next/server';
 import { verifyCsrf } from '@/lib/server/auth';
 import { requireAuth } from '@/lib/server/middleware';
@@ -36,6 +37,15 @@ import {
 } from '@/lib/server/subscriptions/guards';
 import { lockUserTx } from '@/lib/server/withdrawals/lock';
 import { isTransientConflict } from '@/lib/server/prisma-errors';
+import { zPhone } from '@/lib/server/zod-helpers';
+
+// Premium checkout's payment-method choice (/premium/checkout) — fixed to
+// Senegalese Mobile Money operators, same vocabulary Bictorys accepts
+// (see bictorys.ts's mapMethodToBictorysType).
+const CheckoutBody = z.object({
+  paymentMethod: z.enum(['WAVE', 'ORANGE_MONEY', 'FREE_MONEY']).optional(),
+  phone: zPhone.optional(),
+});
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -51,6 +61,9 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         renewsAt: sub?.renewsAt ?? null,
         isActive: isSubscriptionActive(sub),
         planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
+        paymentMethod: sub?.paymentMethod ?? null,
+        paymentPhone: sub?.paymentPhone ?? null,
+        createdAt: sub?.createdAt ?? null,
       },
       { headers: { 'x-request-id': ctx.requestId } },
     );
@@ -65,6 +78,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
+
+    const parsed = CheckoutBody.safeParse(await req.json().catch(() => ({})));
+    if (!parsed.success) {
+      return NextResponse.json(
+        {
+          error: 'VALIDATION_FAILED',
+          message: 'Invalid request body',
+          issues: parsed.error.issues,
+        },
+        { status: 400, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+    const { paymentMethod, phone } = parsed.data;
 
     let provider;
     try {
@@ -123,12 +149,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               ownerId: auth.user.sub,
               status: 'PENDING',
               planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
+              paymentMethod: paymentMethod ?? null,
+              paymentPhone: phone ?? null,
             },
             update: {
               status: 'PENDING',
               planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
               providerChargeId: null,
               paymentUrl: null,
+              paymentMethod: paymentMethod ?? null,
+              paymentPhone: phone ?? null,
             },
           });
           return { kind: 'proceed' as const, subscription: row };
@@ -179,7 +209,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         provider.charge({
           amount: PREMIUM_MONTHLY_PRICE_FCFA,
           currency: 'XOF',
-          customer: { email: auth.user.email },
+          customer: { email: auth.user.email, ...(phone ? { phone } : {}) },
+          ...(paymentMethod ? { metadata: { paymentType: paymentMethod } } : {}),
           successUrl: `${publicUrl}/premium/success`,
           failureUrl: `${publicUrl}/premium/failed`,
           externalRef: `sub_${subscription.id}_${randomUUID()}`,
@@ -228,5 +259,39 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 502, headers: { 'x-request-id': ctx.requestId } },
       );
     }
+  });
+}
+
+// Gestion Premium's "Résilier l'abonnement" — immediate revocation, not
+// cancel-at-period-end. Mobile Money has no auto-debit to stop, so there is
+// no recurring charge to cancel; this simply flips the status a lapsed
+// subscription would eventually reach on its own, right now, forfeiting
+// any remaining paid days (the confirm dialog says so explicitly).
+export async function DELETE(req: NextRequest): Promise<NextResponse> {
+  const ctx = makeRequestContext(req.headers);
+  return withRequestContext(ctx, async () => {
+    const csrfFail = verifyCsrf(req);
+    if (csrfFail) return csrfFail;
+
+    const auth = await requireAuth();
+    if (auth instanceof NextResponse) return auth;
+
+    const existing = await prisma.subscription.findUnique({ where: { ownerId: auth.user.sub } });
+    if (!existing) {
+      return NextResponse.json(
+        { error: 'SUBSCRIPTION_NOT_FOUND', message: 'No subscription to cancel.' },
+        { status: 404, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    await prisma.subscription.update({
+      where: { ownerId: auth.user.sub },
+      data: { status: 'CANCELED' },
+    });
+
+    return NextResponse.json(
+      { ok: true },
+      { status: 200, headers: { 'x-request-id': ctx.requestId } },
+    );
   });
 }

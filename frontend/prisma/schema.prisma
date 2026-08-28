@@ -438,6 +438,13 @@ model Subscription {
   providerChargeId String? @unique
   paymentUrl       String?
 
+  // Last checkout attempt's chosen Mobile Money method/phone (Gestion
+  // Premium's read-only "Moyen de paiement" card) — set in POST when the
+  // charge is initiated, not confirmed by the webhook, same scoping as
+  // `provider`/`paymentUrl` above (this row is reused across renewals).
+  paymentMethod String? // "WAVE" | "ORANGE_MONEY" | "FREE_MONEY"
+  paymentPhone  String? // E.164, e.g. "+221771234567"
+
   // Renewal-reminder cron (subscription-renewal-reminders) — since Mobile
   // Money has no auto-debit, renewal is always a manual re-checkout, so we
   // email a heads-up before `renewsAt` lapses. `reminderStage` tracks the

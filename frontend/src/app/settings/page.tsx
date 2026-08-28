@@ -117,6 +117,7 @@ export default function SettingsPage() {
             <ProfileSection {...sharedProps} />
             <SecuritySection {...sharedProps} />
             <NotificationsSection {...sharedProps} />
+            {isPremium && <SubscriptionSection />}
             <SettingsSection title="Analyse">
               <Link href="/stats" className="w-full flex items-center gap-4 px-5 py-4">
                 <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
@@ -157,6 +158,7 @@ export default function SettingsPage() {
             </div>
             <div className="flex flex-col gap-6 w-[400px] flex-shrink-0">
               <SecuritySection {...sharedProps} />
+              {isPremium && <SubscriptionSection />}
               <DataSection isPremium={isPremium} />
               <AppInfoBlock />
             </div>
@@ -574,6 +576,27 @@ function ToggleRow({
         />
       </button>
     </div>
+  );
+}
+
+function SubscriptionSection() {
+  return (
+    <SettingsSection title="Abonnement">
+      <Link href="/premium/manage" className="w-full flex items-center gap-4 px-5 py-4">
+        <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+          <Icon i="zap" size={18} className="text-primary" />
+        </div>
+        <div className="flex-1 min-w-0 text-left">
+          <div className="font-headings font-bold text-sm text-foreground">
+            Gérer mon abonnement
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            Statut, moyen de paiement, résiliation
+          </div>
+        </div>
+        <Icon i="chevron-right" size={16} className="text-muted-foreground flex-shrink-0" />
+      </Link>
+    </SettingsSection>
   );
 }
 
