@@ -128,6 +128,46 @@ describe('GET /api/clients', () => {
     );
   });
 
+  it('matches on any single word of a multi-word query (surname-only match)', async () => {
+    // ClientPicker's "search or create" dropdown (Nouvelle dette) — typing
+    // "lamine sarr" for a genuinely new client should still surface
+    // existing same-surname clients ("Aissa Sarr", "Alpha Sarr") as
+    // candidates, not silently fall through to "Créer" as if no client
+    // anywhere shared any part of that name.
+    prismaMock.client.findMany.mockResolvedValue([]);
+    await GET(makeGet('?q=lamine%20sarr'));
+    expect(prismaMock.client.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          ownerId: 'user-1',
+          OR: [
+            { firstName: { contains: 'lamine', mode: 'insensitive' } },
+            { phone: { contains: 'lamine', mode: 'insensitive' } },
+            { firstName: { contains: 'sarr', mode: 'insensitive' } },
+            { phone: { contains: 'sarr', mode: 'insensitive' } },
+          ],
+        }),
+      }),
+    );
+  });
+
+  it('collapses repeated whitespace in a multi-word query into single tokens', async () => {
+    prismaMock.client.findMany.mockResolvedValue([]);
+    await GET(makeGet('?q=' + encodeURIComponent('  lamine   sarr  ')));
+    expect(prismaMock.client.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          OR: [
+            { firstName: { contains: 'lamine', mode: 'insensitive' } },
+            { phone: { contains: 'lamine', mode: 'insensitive' } },
+            { firstName: { contains: 'sarr', mode: 'insensitive' } },
+            { phone: { contains: 'sarr', mode: 'insensitive' } },
+          ],
+        }),
+      }),
+    );
+  });
+
   it('truncates to ?limit=', async () => {
     prismaMock.client.findMany.mockResolvedValue([
       client({ id: 'c-1' }),

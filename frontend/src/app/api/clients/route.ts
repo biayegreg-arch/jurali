@@ -70,14 +70,22 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         })()
       : {};
 
+    // Tokenized (per-word) OR-match rather than requiring the whole `q`
+    // phrase as one contiguous substring — a shop owner typing "lamine
+    // sarr" for a brand-new client should still see existing same-surname
+    // clients ("Aissa Sarr") surface as candidates in ClientPicker's
+    // search-or-create dropdown, not fall straight through to "Créer" as
+    // if nothing shared any part of that name.
+    const qTokens = q ? q.split(/\s+/).filter(Boolean) : [];
+
     const summarized = await listClientSummaries(auth.user.sub, {
       ...monthWhere,
-      ...(q
+      ...(qTokens.length
         ? {
-            OR: [
-              { firstName: { contains: q, mode: 'insensitive' } },
-              { phone: { contains: q, mode: 'insensitive' } },
-            ],
+            OR: qTokens.flatMap((token) => [
+              { firstName: { contains: token, mode: 'insensitive' as const } },
+              { phone: { contains: token, mode: 'insensitive' as const } },
+            ]),
           }
         : {}),
     });
