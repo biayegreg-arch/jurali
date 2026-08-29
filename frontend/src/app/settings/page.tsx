@@ -318,6 +318,7 @@ function SecuritySection({
   const [error, setError] = useState<string | null>(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
+  const [googleLinkClicked, setGoogleLinkClicked] = useState(false);
 
   const hasPassword = user.hasPassword;
   const googleLinked = user.linkedProviders.includes('google');
@@ -451,7 +452,15 @@ function SecuritySection({
         <div className="px-5 pb-4 -mt-2">
           <a
             href="/api/auth/oauth/google/start?next=/settings"
-            className="text-xs text-primary font-bold"
+            aria-disabled={googleLinkClicked}
+            onClick={(e) => {
+              if (googleLinkClicked) {
+                e.preventDefault();
+                return;
+              }
+              setGoogleLinkClicked(true);
+            }}
+            className={`text-xs text-primary font-bold ${googleLinkClicked ? 'pointer-events-none opacity-60' : ''}`}
           >
             Lier mon compte Google
           </a>

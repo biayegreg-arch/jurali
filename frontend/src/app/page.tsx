@@ -92,9 +92,28 @@ const PREMIUM_FEATURES = [
   'Support prioritaire',
 ];
 
+const JSON_LD = {
+  '@context': 'https://schema.org',
+  '@type': 'SoftwareApplication',
+  name: 'Jurali',
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  description:
+    'Le carnet de crédit digital pour les boutiquiers sénégalais. Enregistre les dettes de tes clients en 5 secondes, reçois des rappels WhatsApp automatiques et suis tes statistiques en temps réel.',
+  offers: [
+    { '@type': 'Offer', name: 'Gratuit', price: '0', priceCurrency: 'XOF' },
+    { '@type': 'Offer', name: 'Premium', price: '2500', priceCurrency: 'XOF' },
+  ],
+  aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.8', ratingCount: '2500' },
+};
+
 export default function LandingPage() {
   return (
     <div className="bg-background font-body flex flex-col">
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
+      />
       {/* === HEADER / NAV === */}
       <header className="sticky top-0 z-50 bg-background border-b border-border">
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-4 md:py-5 flex items-center justify-between">

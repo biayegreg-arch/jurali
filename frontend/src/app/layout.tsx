@@ -19,9 +19,34 @@ const spaceGrotesk = Space_Grotesk({
   display: 'swap',
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://jurali.app';
+const DEFAULT_DESCRIPTION =
+  'Le carnet de crédit digital pour les boutiquiers sénégalais. Enregistre les dettes de tes clients en 5 secondes, reçois des rappels WhatsApp automatiques et suis tes statistiques en temps réel.';
+
 export const metadata: Metadata = {
-  title: 'Jurali',
-  description: 'Le carnet de crédit digital pour les boutiquiers sénégalais.',
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: 'Jurali — Le carnet de crédit digital pour boutiquiers',
+    template: '%s | Jurali',
+  },
+  description: DEFAULT_DESCRIPTION,
+  robots: { index: true, follow: true },
+  openGraph: {
+    type: 'website',
+    locale: 'fr_SN',
+    siteName: 'Jurali',
+    title: 'Jurali — Le carnet de crédit digital pour boutiquiers',
+    description: DEFAULT_DESCRIPTION,
+    url: '/',
+  },
+  twitter: {
+    card: 'summary',
+    title: 'Jurali — Le carnet de crédit digital pour boutiquiers',
+    description: DEFAULT_DESCRIPTION,
+  },
+  verification: {
+    google: 'lDCezVSHlymtHljRUR1v8yCJLkye9lOccVb1X0RB1C8',
+  },
 };
 
 export default function RootLayout({
