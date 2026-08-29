@@ -467,6 +467,15 @@ function SecuritySection({
         </div>
       )}
 
+      <div className="flex items-center gap-4 px-5 py-3 border-t border-border text-xs text-muted-foreground">
+        <Link href="/cgu" className="hover:text-foreground">
+          Conditions d&rsquo;utilisation
+        </Link>
+        <Link href="/confidentialite" className="hover:text-foreground">
+          Confidentialité
+        </Link>
+      </div>
+
       <button
         type="button"
         onClick={() => setShowLogoutConfirm(true)}

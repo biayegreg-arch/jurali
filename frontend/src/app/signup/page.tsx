@@ -234,23 +234,32 @@ export default function SignupPage() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={() => setAcceptedTerms((v) => !v)}
-              className="flex items-start gap-3 mt-1 text-left"
-            >
-              <div
+            <div className="flex items-start gap-3 mt-1 text-left">
+              <button
+                type="button"
+                onClick={() => setAcceptedTerms((v) => !v)}
+                aria-pressed={acceptedTerms}
+                aria-label="J&rsquo;accepte les conditions d&rsquo;utilisation et la politique de confidentialité"
                 className={`w-5 h-5 rounded flex items-center justify-center flex-shrink-0 mt-0.5 ${acceptedTerms ? 'bg-primary' : 'bg-input border border-border'}`}
               >
                 {acceptedTerms && <Icon i="check" size={12} className="text-primary-foreground" />}
-              </div>
+              </button>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 J&rsquo;accepte les{' '}
-                <span className="text-primary font-bold">conditions d&rsquo;utilisation</span> et la{' '}
-                <span className="text-primary font-bold">politique de confidentialité</span> de
-                Jurali
+                <Link href="/cgu" target="_blank" className="text-primary font-bold underline">
+                  conditions d&rsquo;utilisation
+                </Link>{' '}
+                et la{' '}
+                <Link
+                  href="/confidentialite"
+                  target="_blank"
+                  className="text-primary font-bold underline"
+                >
+                  politique de confidentialité
+                </Link>{' '}
+                de Jurali
               </p>
-            </button>
+            </div>
 
             {error && <div className="text-sm text-danger">{error}</div>}
 
