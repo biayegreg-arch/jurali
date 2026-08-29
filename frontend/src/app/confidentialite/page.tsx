@@ -8,9 +8,8 @@ export const metadata: Metadata = {
 
 const LAST_UPDATED = '29 août 2026';
 
-// [À COMPLÉTER avant publication] — mêmes informations que /cgu.
-const ENTITY_NAME = '[Nom de l’entité / raison sociale à compléter]';
-const ENTITY_ADDRESS = '[Adresse du siège à compléter], Sénégal';
+const ENTITY_NAME = 'Joal Immo';
+const ENTITY_ADDRESS = 'Taiba 2, Grand Yoff N°397, Dakar';
 const CONTACT_EMAIL = 'contact@jurali.app';
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
