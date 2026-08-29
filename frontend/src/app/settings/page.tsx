@@ -19,6 +19,9 @@ import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSectio
 import { PhoneField } from '@/components/jurali/PhoneField';
 import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
 import { JuraliMark } from '@/components/jurali/JuraliMark';
+import { Skeleton } from '@/components/jurali/Skeleton';
+import { MotionLink } from '@/components/jurali/MotionLink';
+import { tapScale } from '@/lib/motion';
 import { useExportDebtsCsv } from '@/lib/useExportDebtsCsv';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { OVERDUE_ALERT_THRESHOLD_DAYS } from '@/lib/server/jurali/overdue-alert';
@@ -62,7 +65,10 @@ function usePremiumToggle(endpoint: string, skip: boolean) {
 export default function SettingsPage() {
   const user = useUser();
   const { refresh, logout } = useAuth();
-  const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
+  const { data: subscription, loading: subLoading } = useApi<SubscriptionData>(
+    '/api/subscriptions',
+    { skip: !user },
+  );
   const isPremium = subscription?.isActive ?? false;
   const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
@@ -77,7 +83,7 @@ export default function SettingsPage() {
   if (!user) return null;
 
   const displayName = user.shopName || user.email;
-  const sharedProps = { user, isPremium, autoReminder, overdueAlert, refresh, logout };
+  const sharedProps = { user, isPremium, subLoading, autoReminder, overdueAlert, refresh, logout };
 
   return (
     <PageTransition>
@@ -119,7 +125,11 @@ export default function SettingsPage() {
             <NotificationsSection {...sharedProps} />
             {isPremium && <SubscriptionSection />}
             <SettingsSection title="Analyse">
-              <Link href="/stats" className="w-full flex items-center gap-4 px-5 py-4">
+              <MotionLink
+                href="/stats"
+                whileTap={tapScale}
+                className="w-full flex items-center gap-4 px-5 py-4"
+              >
                 <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
                   <Icon i="bar-chart-2" size={18} className="text-primary" />
                 </div>
@@ -132,9 +142,9 @@ export default function SettingsPage() {
                   </div>
                 </div>
                 <Icon i="chevron-right" size={16} className="text-muted-foreground flex-shrink-0" />
-              </Link>
+              </MotionLink>
             </SettingsSection>
-            <DataSection isPremium={isPremium} />
+            <DataSection isPremium={isPremium} loading={subLoading} />
             <AppInfoBlock />
           </div>
         </div>
@@ -159,7 +169,7 @@ export default function SettingsPage() {
             <div className="flex flex-col gap-6 w-[400px] flex-shrink-0">
               <SecuritySection {...sharedProps} />
               {isPremium && <SubscriptionSection />}
-              <DataSection isPremium={isPremium} />
+              <DataSection isPremium={isPremium} loading={subLoading} />
               <AppInfoBlock />
             </div>
           </div>
@@ -487,13 +497,25 @@ interface ToggleState {
 
 function NotificationsSection({
   isPremium,
+  subLoading,
   autoReminder,
   overdueAlert,
 }: {
   isPremium: boolean;
+  subLoading: boolean;
   autoReminder: ToggleState;
   overdueAlert: ToggleState;
 }) {
+  if (subLoading) {
+    return (
+      <SettingsSection title="Notifications & Rappels">
+        <ToggleRowSkeleton />
+        <ToggleRowSkeleton />
+        <RowSkeleton last />
+      </SettingsSection>
+    );
+  }
+
   return (
     <SettingsSection title="Notifications & Rappels">
       <ToggleRow
@@ -520,6 +542,33 @@ function NotificationsSection({
   );
 }
 
+/** Row-shaped skeleton matching SettingsRow/ToggleRow's icon+label+description layout. */
+function RowSkeleton({ last = false }: { last?: boolean }) {
+  return (
+    <div className={`flex items-center gap-4 px-5 py-4 ${!last ? 'border-b border-border' : ''}`}>
+      <Skeleton className="w-9 h-9 rounded-lg flex-shrink-0" />
+      <div className="flex-1 min-w-0 flex flex-col gap-2">
+        <Skeleton className="h-3.5 w-40" />
+        <Skeleton className="h-3 w-52" />
+      </div>
+    </div>
+  );
+}
+
+/** Same as RowSkeleton but with a toggle-shaped placeholder on the right. */
+function ToggleRowSkeleton() {
+  return (
+    <div className="flex items-center gap-4 px-5 py-4 border-b border-border">
+      <Skeleton className="w-9 h-9 rounded-lg flex-shrink-0" />
+      <div className="flex-1 min-w-0 flex flex-col gap-2">
+        <Skeleton className="h-3.5 w-40" />
+        <Skeleton className="h-3 w-52" />
+      </div>
+      <Skeleton className="w-11 h-6 rounded-full flex-shrink-0" />
+    </div>
+  );
+}
+
 function ToggleRow({
   icon,
   label,
@@ -535,7 +584,11 @@ function ToggleRow({
 }) {
   if (!isPremium) {
     return (
-      <Link href="/premium" className="flex items-center gap-4 px-5 py-4 border-b border-border">
+      <MotionLink
+        href="/premium"
+        whileTap={tapScale}
+        className="flex items-center gap-4 px-5 py-4 border-b border-border"
+      >
         <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
           <Icon i={icon} size={18} className="text-muted-foreground" />
         </div>
@@ -546,7 +599,7 @@ function ToggleRow({
         <span className="bg-accent text-accent-foreground font-headings font-bold text-xs px-2.5 py-1 rounded-lg flex-shrink-0">
           Premium
         </span>
-      </Link>
+      </MotionLink>
     );
   }
 
@@ -582,7 +635,11 @@ function ToggleRow({
 function SubscriptionSection() {
   return (
     <SettingsSection title="Abonnement">
-      <Link href="/premium/manage" className="w-full flex items-center gap-4 px-5 py-4">
+      <MotionLink
+        href="/premium/manage"
+        whileTap={tapScale}
+        className="w-full flex items-center gap-4 px-5 py-4"
+      >
         <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
           <Icon i="zap" size={18} className="text-primary" />
         </div>
@@ -595,13 +652,21 @@ function SubscriptionSection() {
           </div>
         </div>
         <Icon i="chevron-right" size={16} className="text-muted-foreground flex-shrink-0" />
-      </Link>
+      </MotionLink>
     </SettingsSection>
   );
 }
 
-function DataSection({ isPremium }: { isPremium: boolean }) {
+function DataSection({ isPremium, loading }: { isPremium: boolean; loading: boolean }) {
   const { exporting, error, exportCsv } = useExportDebtsCsv();
+
+  if (loading) {
+    return (
+      <SettingsSection title="Données">
+        <RowSkeleton last />
+      </SettingsSection>
+    );
+  }
 
   return (
     <SettingsSection title="Données">
@@ -628,7 +693,11 @@ function DataSection({ isPremium }: { isPremium: boolean }) {
           {error && <div className="text-xs text-danger mt-2">{error}</div>}
         </div>
       ) : (
-        <Link href="/premium" className="flex items-center gap-4 px-5 py-4">
+        <MotionLink
+          href="/premium"
+          whileTap={tapScale}
+          className="flex items-center gap-4 px-5 py-4"
+        >
           <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
             <Icon i="download" size={18} className="text-muted-foreground" />
           </div>
@@ -641,7 +710,7 @@ function DataSection({ isPremium }: { isPremium: boolean }) {
           <span className="bg-accent text-accent-foreground font-headings font-bold text-xs px-2.5 py-1 rounded-lg flex-shrink-0">
             Premium
           </span>
-        </Link>
+        </MotionLink>
       )}
     </SettingsSection>
   );
