@@ -39,7 +39,7 @@ Last updated: 2026-08-28 (S'abonner Premium + Gestion Premium — split /premium
 - [x] `page-premium` (rescoped) — `/premium/page.tsx` is now free-tier-only: CTA is a `Link` to `/premium/checkout` instead of a direct `POST`, auto-redirects to `/premium/manage` if already active; `PREMIUM_FEATURES` extracted to shared `lib/jurali-premium.ts` (was duplicated per-screen) — commit: pending
 
 ## In progress
-(none)
+- [ ] `admin-console` — Banani screen `AdminDashboard.jsx` (only screen designed; 5 more pages named in its nav, built fresh) — backend done (schema + `PlatformConfig` + 4 new `/api/admin/*` routes + `admin-revenue.ts`), UI pages not yet built — plan: `admin-console.md`
 
 ## Pending (seen in Banani, not yet fetched/planned for implementation)
 - `PaymentReceivedDesktop` — reference only for now; not implemented as a

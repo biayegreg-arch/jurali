@@ -32,8 +32,8 @@ import {
   PaymentProviderUnconfiguredError,
 } from '@/lib/server/payments/provider-singleton';
 import {
+  getPremiumMonthlyPriceFcfa,
   isSubscriptionActive,
-  PREMIUM_MONTHLY_PRICE_FCFA,
 } from '@/lib/server/subscriptions/guards';
 import { lockUserTx } from '@/lib/server/withdrawals/lock';
 import { isTransientConflict } from '@/lib/server/prisma-errors';
@@ -53,14 +53,17 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const auth = await requireAuth();
     if (auth instanceof NextResponse) return auth;
 
-    const sub = await prisma.subscription.findUnique({ where: { ownerId: auth.user.sub } });
+    const [sub, priceFcfa] = await Promise.all([
+      prisma.subscription.findUnique({ where: { ownerId: auth.user.sub } }),
+      getPremiumMonthlyPriceFcfa(prisma),
+    ]);
 
     return NextResponse.json(
       {
         status: sub?.status ?? 'NONE',
         renewsAt: sub?.renewsAt ?? null,
         isActive: isSubscriptionActive(sub),
-        planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
+        planAmountFcfa: priceFcfa,
         paymentMethod: sub?.paymentMethod ?? null,
         paymentPhone: sub?.paymentPhone ?? null,
         createdAt: sub?.createdAt ?? null,
@@ -116,6 +119,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       );
     }
     const publicUrl = envPublicUrl ?? 'http://localhost:3000';
+    const priceFcfa = await getPremiumMonthlyPriceFcfa(prisma);
 
     // The read-then-upsert below used to run unguarded: two concurrent POSTs
     // could both read a non-PENDING `existing` row before either upsert
@@ -148,13 +152,13 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             create: {
               ownerId: auth.user.sub,
               status: 'PENDING',
-              planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
+              planAmountFcfa: priceFcfa,
               paymentMethod: paymentMethod ?? null,
               paymentPhone: phone ?? null,
             },
             update: {
               status: 'PENDING',
-              planAmountFcfa: PREMIUM_MONTHLY_PRICE_FCFA,
+              planAmountFcfa: priceFcfa,
               providerChargeId: null,
               paymentUrl: null,
               paymentMethod: paymentMethod ?? null,
@@ -207,7 +211,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // `providerChargeId` (Bictorys' own charge id), not this ref.
       const result = await breaker.execute(() =>
         provider.charge({
-          amount: PREMIUM_MONTHLY_PRICE_FCFA,
+          amount: priceFcfa,
           currency: 'XOF',
           customer: { email: auth.user.email, ...(phone ? { phone } : {}) },
           ...(paymentMethod ? { metadata: { paymentType: paymentMethod } } : {}),

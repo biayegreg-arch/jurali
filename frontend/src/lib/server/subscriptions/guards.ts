@@ -2,8 +2,23 @@ import 'server-only';
 import { NextResponse } from 'next/server';
 import type { PrismaClient } from '@prisma/client';
 
+// Fallback used until an admin sets a price (or the PlatformConfig row is
+// somehow missing) — see `getPremiumMonthlyPriceFcfa` below, the real
+// source of truth once /admin/subscriptions has been used.
 export const PREMIUM_MONTHLY_PRICE_FCFA = 2500;
 export const SUBSCRIPTION_PERIOD_DAYS = 30;
+
+/**
+ * Admin-editable Premium price (Jurali admin console, /admin/subscriptions).
+ * Reads the `PlatformConfig` singleton; falls back to the hardcoded default
+ * when no admin has ever set a price (no backfill migration needed).
+ */
+export async function getPremiumMonthlyPriceFcfa(
+  prisma: Pick<PrismaClient, 'platformConfig'>,
+): Promise<number> {
+  const config = await prisma.platformConfig.findUnique({ where: { id: 'singleton' } });
+  return config?.premiumMonthlyPriceFcfa ?? PREMIUM_MONTHLY_PRICE_FCFA;
+}
 
 export interface SubscriptionState {
   status: string;

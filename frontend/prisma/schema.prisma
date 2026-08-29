@@ -460,3 +460,15 @@ model Subscription {
 
   @@index([ownerId])
 }
+
+// Admin-editable platform settings. Single row (fixed id "singleton") —
+// deliberately not a generic key-value store: today only the Premium price
+// needs to be admin-editable, and a typed 1-column table is simpler than a
+// KV schema for a single setting. `getPremiumMonthlyPriceFcfa` in
+// subscriptions/guards.ts falls back to the hardcoded default when no row
+// exists yet (no backfill migration needed).
+model PlatformConfig {
+  id                      String   @id @default("singleton")
+  premiumMonthlyPriceFcfa Int      @default(2500)
+  updatedAt               DateTime @updatedAt
+}
