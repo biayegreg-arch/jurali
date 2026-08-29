@@ -21,7 +21,7 @@ const PROBLEMS = [
 
 const FEATURES = [
   {
-    icon: 'zap',
+    icon: 'check-circle',
     title: 'Enregistre en 5 secondes',
     desc: 'Client + montant + articles. C’est tout. Jurali gère le reste.',
   },
@@ -142,7 +142,7 @@ export default function LandingPage() {
               href="/signup"
               className="w-full sm:w-auto flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base px-8 py-4 rounded-xl"
             >
-              <Icon i="zap" size={20} />
+              <Icon i="check-circle" size={20} />
               Commencer gratuitement
             </Link>
             <a
@@ -401,7 +401,7 @@ export default function LandingPage() {
             href="/signup"
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base px-8 py-4 rounded-xl"
           >
-            <Icon i="zap" size={20} />
+            <Icon i="check-circle" size={20} />
             Commencer gratuitement maintenant
           </Link>
         </div>
