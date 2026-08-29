@@ -56,10 +56,12 @@ model User {
   // SUPERADMIN can promote/demote other admins. Bootstrap an initial
   // SUPERADMIN via `pnpm db:make-superadmin <email>` (see scripts).
   role              String    @default("USER") // USER | ADMIN | SUPERADMIN
-  // Account status. ACTIVE = login + refresh allowed; SUSPENDED = both
-  // refused with 403 ACCOUNT_SUSPENDED. Mutated via /api/admin/users/[id]/status
-  // (ADMIN can suspend; only SUPERADMIN can restore).
-  status            String    @default("ACTIVE") // ACTIVE | SUSPENDED
+  // Account status. ACTIVE = login + refresh allowed; SUSPENDED and DELETED
+  // both refuse with 403 (ACCOUNT_SUSPENDED / ACCOUNT_DELETED) — DELETED is
+  // a soft delete (data retained, reversible), not a real
+  // `prisma.user.delete()`. Mutated via /api/admin/users/[id]/status
+  // (ADMIN can suspend; only SUPERADMIN can restore, delete, or undelete).
+  status            String    @default("ACTIVE") // ACTIVE | SUSPENDED | DELETED
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 

@@ -1,5 +1,8 @@
 // GET /api/admin/subscriptions — list all Premium subscriptions for the
-// "Abonnements" admin page (status/plan filters, cursor pagination).
+// "Abonnements" admin page (status/plan filters, cursor pagination), also
+// used by the Utilisateurs "Gérer" panel via ?ownerId= to fetch a single
+// user's subscription (Subscription.ownerId is unique, so this returns at
+// most one row).
 //
 // Mirrors the users-list pattern. `isActive` is computed the same way the
 // public GET /api/subscriptions does (status===ACTIVE && renewsAt in the
@@ -39,10 +42,12 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const url = req.nextUrl;
     const limit = clampLimit(url.searchParams.get('limit'));
     const status = url.searchParams.get('status');
+    const ownerId = url.searchParams.get('ownerId');
     const cursor = decodeCursor(url.searchParams.get('cursor'));
 
     const where: Prisma.SubscriptionWhereInput = {
       ...(status ? { status } : {}),
+      ...(ownerId ? { ownerId } : {}),
       ...cursorWhere(cursor),
     };
 

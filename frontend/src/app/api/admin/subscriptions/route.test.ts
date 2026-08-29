@@ -90,6 +90,14 @@ describe('GET /api/admin/subscriptions', () => {
     expect(where?.['status']).toBe('FAILED');
   });
 
+  it('filters by ?ownerId (used by the Utilisateurs "Gérer" panel)', async () => {
+    prismaMock.subscription.findMany.mockResolvedValueOnce([] as never);
+    await GET(makeGet('http://test/api/admin/subscriptions?ownerId=u1'));
+    const args = prismaMock.subscription.findMany.mock.calls[0]?.[0];
+    const where = args?.where as Record<string, unknown> | undefined;
+    expect(where?.['ownerId']).toBe('u1');
+  });
+
   it('includes owner email/name/shopName via select', async () => {
     prismaMock.subscription.findMany.mockResolvedValueOnce([] as never);
     await GET(makeGet('http://test/api/admin/subscriptions'));

@@ -135,7 +135,7 @@ describe('GET /api/admin/overview', () => {
     expect(body.recentUsers[0]?.isPremium).toBe(false);
   });
 
-  it('clamps a net-negative outstanding balance to 0', async () => {
+  it('does NOT clamp a net-negative outstanding balance (a real data anomaly, not a display bug)', async () => {
     prismaMock.user.findMany.mockResolvedValue([
       { id: 'u1', email: 'a@test.local', name: null, shopName: null, createdAt: new Date() },
     ] as never);
@@ -144,7 +144,7 @@ describe('GET /api/admin/overview', () => {
       .mockResolvedValueOnce({ _sum: { amountFcfa: 5000 } } as never); // PAYMENT
     const res = await GET(makeGet());
     const body = (await res.json()) as { recentUsers: Array<{ outstandingBalanceFcfa: number }> };
-    expect(body.recentUsers[0]?.outstandingBalanceFcfa).toBe(0);
+    expect(body.recentUsers[0]?.outstandingBalanceFcfa).toBe(-4000);
   });
 
   it('propagates 403 from requireAdmin without querying anything', async () => {

@@ -9,6 +9,7 @@ import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { PageTransition } from '@/components/jurali/PageTransition';
 import { Icon } from '@/components/jurali/Icon';
+import { Skeleton } from '@/components/jurali/Skeleton';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { formatDateFr } from '@/lib/jurali-format';
 
@@ -111,26 +112,30 @@ function AuditLogTab() {
   return (
     <div className="bg-background border border-border rounded-xl overflow-hidden">
       <div className="divide-y divide-border">
-        {items.map((row) => (
-          <div key={row.id} className="flex flex-col gap-1 px-5 py-3.5">
-            <div className="flex items-center justify-between gap-3">
-              <span className="font-headings font-bold text-sm text-foreground">{row.action}</span>
-              <span className="text-xs text-muted-foreground flex-shrink-0">
-                {formatDateFr(row.createdAt)}
-              </span>
-            </div>
-            <div className="text-xs text-muted-foreground">
-              Acteur : {row.actorId}
-              {row.targetType &&
-                ` · Cible : ${row.targetType}${row.targetId ? ` (${row.targetId})` : ''}`}
-            </div>
-            {row.metadata != null && (
-              <div className="text-xs text-muted-foreground font-mono truncate">
-                {JSON.stringify(row.metadata)}
+        {loading && items.length === 0
+          ? Array.from({ length: 6 }, (_, i) => <AuditRowSkeleton key={i} />)
+          : items.map((row) => (
+              <div key={row.id} className="flex flex-col gap-1 px-5 py-3.5">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-headings font-bold text-sm text-foreground">
+                    {row.action}
+                  </span>
+                  <span className="text-xs text-muted-foreground flex-shrink-0">
+                    {formatDateFr(row.createdAt)}
+                  </span>
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  Acteur : {row.actorId}
+                  {row.targetType &&
+                    ` · Cible : ${row.targetType}${row.targetId ? ` (${row.targetId})` : ''}`}
+                </div>
+                {row.metadata != null && (
+                  <div className="text-xs text-muted-foreground font-mono truncate">
+                    {JSON.stringify(row.metadata)}
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-        ))}
+            ))}
         {!loading && items.length === 0 && (
           <div className="px-5 py-8 text-sm text-muted-foreground text-center">
             Aucune action administrative enregistrée.
@@ -176,6 +181,16 @@ function RateLimitsTab() {
     );
   }
 
+  if (loading && buckets.length === 0) {
+    return (
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {Array.from({ length: 4 }, (_, i) => (
+          <BucketCardSkeleton key={i} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
       {buckets.map((b) => (
@@ -203,6 +218,32 @@ function RateLimitsTab() {
           )}
         </div>
       ))}
+    </div>
+  );
+}
+
+function AuditRowSkeleton() {
+  return (
+    <div className="flex flex-col gap-1.5 px-5 py-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <Skeleton className="h-3.5 w-40" />
+        <Skeleton className="h-3 w-24" />
+      </div>
+      <Skeleton className="h-3 w-56" />
+    </div>
+  );
+}
+
+function BucketCardSkeleton() {
+  return (
+    <div className="bg-background border border-border rounded-xl p-5 flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-3.5 w-24" />
+        <Skeleton className="h-3 w-16" />
+      </div>
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-full" />
+      <Skeleton className="h-3 w-2/3" />
     </div>
   );
 }

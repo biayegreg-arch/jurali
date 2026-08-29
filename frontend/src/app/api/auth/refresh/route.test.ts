@@ -169,4 +169,21 @@ describe('POST /api/auth/refresh', () => {
     expect(acquireRefreshLock).not.toHaveBeenCalled();
     expect(releaseSpy).not.toHaveBeenCalled();
   });
+
+  it('DELETED user — 403 ACCOUNT_DELETED, no rotation', async () => {
+    vi.mocked(verifyRefreshToken).mockResolvedValue({ sub: 'u_del', tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u_del',
+      email: 'deleted@b.com',
+      tokenVersion: 0,
+      status: 'DELETED',
+    } as never);
+
+    const res = await POST(makeReq('valid'));
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('ACCOUNT_DELETED');
+    expect(acquireRefreshLock).not.toHaveBeenCalled();
+  });
 });

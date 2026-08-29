@@ -77,10 +77,13 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           sub.status === 'ACTIVE' &&
           !!sub.renewsAt &&
           sub.renewsAt.getTime() > now.getTime();
-        const outstandingBalanceFcfa = Math.max(
-          0,
-          (debtSum._sum.amountFcfa ?? 0) - (paymentSum._sum.amountFcfa ?? 0),
-        );
+        // Matches lib/server/jurali/balance.ts's computeClientBalance formula
+        // (DEBT adds, PAYMENT subtracts) summed across all of this owner's
+        // clients — deliberately NOT clamped to 0, same as that helper: a
+        // negative aggregate is a real data anomaly an admin should see, not
+        // hide.
+        const outstandingBalanceFcfa =
+          (debtSum._sum.amountFcfa ?? 0) - (paymentSum._sum.amountFcfa ?? 0);
         return {
           id: u.id,
           email: u.email,

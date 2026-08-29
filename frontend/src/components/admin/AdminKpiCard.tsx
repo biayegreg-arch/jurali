@@ -1,5 +1,6 @@
 import { Icon } from '@/components/jurali/Icon';
 import { AnimatedNumber } from '@/components/jurali/AnimatedNumber';
+import { Skeleton } from '@/components/jurali/Skeleton';
 import { formatPrice } from '@/lib/utils';
 
 export interface AdminKpiCardProps {
@@ -34,12 +35,14 @@ export function AdminKpiCard({
           <Icon i={icon} size={14} className={iconColor} />
         </div>
       </div>
-      <div className="font-headings font-bold text-3xl text-foreground">
-        {loading ? '…' : <AnimatedNumber value={value} format={format} />}
-        {!loading && suffix ? (
-          <span className="text-base font-body font-normal">{suffix}</span>
-        ) : null}
-      </div>
+      {loading ? (
+        <Skeleton className="h-8 w-24" />
+      ) : (
+        <div className="font-headings font-bold text-3xl text-foreground">
+          <AnimatedNumber value={value} format={format} />
+          {suffix ? <span className="text-base font-body font-normal">{suffix}</span> : null}
+        </div>
+      )}
     </div>
   );
 }

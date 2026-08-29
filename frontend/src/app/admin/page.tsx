@@ -9,6 +9,7 @@
 import Link from 'next/link';
 import { useApi } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
+import { Skeleton } from '@/components/jurali/Skeleton';
 import { PageTransition } from '@/components/jurali/PageTransition';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { AdminKpiCard } from '@/components/admin/AdminKpiCard';
@@ -115,48 +116,62 @@ export default function AdminOverviewPage() {
             <div className="font-headings font-bold text-base text-foreground mb-5">
               Revenus mensuels (réel)
             </div>
-            <AdminRevenueChart points={data?.monthlyRevenue ?? []} />
+            <AdminRevenueChart points={data?.monthlyRevenue ?? []} loading={loading} />
           </div>
 
           <div className="bg-background border border-border rounded-xl p-5 flex flex-col gap-4 lg:w-[220px] flex-shrink-0">
             <div className="font-headings font-bold text-base text-foreground">
               Répartition plans
             </div>
-            <div className="flex items-center justify-center py-2">
-              <div
-                className="relative w-24 h-24 rounded-full flex items-center justify-center flex-shrink-0"
-                style={{
-                  background: `conic-gradient(var(--color-primary) 0% ${premiumPct}%, var(--color-muted) ${premiumPct}% 100%)`,
-                }}
-              >
-                <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center">
-                  <div className="font-headings font-bold text-base text-foreground">
-                    {premiumPct}%
+            {loading ? (
+              <>
+                <div className="flex items-center justify-center py-2">
+                  <Skeleton className="w-24 h-24 rounded-full" />
+                </div>
+                <div className="flex flex-col gap-2.5">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex items-center justify-center py-2">
+                  <div
+                    className="relative w-24 h-24 rounded-full flex items-center justify-center flex-shrink-0"
+                    style={{
+                      background: `conic-gradient(var(--color-primary) 0% ${premiumPct}%, var(--color-muted) ${premiumPct}% 100%)`,
+                    }}
+                  >
+                    <div className="w-14 h-14 rounded-full bg-background flex flex-col items-center justify-center">
+                      <div className="font-headings font-bold text-base text-foreground">
+                        {premiumPct}%
+                      </div>
+                      <div className="text-xs text-muted-foreground">Premium</div>
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground">Premium</div>
                 </div>
-              </div>
-            </div>
-            <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0" />
-                  <span className="text-sm text-foreground">Premium</span>
+                <div className="flex flex-col gap-2.5">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-primary flex-shrink-0" />
+                      <span className="text-sm text-foreground">Premium</span>
+                    </div>
+                    <span className="font-headings font-bold text-sm text-foreground">
+                      {kpis?.premiumCount ?? 0}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2.5 h-2.5 rounded-full bg-muted flex-shrink-0" />
+                      <span className="text-sm text-foreground">Gratuit</span>
+                    </div>
+                    <span className="font-headings font-bold text-sm text-foreground">
+                      {kpis?.freeCount ?? 0}
+                    </span>
+                  </div>
                 </div>
-                <span className="font-headings font-bold text-sm text-foreground">
-                  {kpis?.premiumCount ?? 0}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className="w-2.5 h-2.5 rounded-full bg-muted flex-shrink-0" />
-                  <span className="text-sm text-foreground">Gratuit</span>
-                </div>
-                <span className="font-headings font-bold text-sm text-foreground">
-                  {kpis?.freeCount ?? 0}
-                </span>
-              </div>
-            </div>
+              </>
+            )}
           </div>
         </div>
 
@@ -171,41 +186,48 @@ export default function AdminOverviewPage() {
               </Link>
             </div>
             <div className="divide-y divide-border">
-              {(data?.recentUsers ?? []).map((u) => (
-                <div key={u.id} className="flex items-center px-5 py-3 gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-                    <span className="font-headings font-bold text-xs text-secondary-foreground">
-                      {(u.name || u.shopName || u.email).charAt(0).toUpperCase()}
-                    </span>
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-headings font-bold text-sm text-foreground truncate">
-                      {u.name || u.email}
+              {loading && (data?.recentUsers.length ?? 0) === 0
+                ? Array.from({ length: 5 }, (_, i) => <RecentUserSkeleton key={i} />)
+                : (data?.recentUsers ?? []).map((u) => (
+                    <div key={u.id} className="flex items-center px-5 py-3 gap-3">
+                      <div className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                        <span className="font-headings font-bold text-xs text-secondary-foreground">
+                          {(u.name || u.shopName || u.email).charAt(0).toUpperCase()}
+                        </span>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-headings font-bold text-sm text-foreground truncate">
+                          {u.name || u.email}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {u.shopName || u.email}
+                        </div>
+                      </div>
+                      <div
+                        className="text-right flex-shrink-0 hidden sm:block"
+                        style={{ width: 100 }}
+                      >
+                        <div className="font-headings font-bold text-sm text-foreground">
+                          {u.clientCount} client{u.clientCount > 1 ? 's' : ''}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatPrice(u.outstandingBalanceFcfa)} FCFA
+                        </div>
+                      </div>
+                      <div className="flex-shrink-0">
+                        {u.isPremium ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-primary-foreground font-bold text-xs">
+                            <Icon i="zap" size={10} />
+                            Premium
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-input border border-border text-muted-foreground font-bold text-xs">
+                            Gratuit
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {u.shopName || u.email}
-                    </div>
-                  </div>
-                  <div className="text-center flex-shrink-0 hidden sm:block" style={{ width: 60 }}>
-                    <div className="font-headings font-bold text-sm text-foreground">
-                      {u.clientCount}
-                    </div>
-                    <div className="text-xs text-muted-foreground">clients</div>
-                  </div>
-                  <div className="flex-shrink-0">
-                    {u.isPremium ? (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-primary-foreground font-bold text-xs">
-                        <Icon i="zap" size={10} />
-                        Premium
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded-md bg-input border border-border text-muted-foreground font-bold text-xs">
-                        Gratuit
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                  ))}
               {!loading && (data?.recentUsers.length ?? 0) === 0 && (
                 <div className="px-5 py-6 text-sm text-muted-foreground">Aucun utilisateur.</div>
               )}
@@ -222,34 +244,38 @@ export default function AdminOverviewPage() {
               </Link>
             </div>
             <div className="divide-y divide-border">
-              {(data?.recentPayments ?? []).map((p) => (
-                <div key={p.id} className="flex items-center px-5 py-3.5 gap-3">
-                  <div
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-                      p.status === 'PAID' ? 'bg-green-50' : 'bg-red-50'
-                    }`}
-                  >
-                    <Icon
-                      i={p.status === 'PAID' ? 'check' : 'x'}
-                      size={14}
-                      className={p.status === 'PAID' ? 'text-green-700' : 'text-danger'}
-                    />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="font-headings font-bold text-sm text-foreground truncate">
-                      {p.ownerShopName || p.ownerEmail}
+              {loading && (data?.recentPayments.length ?? 0) === 0
+                ? Array.from({ length: 4 }, (_, i) => <RecentPaymentSkeleton key={i} />)
+                : (data?.recentPayments ?? []).map((p) => (
+                    <div key={p.id} className="flex items-center px-5 py-3.5 gap-3">
+                      <div
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
+                          p.status === 'PAID' ? 'bg-green-50' : 'bg-red-50'
+                        }`}
+                      >
+                        <Icon
+                          i={p.status === 'PAID' ? 'check' : 'x'}
+                          size={14}
+                          className={p.status === 'PAID' ? 'text-green-700' : 'text-danger'}
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-headings font-bold text-sm text-foreground truncate">
+                          {p.ownerShopName || p.ownerEmail}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatDateFr(p.createdAt)}
+                        </div>
+                      </div>
+                      <div
+                        className={`font-headings font-bold text-sm flex-shrink-0 ${
+                          p.status === 'PAID' ? 'text-foreground' : 'text-danger line-through'
+                        }`}
+                      >
+                        {formatPrice(p.amountFcfa)} FCFA
+                      </div>
                     </div>
-                    <div className="text-xs text-muted-foreground">{formatDateFr(p.createdAt)}</div>
-                  </div>
-                  <div
-                    className={`font-headings font-bold text-sm flex-shrink-0 ${
-                      p.status === 'PAID' ? 'text-foreground' : 'text-danger line-through'
-                    }`}
-                  >
-                    {formatPrice(p.amountFcfa)} FCFA
-                  </div>
-                </div>
-              ))}
+                  ))}
               {!loading && (data?.recentPayments.length ?? 0) === 0 && (
                 <div className="px-5 py-6 text-sm text-muted-foreground">
                   Aucun paiement récent.
@@ -260,5 +286,31 @@ export default function AdminOverviewPage() {
         </div>
       </div>
     </PageTransition>
+  );
+}
+
+function RecentUserSkeleton() {
+  return (
+    <div className="flex items-center px-5 py-3 gap-3">
+      <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-32" />
+        <Skeleton className="h-3 w-40" />
+      </div>
+      <Skeleton className="h-5 w-16 rounded-md flex-shrink-0" />
+    </div>
+  );
+}
+
+function RecentPaymentSkeleton() {
+  return (
+    <div className="flex items-center px-5 py-3.5 gap-3">
+      <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-28" />
+        <Skeleton className="h-3 w-20" />
+      </div>
+      <Skeleton className="h-4 w-16 flex-shrink-0" />
+    </div>
   );
 }

@@ -13,6 +13,7 @@ import { useAsyncAction } from '@/lib/useAsyncAction';
 import { useToast } from '@/contexts/ToastContext';
 import { PageTransition } from '@/components/jurali/PageTransition';
 import { Icon } from '@/components/jurali/Icon';
+import { Skeleton } from '@/components/jurali/Skeleton';
 import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { AdminStatusPill, type AdminStatusTone } from '@/components/admin/AdminStatusPill';
@@ -116,30 +117,35 @@ export default function AdminSubscriptionsPage() {
 
         <div className="bg-background border border-border rounded-xl overflow-hidden">
           <div className="divide-y divide-border">
-            {items.map((s) => (
-              <div key={s.id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4">
-                <div className="flex-1 min-w-0">
-                  <div className="font-headings font-bold text-sm text-foreground truncate">
-                    {s.owner.shopName || s.owner.name || s.owner.email}
+            {loading && items.length === 0
+              ? Array.from({ length: 6 }, (_, i) => <SubscriptionRowSkeleton key={i} />)
+              : items.map((s) => (
+                  <div
+                    key={s.id}
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="font-headings font-bold text-sm text-foreground truncate">
+                        {s.owner.shopName || s.owner.name || s.owner.email}
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">{s.owner.email}</div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <AdminStatusPill
+                        label={s.isActive ? 'Actif' : STATUS_LABEL[s.status]}
+                        tone={s.isActive ? 'positive' : STATUS_TONE[s.status]}
+                      />
+                      <span className="text-xs text-muted-foreground">
+                        {formatPrice(s.planAmountFcfa)} FCFA
+                      </span>
+                      {s.renewsAt && (
+                        <span className="text-xs text-muted-foreground">
+                          → {formatDateFr(s.renewsAt)}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                  <div className="text-xs text-muted-foreground truncate">{s.owner.email}</div>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <AdminStatusPill
-                    label={s.isActive ? 'Actif' : STATUS_LABEL[s.status]}
-                    tone={s.isActive ? 'positive' : STATUS_TONE[s.status]}
-                  />
-                  <span className="text-xs text-muted-foreground">
-                    {formatPrice(s.planAmountFcfa)} FCFA
-                  </span>
-                  {s.renewsAt && (
-                    <span className="text-xs text-muted-foreground">
-                      → {formatDateFr(s.renewsAt)}
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+                ))}
             {!loading && items.length === 0 && (
               <div className="px-5 py-8 text-sm text-muted-foreground text-center">
                 Aucun abonnement ne correspond.
@@ -246,13 +252,15 @@ function PriceCard({ editable }: { editable: boolean }) {
             </button>
           </div>
         </div>
+      ) : !config ? (
+        <Skeleton className="h-9 w-40 bg-primary-foreground/15" />
       ) : (
         <>
           <div className="font-headings font-bold text-3xl text-primary-foreground">
-            {config ? formatPrice(config.premiumMonthlyPriceFcfa) : '…'}{' '}
+            {formatPrice(config.premiumMonthlyPriceFcfa)}{' '}
             <span className="text-base font-body font-normal text-secondary">FCFA / mois</span>
           </div>
-          {config?.updatedAt && (
+          {config.updatedAt && (
             <div className="text-xs text-secondary mt-2">
               Dernière modification : {formatDateFr(config.updatedAt)}
             </div>
@@ -269,6 +277,19 @@ function PriceCard({ editable }: { editable: boolean }) {
         onCancel={() => setConfirming(null)}
         onConfirm={confirmSave}
       />
+    </div>
+  );
+}
+
+function SubscriptionRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 px-5 py-4">
+      <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+        <Skeleton className="h-3.5 w-44" />
+        <Skeleton className="h-3 w-56" />
+      </div>
+      <Skeleton className="h-5 w-16 rounded-md" />
+      <Skeleton className="h-3 w-20" />
     </div>
   );
 }

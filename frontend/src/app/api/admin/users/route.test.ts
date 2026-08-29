@@ -615,4 +615,166 @@ describe('/api/admin/users/[id]/status [Wave 2] — suspend / restore', () => {
     expect(mockRequireAdmin).not.toHaveBeenCalled();
     expect(prismaMock.user.update).not.toHaveBeenCalled();
   });
+
+  // Soft-delete (DELETED status) — added alongside the admin "Gérer"
+  // panel's suppression/annulation-de-suppression actions.
+  it('PATCH ACTIVE → DELETED by ADMIN → 403 DELETE_REQUIRES_SUPERADMIN', async () => {
+    const target = seedAdmin({ id: 'u_del1', status: 'ACTIVE' });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: target.id,
+      status: 'ACTIVE',
+      email: target.email,
+      name: null,
+      role: 'USER',
+    } as never);
+
+    const res = await PATCH_STATUS(
+      makePatch(`http://test/api/admin/users/${target.id}/status`, { status: 'DELETED' }),
+      paramsOf(target.id),
+    );
+
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('DELETE_REQUIRES_SUPERADMIN');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+    expect(mockLogAdminAction).not.toHaveBeenCalled();
+  });
+
+  it('PATCH ACTIVE → DELETED by SUPERADMIN → 200 + AdminAction user.delete', async () => {
+    mockRequireAdmin.mockResolvedValueOnce(superadminCtx);
+    const target = seedAdmin({ id: 'u_del2', status: 'ACTIVE', role: 'USER' });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: target.id,
+      status: 'ACTIVE',
+      email: target.email,
+      name: null,
+      role: 'USER',
+    } as never);
+    prismaMock.user.update.mockResolvedValueOnce({ id: target.id, status: 'DELETED' } as never);
+
+    const res = await PATCH_STATUS(
+      makePatch(`http://test/api/admin/users/${target.id}/status`, {
+        status: 'DELETED',
+        reason: 'user request',
+      }),
+      paramsOf(target.id),
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { user: { id: string; status: string } };
+    expect(body.user).toEqual({ id: target.id, status: 'DELETED' });
+    expect(mockLogAdminAction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        actorId: superadminUser.id,
+        action: 'user.delete',
+        targetType: 'User',
+        targetId: target.id,
+        metadata: { from: 'ACTIVE', to: 'DELETED', reason: 'user request' },
+      }),
+    );
+  });
+
+  it('PATCH DELETED → ACTIVE (undelete) by ADMIN → 403 RESTORE_REQUIRES_SUPERADMIN', async () => {
+    const target = seedAdmin({ id: 'u_del3' });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: target.id,
+      status: 'DELETED',
+      email: target.email,
+      name: null,
+      role: 'USER',
+    } as never);
+
+    const res = await PATCH_STATUS(
+      makePatch(`http://test/api/admin/users/${target.id}/status`, { status: 'ACTIVE' }),
+      paramsOf(target.id),
+    );
+
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('RESTORE_REQUIRES_SUPERADMIN');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+  });
+
+  it('PATCH DELETED → ACTIVE (undelete) by SUPERADMIN → 200 + AdminAction user.restore', async () => {
+    mockRequireAdmin.mockResolvedValueOnce(superadminCtx);
+    const target = seedAdmin({ id: 'u_del4' });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: target.id,
+      status: 'DELETED',
+      email: target.email,
+      name: null,
+      role: 'USER',
+    } as never);
+    prismaMock.user.update.mockResolvedValueOnce({ id: target.id, status: 'ACTIVE' } as never);
+
+    const res = await PATCH_STATUS(
+      makePatch(`http://test/api/admin/users/${target.id}/status`, { status: 'ACTIVE' }),
+      paramsOf(target.id),
+    );
+
+    expect(res.status).toBe(200);
+    expect(mockLogAdminAction).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        action: 'user.restore',
+        metadata: { from: 'DELETED', to: 'ACTIVE' },
+      }),
+    );
+  });
+
+  it('PATCH deactivating (suspend or delete) the last ACTIVE SUPERADMIN → 409 LAST_SUPERADMIN', async () => {
+    const onlyActiveSuperadmin = seedSuperadmin({ id: 'sa_only', status: 'ACTIVE' });
+    mockRequireAdmin.mockResolvedValueOnce({
+      user: { sub: onlyActiveSuperadmin.id, email: onlyActiveSuperadmin.email },
+      admin: {
+        id: onlyActiveSuperadmin.id,
+        email: onlyActiveSuperadmin.email,
+        role: 'SUPERADMIN' as const,
+      },
+    });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: onlyActiveSuperadmin.id,
+      status: 'ACTIVE',
+      email: onlyActiveSuperadmin.email,
+      name: null,
+      role: 'SUPERADMIN',
+    } as never);
+    prismaMock.user.count.mockResolvedValueOnce(1);
+
+    const res = await PATCH_STATUS(
+      makePatch(`http://test/api/admin/users/${onlyActiveSuperadmin.id}/status`, {
+        status: 'DELETED',
+      }),
+      paramsOf(onlyActiveSuperadmin.id),
+    );
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('LAST_SUPERADMIN');
+    expect(prismaMock.user.update).not.toHaveBeenCalled();
+    expect(mockLogAdminAction).not.toHaveBeenCalled();
+  });
+
+  it('PATCH deactivating a SUPERADMIN when another ACTIVE SUPERADMIN remains → 200', async () => {
+    mockRequireAdmin.mockResolvedValueOnce(superadminCtx);
+    const target = seedSuperadmin({ id: 'sa_deactivatable', status: 'ACTIVE' });
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: target.id,
+      status: 'ACTIVE',
+      email: target.email,
+      name: null,
+      role: 'SUPERADMIN',
+    } as never);
+    prismaMock.user.count.mockResolvedValueOnce(2);
+    prismaMock.user.update.mockResolvedValueOnce({ id: target.id, status: 'DELETED' } as never);
+
+    const res = await PATCH_STATUS(
+      makePatch(`http://test/api/admin/users/${target.id}/status`, { status: 'DELETED' }),
+      paramsOf(target.id),
+    );
+
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledTimes(1);
+  });
 });

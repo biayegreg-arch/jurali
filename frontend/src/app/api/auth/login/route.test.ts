@@ -198,4 +198,23 @@ describe('POST /api/auth/login', () => {
     expect(__cookieStore.has('app-refresh')).toBe(false);
     expect(__cookieStore.has('app-csrf')).toBe(false);
   });
+
+  it('DELETED user with valid credentials — 403 ACCOUNT_DELETED, no cookies', async () => {
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u_del',
+      email: 'deleted@b.com',
+      passwordHash: '$2a$12$hashhashhashhashhashhashhashhashhashhashhashhashhashhha',
+      emailVerifiedAt: new Date(),
+      tokenVersion: 0,
+      status: 'DELETED',
+    } as never);
+    vi.mocked(verifyPassword).mockResolvedValue(true);
+
+    const res = await POST(makeReq({ email: 'deleted@b.com', password: 'longenough' }));
+
+    expect(res.status).toBe(403);
+    const body = await res.json();
+    expect(body.error).toBe('ACCOUNT_DELETED');
+    expect(__cookieStore.has('app-token')).toBe(false);
+  });
 });

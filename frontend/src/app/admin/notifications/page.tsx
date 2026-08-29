@@ -8,6 +8,7 @@ import { useEffect, useState } from 'react';
 import { api, ApiError } from '@/lib/api';
 import { useToast } from '@/contexts/ToastContext';
 import { PageTransition } from '@/components/jurali/PageTransition';
+import { Skeleton } from '@/components/jurali/Skeleton';
 import { AdminPageHeader } from '@/components/admin/AdminPageHeader';
 import { AdminStatusPill, type AdminStatusTone } from '@/components/admin/AdminStatusPill';
 import { formatDateFr } from '@/lib/jurali-format';
@@ -144,19 +145,23 @@ function EmailQueueTab() {
       </div>
       <div className="bg-background border border-border rounded-xl overflow-hidden">
         <div className="divide-y divide-border">
-          {items.map((job) => (
-            <div key={job.id} className="flex flex-col gap-1.5 px-5 py-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-headings font-bold text-sm text-foreground truncate">
-                  {job.subject}
+          {loading && items.length === 0
+            ? Array.from({ length: 6 }, (_, i) => <JobRowSkeleton key={i} />)
+            : items.map((job) => (
+                <div key={job.id} className="flex flex-col gap-1.5 px-5 py-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-headings font-bold text-sm text-foreground truncate">
+                      {job.subject}
+                    </div>
+                    <AdminStatusPill label={job.status} tone={STATUS_TONE[job.status]} />
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">{job.to}</div>
+                  {job.lastError && (
+                    <div className="text-xs text-danger truncate">{job.lastError}</div>
+                  )}
+                  <div className="text-xs text-muted-foreground">{formatDateFr(job.createdAt)}</div>
                 </div>
-                <AdminStatusPill label={job.status} tone={STATUS_TONE[job.status]} />
-              </div>
-              <div className="text-xs text-muted-foreground truncate">{job.to}</div>
-              {job.lastError && <div className="text-xs text-danger truncate">{job.lastError}</div>}
-              <div className="text-xs text-muted-foreground">{formatDateFr(job.createdAt)}</div>
-            </div>
-          ))}
+              ))}
           {!loading && items.length === 0 && (
             <div className="px-5 py-8 text-sm text-muted-foreground text-center">
               Aucun email ne correspond.
@@ -202,20 +207,22 @@ function OutboxTab() {
       </div>
       <div className="bg-background border border-border rounded-xl overflow-hidden">
         <div className="divide-y divide-border">
-          {items.map((e) => (
-            <div key={e.id} className="flex flex-col gap-1.5 px-5 py-3.5">
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-headings font-bold text-sm text-foreground truncate">
-                  {e.kind}
+          {loading && items.length === 0
+            ? Array.from({ length: 6 }, (_, i) => <JobRowSkeleton key={i} />)
+            : items.map((e) => (
+                <div key={e.id} className="flex flex-col gap-1.5 px-5 py-3.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="font-headings font-bold text-sm text-foreground truncate">
+                      {e.kind}
+                    </div>
+                    <AdminStatusPill label={e.status} tone={STATUS_TONE[e.status]} />
+                  </div>
+                  {e.lastError && <div className="text-xs text-danger truncate">{e.lastError}</div>}
+                  <div className="text-xs text-muted-foreground">
+                    {formatDateFr(e.createdAt)} · {e.attempts} tentative{e.attempts > 1 ? 's' : ''}
+                  </div>
                 </div>
-                <AdminStatusPill label={e.status} tone={STATUS_TONE[e.status]} />
-              </div>
-              {e.lastError && <div className="text-xs text-danger truncate">{e.lastError}</div>}
-              <div className="text-xs text-muted-foreground">
-                {formatDateFr(e.createdAt)} · {e.attempts} tentative{e.attempts > 1 ? 's' : ''}
-              </div>
-            </div>
-          ))}
+              ))}
           {!loading && items.length === 0 && (
             <div className="px-5 py-8 text-sm text-muted-foreground text-center">
               Aucun événement ne correspond.
@@ -223,6 +230,19 @@ function OutboxTab() {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+function JobRowSkeleton() {
+  return (
+    <div className="flex flex-col gap-1.5 px-5 py-3.5">
+      <div className="flex items-center justify-between gap-3">
+        <Skeleton className="h-3.5 w-48" />
+        <Skeleton className="h-5 w-16 rounded-md flex-shrink-0" />
+      </div>
+      <Skeleton className="h-3 w-32" />
+      <Skeleton className="h-3 w-24" />
     </div>
   );
 }

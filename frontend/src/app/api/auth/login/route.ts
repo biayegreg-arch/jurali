@@ -151,13 +151,15 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     //     restore leaves the user one failed attempt away from a fresh
     //     lockout. Clearing here keeps the counter clean across the
     //     suspend → restore lifecycle.
-    if (user.status === 'SUSPENDED') {
+    if (user.status === 'SUSPENDED' || user.status === 'DELETED') {
       await recordSuccess(email);
       return NextResponse.json(
-        {
-          error: 'ACCOUNT_SUSPENDED',
-          message: 'This account has been suspended. Contact support.',
-        },
+        user.status === 'DELETED'
+          ? { error: 'ACCOUNT_DELETED', message: 'This account has been deleted.' }
+          : {
+              error: 'ACCOUNT_SUSPENDED',
+              message: 'This account has been suspended. Contact support.',
+            },
         { status: 403, headers: { 'x-request-id': ctx.requestId } },
       );
     }

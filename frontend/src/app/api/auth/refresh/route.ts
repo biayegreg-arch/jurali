@@ -82,9 +82,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     // 15-min choke point: once we 403 here, the existing access JWT expires
     // within its 15-min TTL and the user is fully locked out without needing
     // to revoke per-token state.
-    if (user.status === 'SUSPENDED') {
+    if (user.status === 'SUSPENDED' || user.status === 'DELETED') {
       return NextResponse.json(
-        { error: 'ACCOUNT_SUSPENDED', message: 'This account has been suspended.' },
+        user.status === 'DELETED'
+          ? { error: 'ACCOUNT_DELETED', message: 'This account has been deleted.' }
+          : { error: 'ACCOUNT_SUSPENDED', message: 'This account has been suspended.' },
         { status: 403, headers: { 'x-request-id': ctx.requestId } },
       );
     }

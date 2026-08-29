@@ -15,6 +15,7 @@ import { useApi } from '@/lib/useApi';
 import { useAuth } from '@/contexts/AuthContext';
 import { Icon } from '@/components/jurali/Icon';
 import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
+import { Skeleton } from '@/components/jurali/Skeleton';
 import { AdminSidebarNav } from '@/components/admin/AdminSidebarNav';
 
 interface AdminMe {
@@ -37,9 +38,29 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }, [loading, data, router]);
 
   if (loading || !data) {
+    // Skeleton shell (sidebar + topbar), not a spinner/text loader — the
+    // brief GET /api/admin/me round trip shouldn't flash a "classic" loader.
     return (
-      <div className="min-h-dvh bg-background flex items-center justify-center">
-        <span className="text-sm text-muted-foreground">Vérification des accès…</span>
+      <div className="min-h-dvh bg-background font-body flex">
+        <div className="hidden lg:flex flex-col flex-shrink-0 border-r border-border bg-background w-[260px] px-6 pt-8">
+          <div className="flex items-center gap-2 mb-8">
+            <Skeleton className="w-7 h-7 rounded-md" />
+            <Skeleton className="h-4 w-16" />
+          </div>
+          <div className="flex flex-col gap-3">
+            {Array.from({ length: 6 }, (_, i) => (
+              <Skeleton key={i} className="h-9 w-full rounded-lg" />
+            ))}
+          </div>
+        </div>
+        <div className="flex-1 flex flex-col gap-6 p-4 lg:p-8 pt-16 lg:pt-8">
+          <Skeleton className="h-8 w-48" />
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {Array.from({ length: 4 }, (_, i) => (
+              <Skeleton key={i} className="h-24 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

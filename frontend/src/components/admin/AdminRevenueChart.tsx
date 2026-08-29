@@ -1,3 +1,4 @@
+import { Skeleton } from '@/components/jurali/Skeleton';
 import { formatPrice } from '@/lib/utils';
 
 export interface MonthlyRevenuePoint {
@@ -6,7 +7,31 @@ export interface MonthlyRevenuePoint {
 }
 
 /** Real single-series monthly bar chart — shared by /admin and /admin/revenue. */
-export function AdminRevenueChart({ points }: { points: MonthlyRevenuePoint[] }) {
+export function AdminRevenueChart({
+  points,
+  loading = false,
+}: {
+  points: MonthlyRevenuePoint[];
+  loading?: boolean;
+}) {
+  if (loading) {
+    // Shape-matched skeleton — 6 bars of varying pulsing height, same
+    // footprint as the real chart so the layout doesn't jump on load.
+    const heights = [55, 70, 40, 85, 60, 95];
+    return (
+      <div className="flex items-end gap-2" style={{ height: 120 }}>
+        {heights.map((h, i) => (
+          <div key={i} className="flex-1 flex flex-col items-center gap-1 min-w-0">
+            <div className="w-full flex items-end" style={{ height: 100 }}>
+              <Skeleton className="w-full" style={{ height: `${h}%` }} />
+            </div>
+            <Skeleton className="h-3 w-6" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+
   const max = Math.max(1, ...points.map((p) => p.totalFcfa));
   return (
     <div className="flex items-end gap-2" style={{ height: 120 }}>
