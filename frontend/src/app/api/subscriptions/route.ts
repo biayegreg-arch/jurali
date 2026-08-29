@@ -213,7 +213,9 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           ...(paymentMethod ? { metadata: { paymentType: paymentMethod } } : {}),
           successUrl: `${publicUrl}/premium/success`,
           failureUrl: `${publicUrl}/premium/failed`,
-          externalRef: `sub_${subscription.id}_${randomUUID()}`,
+          // Bictorys' paymentReference rejects dashes (E400-46) — strip them
+          // from the UUID suffix; alphanumeric + underscore only.
+          externalRef: `sub_${subscription.id}_${randomUUID().replace(/-/g, '')}`,
         }),
       );
 
