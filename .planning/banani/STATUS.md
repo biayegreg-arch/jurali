@@ -37,9 +37,10 @@ Last updated: 2026-08-28 (S'abonner Premium + Gestion Premium — split /premium
 - [x] `premium-checkout` — Banani screen `SAbonnerPremium.jsx` — `frontend/src/app/premium/checkout/page.tsx`, real Wave/Orange Money/Free Money selection + phone number now thread into `PaymentProvider.charge()` (`metadata.paymentType`/`customer.phone`, capability that existed but was never exposed in the UI before); dropped the annual-plan toggle (re-confirms the Phase 0.3 monthly-only decision) — plan: `premium-checkout.md` — commit: pending
 - [x] `premium-manage` — Banani screen `GestionPremium.jsx` — `frontend/src/app/premium/manage/page.tsx`, new `DELETE /api/subscriptions` (immediate cancel → `CANCELED`), new `Subscription.paymentMethod`/`paymentPhone` columns (set at checkout, read-only "Modifier" dropped — no flow to change it post-checkout); dropped the fabricated invoice history + "Total payé"/"Économie annuelle" stats (no payment ledger exists) and the annual-plan upsell; `/premium` now redirects here when already active, Settings gained a "Gérer mon abonnement" link (Premium-only) — plan: `premium-manage.md` — commit: pending
 - [x] `page-premium` (rescoped) — `/premium/page.tsx` is now free-tier-only: CTA is a `Link` to `/premium/checkout` instead of a direct `POST`, auto-redirects to `/premium/manage` if already active; `PREMIUM_FEATURES` extracted to shared `lib/jurali-premium.ts` (was duplicated per-screen) — commit: pending
+- [x] `admin-console` — Banani screen `AdminDashboard.jsx` (only screen designed; 5 more pages named in its own nav, built fresh with matching tokens) — full backend (`PlatformConfig` singleton + admin-editable Premium price, `/api/admin/{config,subscriptions,overview,revenue}`) + full UI (`app/admin/layout.tsx` + 6 pages) — plan: `admin-console.md` — commit: pending. Responsive/pixel-parity NOT verified in-browser (no screenshot tool this session — see plan's checklist).
 
 ## In progress
-- [ ] `admin-console` — Banani screen `AdminDashboard.jsx` (only screen designed; 5 more pages named in its nav, built fresh) — backend done (schema + `PlatformConfig` + 4 new `/api/admin/*` routes + `admin-revenue.ts`), UI pages not yet built — plan: `admin-console.md`
+(none)
 
 ## Pending (seen in Banani, not yet fetched/planned for implementation)
 - `PaymentReceivedDesktop` — reference only for now; not implemented as a

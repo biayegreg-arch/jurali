@@ -64,9 +64,9 @@ All three batched, all confirmed with the recommended default:
 - [x] Rewire `/api/subscriptions` GET+POST off the constant
 - [x] `GET /api/admin/overview`, `GET /api/admin/subscriptions`, `GET /api/admin/revenue`
 - [x] Backend commit: schema + guards + 4 new admin routes + `admin-revenue.ts` lib, 950 tests green
-- [ ] `AdminLayout` + `AdminSidebar`/`AdminTopbar`/`AdminKpiCard`/`AdminTable` primitives
-- [ ] `/admin` dashboard (pixel-match the fetched screen at 1280px)
-- [ ] `/admin/users`, `/admin/subscriptions`, `/admin/revenue`, `/admin/notifications`, `/admin/settings`
-- [ ] 375 / 768 / 1280 checks on every page
-- [ ] lint + typecheck + test + build
-- [ ] Per-page UI commits
+- [x] `app/admin/layout.tsx` (auth-gate + desktop sidebar + mobile drawer) + `AdminSidebarNav`/`AdminKpiCard`/`AdminStatusPill`/`AdminPageHeader`/`AdminRevenueChart` primitives
+- [x] `/admin` dashboard — built from the fetched screen's tokens/classes; all 6 routes verified to return 200 (no server-side render errors)
+- [x] `/admin/users`, `/admin/subscriptions`, `/admin/revenue`, `/admin/notifications`, `/admin/settings`
+- [x] lint + typecheck + test (950 green) all pass
+- [ ] **Not verified**: no browser/screenshot tool was available this session, so the 375/768/1280 responsive layout and pixel-parity against the Banani mockup were checked by code review (mobile-first Tailwind classes, `hidden lg:flex` sidebar split) but never actually rendered and looked at. Flagged for the user to eyeball before considering this screen fully Done.
+- [x] Per-page UI commit
