@@ -9,6 +9,7 @@ import { Icon } from './Icon';
 import { SummaryStat } from './SummaryStat';
 import { AnimatedNumber } from './AnimatedNumber';
 import { useApi } from '@/lib/useApi';
+import { useAuth } from '@/contexts/AuthContext';
 
 export interface TopBarProps {
   /** Shop name (falls back to the account name, then email) — never the
@@ -35,6 +36,9 @@ export function TopBar({
   loading,
   notificationCount,
 }: TopBarProps) {
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
+
   return (
     <div className="bg-primary px-4 pt-10 pb-5">
       <div className="max-w-2xl mx-auto">
@@ -46,6 +50,17 @@ export function TopBar({
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
+            {isAdmin && (
+              <Link
+                href="/admin"
+                className="h-8 px-2.5 rounded-lg bg-secondary flex items-center gap-1"
+              >
+                <Icon i="shield" size={14} className="text-secondary-foreground" />
+                <span className="font-headings font-bold text-xs text-secondary-foreground">
+                  Admin
+                </span>
+              </Link>
+            )}
             <NotificationBell count={notificationCount} />
             <Link
               href="/settings"

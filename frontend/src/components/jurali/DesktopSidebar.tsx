@@ -7,6 +7,7 @@ import { Icon } from './Icon';
 import { AnimatedNumber } from './AnimatedNumber';
 import { CLIENT_FREE_TIER_LIMIT } from '@/lib/server/jurali/client-limits';
 import { hoverLift, tapScale } from '@/lib/motion';
+import { useAuth } from '@/contexts/AuthContext';
 
 // Desktop (lg+) sidebar shared by /clients, /dashboard, /debts/new and
 // /stats — Banani's "Dashboard Desktop" screen family, scoped to these
@@ -47,6 +48,8 @@ export function DesktopSidebar({
   isPremium,
 }: DesktopSidebarProps) {
   const pathname = usePathname();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
   const firstName = fullName?.trim().split(/\s+/)[0] || displayName;
   // "Débiteurs" represents the whole debtor-list experience, which both
   // /clients and /dashboard now render identically at lg+ (see
@@ -123,6 +126,15 @@ export function DesktopSidebar({
           <Icon i="bar-chart-2" size={18} className="text-secondary flex-shrink-0" />
           <span className="text-secondary">Statistiques</span>
         </Link>
+        {isAdmin && (
+          <Link
+            href="/admin"
+            className="flex items-center gap-3 px-3 py-2.5 rounded-lg font-body text-sm"
+          >
+            <Icon i="shield" size={18} className="text-secondary flex-shrink-0" />
+            <span className="text-secondary">Admin</span>
+          </Link>
+        )}
       </nav>
 
       {/* "Passer à Premium" nudge (Banani's PagePremium.jsx sidebar) — real

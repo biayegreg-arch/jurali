@@ -24,6 +24,8 @@ export interface User {
   phone: string | null;
   /** Shop address — Phase 9 desktop /settings, editable via PATCH /api/auth/me. */
   address: string | null;
+  /** App-wide role: USER | ADMIN | SUPERADMIN — gates the /admin back-office. */
+  role: 'USER' | 'ADMIN' | 'SUPERADMIN';
 }
 
 interface AuthContextValue {

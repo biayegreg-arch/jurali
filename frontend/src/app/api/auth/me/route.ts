@@ -63,6 +63,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         name: true,
         phone: true,
         address: true,
+        role: true,
         oauthAccounts: { select: { provider: true } },
       },
     });
@@ -94,6 +95,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       name: dbUser?.name ?? null,
       phone: dbUser?.phone ?? null,
       address: dbUser?.address ?? null,
+      role: dbUser?.role ?? 'USER',
     };
 
     return NextResponse.json({ user }, { status: 200, headers: { 'x-request-id': ctx.requestId } });
