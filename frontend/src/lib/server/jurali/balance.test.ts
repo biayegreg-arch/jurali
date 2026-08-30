@@ -4,6 +4,7 @@ import {
   computeDebtStatuses,
   computeOverdueBalance,
   computePaymentProgress,
+  currentCycleTransactions,
   isOverdue,
   listOverdueDebts,
   oldestUnpaidDebtDate,
@@ -358,5 +359,61 @@ describe('computePaymentProgress', () => {
         },
       ],
     });
+  });
+});
+
+describe('currentCycleTransactions', () => {
+  it('returns an empty list for no transactions', () => {
+    expect(currentCycleTransactions([])).toEqual([]);
+  });
+
+  it('returns everything, chronologically, when the balance has never hit 0', () => {
+    const d1 = { id: 'd1', type: 'DEBT' as const, amountFcfa: 10_000, createdAt: day(10) };
+    const p1 = { id: 'p1', type: 'PAYMENT' as const, amountFcfa: 3_000, createdAt: day(5) };
+    expect(currentCycleTransactions([p1, d1])).toEqual([d1, p1]);
+  });
+
+  it('drops a fully-settled debt/payment pair once the balance returns to 0', () => {
+    const oldDebt = { id: 'd1', type: 'DEBT' as const, amountFcfa: 10_000, createdAt: day(20) };
+    const oldPayment = {
+      id: 'p1',
+      type: 'PAYMENT' as const,
+      amountFcfa: 10_000,
+      createdAt: day(15),
+    };
+    const newDebt = { id: 'd2', type: 'DEBT' as const, amountFcfa: 5_000, createdAt: day(1) };
+    expect(currentCycleTransactions([oldDebt, oldPayment, newDebt])).toEqual([newDebt]);
+  });
+
+  it('excludes the settling payment itself from the new cycle', () => {
+    const debt = { id: 'd1', type: 'DEBT' as const, amountFcfa: 10_000, createdAt: day(10) };
+    const settlingPayment = {
+      id: 'p1',
+      type: 'PAYMENT' as const,
+      amountFcfa: 10_000,
+      createdAt: day(5),
+    };
+    expect(currentCycleTransactions([debt, settlingPayment])).toEqual([]);
+  });
+
+  it('scopes to the LAST full settlement across multiple closed cycles', () => {
+    const cycle1Debt = { id: 'd1', type: 'DEBT' as const, amountFcfa: 5_000, createdAt: day(30) };
+    const cycle1Payment = {
+      id: 'p1',
+      type: 'PAYMENT' as const,
+      amountFcfa: 5_000,
+      createdAt: day(25),
+    };
+    const cycle2Debt = { id: 'd2', type: 'DEBT' as const, amountFcfa: 8_000, createdAt: day(20) };
+    const cycle2Payment = {
+      id: 'p2',
+      type: 'PAYMENT' as const,
+      amountFcfa: 8_000,
+      createdAt: day(15),
+    };
+    const cycle3Debt = { id: 'd3', type: 'DEBT' as const, amountFcfa: 2_000, createdAt: day(1) };
+    expect(
+      currentCycleTransactions([cycle1Debt, cycle1Payment, cycle2Debt, cycle2Payment, cycle3Debt]),
+    ).toEqual([cycle3Debt]);
   });
 });

@@ -195,13 +195,39 @@ export interface IdentifiedTransaction extends AgingTransaction {
 }
 
 /**
- * Client-wide payment progress (fiche client "Suivi des paiements") — total
- * ever borrowed vs. current outstanding balance, plus every payment's
- * running effect on that balance. Deliberately whole-client, not per-debt:
- * an earlier FIFO version scoped this to only the oldest unpaid debt, which
- * meant "Montant initial" didn't grow when a new debt was added — confirmed
- * with the user (2026-08-30) that they expect the client's running total,
- * not a single debt's. Returns null once the balance is fully settled
+ * Transactions belonging to the client's CURRENT debt cycle — every
+ * transaction strictly after the most recent moment the running balance
+ * touched exactly 0 (a full settlement). Once a client clears everything,
+ * the next debt starts fresh: `computeClientBalance`/full history/PDF
+ * export are unaffected (nothing is deleted), but cycle-scoped stats
+ * (payment progress, debt count, amount paid this cycle) reset instead of
+ * carrying old, already-settled activity forward — confirmed with the user
+ * (2026-08-30) that a fully paid-off client should look "clean" again for
+ * their next debt, without losing the closed-out history elsewhere.
+ * Returns the full list unchanged if the balance has never yet hit 0.
+ */
+export function currentCycleTransactions<T extends BalanceTransaction & { createdAt: Date }>(
+  transactions: T[],
+): T[] {
+  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  let running = 0;
+  let cutoff = 0;
+  sorted.forEach((tx, i) => {
+    running += tx.type === 'DEBT' ? tx.amountFcfa : -tx.amountFcfa;
+    if (running === 0) cutoff = i + 1;
+  });
+  return sorted.slice(cutoff);
+}
+
+/**
+ * Aggregate payment progress over the given transactions (fiche client
+ * "Suivi des paiements") — total borrowed vs. outstanding balance, plus
+ * every payment's running effect on that balance. Deliberately a plain sum
+ * over whatever it's handed, not per-debt FIFO: an earlier version scoped
+ * this to only the oldest unpaid debt, which meant "Montant initial" didn't
+ * grow when a new debt was added. Callers pass `currentCycleTransactions`'
+ * output to scope this to "since the last full settlement" rather than the
+ * client's entire lifetime. Returns null once the balance is fully settled
  * (nothing left to track).
  */
 export function computePaymentProgress(

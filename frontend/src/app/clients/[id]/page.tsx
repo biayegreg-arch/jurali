@@ -24,9 +24,11 @@ import {
   computeDebtStatuses,
   computeOverdueBalance,
   computePaymentProgress,
+  currentCycleTransactions,
   oldestUnpaidDebtDate,
   type DebtTransaction,
   type DebtStatus,
+  type IdentifiedTransaction,
   type PaymentProgress,
 } from '@/lib/server/jurali/balance';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
@@ -209,38 +211,37 @@ interface FicheDerived {
 }
 
 function deriveFicheData(client: ClientDetail): FicheDerived {
-  const debts: DebtTransaction[] = client.transactions
-    .filter((t): t is ClientTransaction & { type: 'DEBT' } => t.type === 'DEBT')
-    .map((t) => ({
-      id: t.id,
-      type: 'DEBT',
-      amountFcfa: t.amountFcfa,
-      createdAt: new Date(t.createdAt),
-    }));
-  const debtStatuses = computeDebtStatuses(debts);
-  const debtCount = debts.length;
-  const overdueCount = [...debtStatuses.values()].filter((s) => s === 'OVERDUE').length;
-  const totalPaidFcfa = client.transactions
-    .filter((t) => t.type === 'PAYMENT')
-    .reduce((sum, t) => sum + t.amountFcfa, 0);
-
-  const aging = client.transactions.map((t) => ({
+  const allTx: IdentifiedTransaction[] = client.transactions.map((t) => ({
+    id: t.id,
     type: t.type,
     amountFcfa: t.amountFcfa,
     createdAt: new Date(t.createdAt),
   }));
-  const overdueBalanceFcfa = computeOverdueBalance(aging);
-  const oldest = oldestUnpaidDebtDate(aging);
+
+  const debts: DebtTransaction[] = allTx.filter((t): t is DebtTransaction => t.type === 'DEBT');
+  const debtStatuses = computeDebtStatuses(debts);
+  const overdueCount = [...debtStatuses.values()].filter((s) => s === 'OVERDUE').length;
+
+  // Scoped to the client's CURRENT debt cycle (since the last time their
+  // balance hit exactly 0) — once fully paid off, these reset for the next
+  // debt instead of carrying old, already-settled activity forward. Full
+  // history stays intact below in "Historique des dettes" (confirmed with
+  // the user 2026-08-30).
+  const cycleTx = currentCycleTransactions(allTx);
+  const debtCount = cycleTx.filter((t) => t.type === 'DEBT').length;
+  const totalPaidFcfa = cycleTx
+    .filter((t) => t.type === 'PAYMENT')
+    .reduce((sum, t) => sum + t.amountFcfa, 0);
+  const paymentProgress = computePaymentProgress(cycleTx);
+
+  const overdueBalanceFcfa = computeOverdueBalance(allTx);
+  const oldest = oldestUnpaidDebtDate(allTx);
   const nextEligibleReminderDate = oldest
     ? new Date(oldest.getTime() + AUTO_REMINDER_THRESHOLD_DAYS * 24 * 60 * 60 * 1000)
     : null;
 
   const history = [...client.transactions].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
-  );
-
-  const paymentProgress = computePaymentProgress(
-    client.transactions.map((t) => ({ ...t, createdAt: new Date(t.createdAt) })),
   );
 
   return {
