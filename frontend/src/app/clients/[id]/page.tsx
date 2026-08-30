@@ -22,12 +22,12 @@ import { formatDateFr } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
 import {
   computeDebtStatuses,
-  computeOldestDebtProgress,
   computeOverdueBalance,
+  computePaymentProgress,
   oldestUnpaidDebtDate,
   type DebtTransaction,
   type DebtStatus,
-  type OldestDebtProgress,
+  type PaymentProgress,
 } from '@/lib/server/jurali/balance';
 import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
 import { downloadClientHistoryPdf } from '@/lib/jurali-pdf';
@@ -205,7 +205,7 @@ interface FicheDerived {
   overdueBalanceFcfa: number;
   nextEligibleReminderDate: Date | null;
   history: ClientTransaction[];
-  oldestDebtProgress: OldestDebtProgress | null;
+  paymentProgress: PaymentProgress | null;
 }
 
 function deriveFicheData(client: ClientDetail): FicheDerived {
@@ -239,7 +239,7 @@ function deriveFicheData(client: ClientDetail): FicheDerived {
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
 
-  const oldestDebtProgress = computeOldestDebtProgress(
+  const paymentProgress = computePaymentProgress(
     client.transactions.map((t) => ({ ...t, createdAt: new Date(t.createdAt) })),
   );
 
@@ -251,7 +251,7 @@ function deriveFicheData(client: ClientDetail): FicheDerived {
     overdueBalanceFcfa,
     nextEligibleReminderDate,
     history,
-    oldestDebtProgress,
+    paymentProgress,
   };
 }
 
@@ -389,7 +389,7 @@ function MobileFicheBody({
       )}
 
       <PaymentTrackingCard
-        progress={derived.oldestDebtProgress}
+        progress={derived.paymentProgress}
         clientId={client.id}
         onRefresh={onRefresh}
       />
@@ -546,7 +546,7 @@ function DesktopFicheBody({
       {/* Right: payment tracking + debt history table */}
       <div className="flex-1 flex flex-col gap-4 min-w-0">
         <PaymentTrackingCard
-          progress={derived.oldestDebtProgress}
+          progress={derived.paymentProgress}
           clientId={client.id}
           onRefresh={onRefresh}
         />
@@ -768,16 +768,16 @@ function ReminderCard({
 }
 
 // "Suivi des paiements" (Phase 9, FicheClient.jsx re-fetch 2026-08-26) —
-// tracks the CLIENT's current oldest unpaid debt specifically (FIFO means
-// only one debt is ever "being paid down" at a time, see
-// computeOldestDebtProgress). Not Premium-gated: paying down debts is core
-// functionality, same tier as the existing "Total dû"/"Total payé" tiles.
+// whole-client running total (all debts ever recorded vs. current
+// outstanding balance), see computePaymentProgress. Not Premium-gated:
+// paying down debts is core functionality, same tier as the existing
+// "Total dû"/"Total payé" tiles.
 function PaymentTrackingCard({
   progress,
   clientId,
   onRefresh,
 }: {
-  progress: OldestDebtProgress | null;
+  progress: PaymentProgress | null;
   clientId: string;
   onRefresh: () => void;
 }) {
@@ -815,17 +815,9 @@ function PaymentTrackingCard({
 
       <div className="grid grid-cols-1 gap-2 lg:grid-cols-3 lg:gap-3 mb-4">
         <div className="bg-input rounded-lg px-3 py-3">
-          {/* Not the client's total debt — this card tracks ONE debt at a
-              time (FIFO: the oldest unpaid one). Naming it "Montant initial"
-              without the date read as a running total that should grow with
-              every new debt, which it deliberately doesn't (confirmed with
-              the user 2026-08-30). */}
-          <div className="text-xs text-muted-foreground mb-1">Dette la plus ancienne</div>
+          <div className="text-xs text-muted-foreground mb-1">Montant initial</div>
           <div className="font-headings font-bold text-base text-foreground">
             {formatPrice(progress.originalAmountFcfa)} FCFA
-          </div>
-          <div className="text-xs text-muted-foreground mt-0.5">
-            {formatDateFr(progress.createdAt.toISOString())}
           </div>
         </div>
         <div className="bg-input rounded-lg px-3 py-3">

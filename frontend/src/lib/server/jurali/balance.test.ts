@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   computeClientBalance,
   computeDebtStatuses,
-  computeOldestDebtProgress,
   computeOverdueBalance,
+  computePaymentProgress,
   isOverdue,
   listOverdueDebts,
   oldestUnpaidDebtDate,
@@ -262,9 +262,9 @@ describe('listOverdueDebts', () => {
   });
 });
 
-describe('computeOldestDebtProgress', () => {
+describe('computePaymentProgress', () => {
   it('returns null when there are no transactions', () => {
-    expect(computeOldestDebtProgress([])).toBeNull();
+    expect(computePaymentProgress([])).toBeNull();
   });
 
   it('returns null once every debt is fully paid off', () => {
@@ -272,38 +272,31 @@ describe('computeOldestDebtProgress', () => {
       { id: 'd1', type: 'DEBT' as const, amountFcfa: 12_500, createdAt: day(10) },
       { id: 'p1', type: 'PAYMENT' as const, amountFcfa: 12_500, createdAt: day(2) },
     ];
-    expect(computeOldestDebtProgress(transactions)).toBeNull();
+    expect(computePaymentProgress(transactions)).toBeNull();
   });
 
   it('tracks a fresh unpaid debt with no payments yet', () => {
-    const debtDate = day(5);
     const transactions = [
-      { id: 'd1', type: 'DEBT' as const, amountFcfa: 20_000, createdAt: debtDate },
+      { id: 'd1', type: 'DEBT' as const, amountFcfa: 20_000, createdAt: day(5) },
     ];
-    expect(computeOldestDebtProgress(transactions)).toEqual({
-      debtId: 'd1',
+    expect(computePaymentProgress(transactions)).toEqual({
       originalAmountFcfa: 20_000,
       remainingFcfa: 20_000,
-      createdAt: debtDate,
       events: [],
     });
   });
 
-  it('records each payment event against the oldest debt with a running remaining balance', () => {
-    const debtDate = day(10);
+  it('records each payment with the whole-client running remaining balance', () => {
     const payment1Date = day(5);
     const payment2Date = day(1);
     const transactions = [
-      { id: 'd1', type: 'DEBT' as const, amountFcfa: 20_000, createdAt: debtDate },
+      { id: 'd1', type: 'DEBT' as const, amountFcfa: 20_000, createdAt: day(10) },
       { id: 'p1', type: 'PAYMENT' as const, amountFcfa: 10_000, createdAt: payment1Date },
       { id: 'p2', type: 'PAYMENT' as const, amountFcfa: 5_000, createdAt: payment2Date },
     ];
-    const progress = computeOldestDebtProgress(transactions);
-    expect(progress).toEqual({
-      debtId: 'd1',
+    expect(computePaymentProgress(transactions)).toEqual({
       originalAmountFcfa: 20_000,
       remainingFcfa: 5_000,
-      createdAt: debtDate,
       events: [
         {
           paymentId: 'p1',
@@ -321,37 +314,46 @@ describe('computeOldestDebtProgress', () => {
     });
   });
 
-  it('targets the new oldest debt once the previous one is fully paid (FIFO rollover)', () => {
+  it('adds a new debt straight into the running total, even after a partial payment', () => {
+    // Regression test: an earlier per-debt (FIFO) version left "Montant
+    // initial" unchanged when a new debt was recorded, since it only ever
+    // tracked the single oldest unpaid debt. The whole-client total must
+    // grow immediately.
+    const payment1Date = day(15);
     const transactions = [
       { id: 'd1', type: 'DEBT' as const, amountFcfa: 10_000, createdAt: day(20) },
-      { id: 'd2', type: 'DEBT' as const, amountFcfa: 8_000, createdAt: day(10) },
-      { id: 'p1', type: 'PAYMENT' as const, amountFcfa: 10_000, createdAt: day(5) },
+      { id: 'p1', type: 'PAYMENT' as const, amountFcfa: 4_000, createdAt: payment1Date },
+      { id: 'd2', type: 'DEBT' as const, amountFcfa: 30_000, createdAt: day(1) },
     ];
-    const progress = computeOldestDebtProgress(transactions);
-    expect(progress?.debtId).toBe('d2');
-    expect(progress?.remainingFcfa).toBe(8_000);
-    expect(progress?.events).toEqual([]);
+    expect(computePaymentProgress(transactions)).toEqual({
+      originalAmountFcfa: 40_000,
+      remainingFcfa: 36_000,
+      events: [
+        {
+          paymentId: 'p1',
+          amountAppliedFcfa: 4_000,
+          remainingAfterFcfa: 6_000,
+          createdAt: payment1Date,
+        },
+      ],
+    });
   });
 
-  it('splits a single payment across two debts, only attributing the second slice to the new oldest debt', () => {
-    const debt2Date = day(10);
+  it('sums multiple unpaid debts into originalAmountFcfa and remainingFcfa', () => {
     const paymentDate = day(5);
     const transactions = [
       { id: 'd1', type: 'DEBT' as const, amountFcfa: 10_000, createdAt: day(20) },
-      { id: 'd2', type: 'DEBT' as const, amountFcfa: 8_000, createdAt: debt2Date },
-      { id: 'p1', type: 'PAYMENT' as const, amountFcfa: 13_000, createdAt: paymentDate },
+      { id: 'd2', type: 'DEBT' as const, amountFcfa: 8_000, createdAt: day(10) },
+      { id: 'p1', type: 'PAYMENT' as const, amountFcfa: 3_000, createdAt: paymentDate },
     ];
-    const progress = computeOldestDebtProgress(transactions);
-    expect(progress).toEqual({
-      debtId: 'd2',
-      originalAmountFcfa: 8_000,
-      remainingFcfa: 5_000,
-      createdAt: debt2Date,
+    expect(computePaymentProgress(transactions)).toEqual({
+      originalAmountFcfa: 18_000,
+      remainingFcfa: 15_000,
       events: [
         {
           paymentId: 'p1',
           amountAppliedFcfa: 3_000,
-          remainingAfterFcfa: 5_000,
+          remainingAfterFcfa: 15_000,
           createdAt: paymentDate,
         },
       ],

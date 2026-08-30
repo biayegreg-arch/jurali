@@ -184,11 +184,9 @@ export function listOverdueDebts(
     }));
 }
 
-export interface OldestDebtProgress {
-  debtId: string;
+export interface PaymentProgress {
   originalAmountFcfa: number;
   remainingFcfa: number;
-  createdAt: Date;
   events: DebtPaymentEvent[];
 }
 
@@ -197,28 +195,40 @@ export interface IdentifiedTransaction extends AgingTransaction {
 }
 
 /**
- * FIFO paydown progress of the client's current oldest unpaid debt (Phase 9,
- * fiche client "Suivi des paiements") — which payments contributed to it,
- * how much of each was applied, and the running remaining balance after
- * each. Returns null once every debt is fully paid (nothing to track).
- *
- * Not scoped to a specific debt id on purpose: FIFO means only one debt is
- * ever "being paid down" at a time, so "the oldest unpaid debt" is the only
- * sensible target — the same reasoning `oldestUnpaidDebtDate` already uses.
+ * Client-wide payment progress (fiche client "Suivi des paiements") — total
+ * ever borrowed vs. current outstanding balance, plus every payment's
+ * running effect on that balance. Deliberately whole-client, not per-debt:
+ * an earlier FIFO version scoped this to only the oldest unpaid debt, which
+ * meant "Montant initial" didn't grow when a new debt was added — confirmed
+ * with the user (2026-08-30) that they expect the client's running total,
+ * not a single debt's. Returns null once the balance is fully settled
+ * (nothing left to track).
  */
-export function computeOldestDebtProgress(
+export function computePaymentProgress(
   transactions: IdentifiedTransaction[],
-): OldestDebtProgress | null {
-  const unpaid = allocateFifo(transactions);
-  const target = unpaid[0];
-  if (!target) return null;
-  return {
-    debtId: target.id!,
-    originalAmountFcfa: target.originalAmount,
-    remainingFcfa: target.amountRemaining,
-    createdAt: target.createdAt,
-    events: target.events,
-  };
+): PaymentProgress | null {
+  const sorted = [...transactions].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  let originalAmountFcfa = 0;
+  let remainingFcfa = 0;
+  const events: DebtPaymentEvent[] = [];
+
+  for (const tx of sorted) {
+    if (tx.type === 'DEBT') {
+      originalAmountFcfa += tx.amountFcfa;
+      remainingFcfa += tx.amountFcfa;
+      continue;
+    }
+    remainingFcfa -= tx.amountFcfa;
+    events.push({
+      paymentId: tx.id,
+      amountAppliedFcfa: tx.amountFcfa,
+      remainingAfterFcfa: remainingFcfa,
+      createdAt: tx.createdAt,
+    });
+  }
+
+  if (remainingFcfa <= 0) return null;
+  return { originalAmountFcfa, remainingFcfa, events };
 }
 
 export function isOverdue(
