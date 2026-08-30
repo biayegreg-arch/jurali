@@ -1,11 +1,14 @@
-'use client';
-
 // Jurali — Landing page (public marketing home). Reproduces Banani's
 // LandingPage.jsx; see .planning/banani/landing-page.md for the routing
 // decision (`/` moved from Dashboard to this screen — Dashboard is now at
 // `/dashboard`) and copy/interaction fixes (trial language dropped, dead nav
 // links removed, "Voir la démo" repointed to a real in-page anchor).
+//
+// Server Component (no interactivity needed) so it can read the per-request
+// CSP nonce (middleware.ts) and stamp it on the JSON-LD <script> below —
+// script-src covers every <script> tag regardless of `type`.
 import Link from 'next/link';
+import { headers } from 'next/headers';
 import { Icon } from '@/components/jurali/Icon';
 import { JuraliMark } from '@/components/jurali/JuraliMark';
 
@@ -107,11 +110,14 @@ const JSON_LD = {
   aggregateRating: { '@type': 'AggregateRating', ratingValue: '4.8', ratingCount: '2500' },
 };
 
-export default function LandingPage() {
+export default async function LandingPage() {
+  const nonce = (await headers()).get('x-nonce') ?? undefined;
+
   return (
     <div className="bg-background font-body flex flex-col">
       <script
         type="application/ld+json"
+        nonce={nonce}
         dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }}
       />
       {/* === HEADER / NAV === */}
