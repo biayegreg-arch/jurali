@@ -85,7 +85,7 @@ export default function AdminOverviewPage() {
           <AdminKpiCard
             label="Abonnés Premium"
             value={kpis?.premiumCount ?? 0}
-            icon="zap"
+            icon="crown"
             iconBg="bg-primary"
             iconColor="text-primary-foreground"
             format={(n) => n.toLocaleString('fr-FR')}
@@ -217,7 +217,7 @@ export default function AdminOverviewPage() {
                       <div className="flex-shrink-0">
                         {u.isPremium ? (
                           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-primary text-primary-foreground font-bold text-xs">
-                            <Icon i="zap" size={10} />
+                            <Icon i="crown" size={10} />
                             Premium
                           </span>
                         ) : (

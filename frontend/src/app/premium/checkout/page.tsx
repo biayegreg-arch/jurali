@@ -144,7 +144,7 @@ export default function PremiumCheckoutPage() {
         whileTap={tapScale}
         className="w-full flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-3.5 rounded-xl disabled:opacity-60"
       >
-        <Icon i="zap" size={18} />
+        <Icon i="crown" size={18} />
         {submitting ? 'Redirection…' : 'Payer maintenant'}
       </motion.button>
     </div>

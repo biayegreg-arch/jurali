@@ -85,7 +85,19 @@ export function DesktopSidebar({
                 multi-tenancy/roles) — "Propriétaire" is always accurate,
                 not a fabricated placeholder like a fake avatar photo
                 would be. */}
-            <div className="text-xs text-secondary">Propriétaire</div>
+            <div className="flex items-center gap-1.5 mt-0.5">
+              <span className="text-xs text-secondary">Propriétaire</span>
+              {isPremium ? (
+                <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md bg-accent text-accent-foreground font-bold text-[10px] leading-none flex-shrink-0">
+                  <Icon i="crown" size={8} />
+                  Premium
+                </span>
+              ) : (
+                <span className="inline-flex items-center px-1.5 py-0.5 rounded-md bg-primary-foreground/10 border border-primary-foreground/20 text-secondary font-bold text-[10px] leading-none flex-shrink-0">
+                  Gratuit
+                </span>
+              )}
+            </div>
           </div>
         </Link>
       </div>
@@ -148,7 +160,7 @@ export function DesktopSidebar({
           className="mx-4 mt-8 rounded-xl p-4 bg-primary-foreground/10 flex flex-col gap-2"
         >
           <div className="flex items-center gap-2">
-            <Icon i="zap" size={15} className="text-accent flex-shrink-0" />
+            <Icon i="crown" size={15} className="text-accent flex-shrink-0" />
             <span className="font-headings font-bold text-xs text-primary-foreground">
               Passer à Premium
             </span>

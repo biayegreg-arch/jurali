@@ -136,7 +136,7 @@ export default function PremiumManagePage() {
               <div className="bg-primary rounded-2xl p-6">
                 <div className="flex items-center justify-between mb-5">
                   <div className="flex items-center gap-2">
-                    <Icon i="zap" size={16} className="text-accent" />
+                    <Icon i="crown" size={16} className="text-accent" />
                     <span className="font-headings font-bold text-sm text-secondary uppercase tracking-widest">
                       Plan actuel
                     </span>

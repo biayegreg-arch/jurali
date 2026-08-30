@@ -659,7 +659,7 @@ function SubscriptionSection() {
         className="w-full flex items-center gap-4 px-5 py-4"
       >
         <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-          <Icon i="zap" size={18} className="text-primary" />
+          <Icon i="crown" size={18} className="text-primary" />
         </div>
         <div className="flex-1 min-w-0 text-left">
           <div className="font-headings font-bold text-sm text-foreground">

@@ -52,7 +52,7 @@ export default function AdminRevenuePage() {
           <AdminKpiCard
             label="Abonnés actifs"
             value={data?.activeSubscriptionCount ?? 0}
-            icon="zap"
+            icon="crown"
             iconBg="bg-primary"
             iconColor="text-primary-foreground"
             format={(n) => n.toLocaleString('fr-FR')}

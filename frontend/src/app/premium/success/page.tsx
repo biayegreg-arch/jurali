@@ -17,7 +17,7 @@ export default function PremiumSuccessPage() {
     <div className="min-h-dvh bg-background font-body flex items-center justify-center px-4 py-10">
       <div className="w-full max-w-md text-center flex flex-col items-center gap-4">
         <div className="w-16 h-16 rounded-2xl bg-secondary flex items-center justify-center">
-          <Icon i="zap" size={28} className="text-primary" />
+          <Icon i="crown" size={28} className="text-primary" />
         </div>
         <div className="font-headings font-bold text-2xl text-foreground">Paiement reçu</div>
         <p className="text-sm text-muted-foreground">

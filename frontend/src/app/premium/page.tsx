@@ -64,7 +64,7 @@ export default function PremiumPage() {
           <div className="flex-1 flex flex-col gap-6 min-w-0">
             <div className="bg-primary rounded-2xl px-6 py-6">
               <div className="flex items-center gap-2 mb-3">
-                <Icon i="zap" size={20} className="text-accent" />
+                <Icon i="crown" size={20} className="text-accent" />
                 <span className="font-headings font-bold text-base text-primary-foreground uppercase tracking-wide">
                   Premium
                 </span>
@@ -135,7 +135,7 @@ export default function PremiumPage() {
                   href="/premium/checkout"
                   className="mt-auto w-full flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-3.5 rounded-xl"
                 >
-                  <Icon i="zap" size={18} />
+                  <Icon i="crown" size={18} />
                   Passer à Premium
                 </Link>
               </div>
