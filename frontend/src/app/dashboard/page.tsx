@@ -127,6 +127,8 @@ export default function DashboardPage() {
             overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
             loading={dashboardLoading}
             notificationCount={notificationCount}
+            totalClientCount={dashboard?.totalClientCount ?? 0}
+            isPremium={subscription?.isActive ?? false}
           />
 
           <div className="max-w-2xl w-full mx-auto flex flex-col">

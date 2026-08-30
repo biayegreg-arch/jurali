@@ -815,9 +815,17 @@ function PaymentTrackingCard({
 
       <div className="grid grid-cols-1 gap-2 lg:grid-cols-3 lg:gap-3 mb-4">
         <div className="bg-input rounded-lg px-3 py-3">
-          <div className="text-xs text-muted-foreground mb-1">Montant initial</div>
+          {/* Not the client's total debt — this card tracks ONE debt at a
+              time (FIFO: the oldest unpaid one). Naming it "Montant initial"
+              without the date read as a running total that should grow with
+              every new debt, which it deliberately doesn't (confirmed with
+              the user 2026-08-30). */}
+          <div className="text-xs text-muted-foreground mb-1">Dette la plus ancienne</div>
           <div className="font-headings font-bold text-base text-foreground">
             {formatPrice(progress.originalAmountFcfa)} FCFA
+          </div>
+          <div className="text-xs text-muted-foreground mt-0.5">
+            {formatDateFr(progress.createdAt.toISOString())}
           </div>
         </div>
         <div className="bg-input rounded-lg px-3 py-3">

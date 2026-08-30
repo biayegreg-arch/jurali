@@ -94,6 +94,8 @@ export default function StatsPage() {
             overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
             loading={dashboardLoading}
             notificationCount={notificationCount}
+            totalClientCount={dashboard?.totalClientCount ?? 0}
+            isPremium={isPremium}
           />
           <div className="max-w-2xl w-full mx-auto flex flex-col px-4 pt-5 pb-8">
             <div className="font-headings font-bold text-xl text-foreground mb-4">Statistiques</div>

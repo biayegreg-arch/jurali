@@ -10,6 +10,7 @@ import { SummaryStat } from './SummaryStat';
 import { AnimatedNumber } from './AnimatedNumber';
 import { useApi } from '@/lib/useApi';
 import { useAuth } from '@/contexts/AuthContext';
+import { CLIENT_FREE_TIER_LIMIT } from '@/lib/server/jurali/client-limits';
 
 export interface TopBarProps {
   /** Shop name (falls back to the account name, then email) — never the
@@ -25,6 +26,11 @@ export interface TopBarProps {
    * simultaneous `/api/notifications/count` fetches (useApi's cache isn't
    * dedup'd across concurrently-mounting instances). Omit to self-fetch. */
   notificationCount?: number;
+  /** Every Client row regardless of balance — drives the free-tier "Passer
+   * à Premium" nudge, mirroring DesktopSidebar's (mobile had none before,
+   * a real parity gap since this is the free→paid upsell surface). */
+  totalClientCount?: number;
+  isPremium?: boolean;
 }
 
 export function TopBar({
@@ -35,6 +41,8 @@ export function TopBar({
   overdueDebtorCount,
   loading,
   notificationCount,
+  totalClientCount = 0,
+  isPremium = false,
 }: TopBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'ADMIN' || user?.role === 'SUPERADMIN';
@@ -80,12 +88,42 @@ export function TopBar({
             sub={loading ? '' : `${debtorCount} clients`}
             accent
           />
-          <SummaryStat
-            label="En retard"
-            value={loading ? '…' : <AnimatedNumber value={overdueDueFcfa} />}
-            sub={loading ? '' : `${overdueDebtorCount} urgents`}
-          />
+          {/* Only entry point to /debts/overdue on mobile — DesktopSidebar's
+              "En retard" nav item has no mobile equivalent otherwise, which
+              made that whole page unreachable from a phone. */}
+          <Link href="/debts/overdue" className="flex-1">
+            <SummaryStat
+              label="En retard"
+              value={loading ? '…' : <AnimatedNumber value={overdueDueFcfa} />}
+              sub={loading ? '' : `${overdueDebtorCount} urgents`}
+            />
+          </Link>
         </div>
+
+        {!isPremium && (
+          <Link
+            href="/premium"
+            className="mt-3 rounded-xl p-4 bg-primary-foreground/10 flex flex-col gap-2"
+          >
+            <div className="flex items-center gap-2">
+              <Icon i="crown" size={15} className="text-accent flex-shrink-0" />
+              <span className="font-headings font-bold text-xs text-primary-foreground">
+                Passer à Premium
+              </span>
+            </div>
+            <div className="w-full h-1 rounded-full overflow-hidden bg-primary-foreground/20">
+              <div
+                className="h-full bg-accent rounded-full"
+                style={{
+                  width: `${Math.min(100, Math.round((totalClientCount / CLIENT_FREE_TIER_LIMIT) * 100))}%`,
+                }}
+              />
+            </div>
+            <p className="text-xs text-secondary">
+              {totalClientCount} / {CLIENT_FREE_TIER_LIMIT} clients utilisés
+            </p>
+          </Link>
+        )}
       </div>
     </div>
   );
