@@ -80,6 +80,15 @@ export function AdminUserManagePanel({
   const subAction = useAsyncAction();
   const [confirm, setConfirm] = useState<PendingConfirm | null>(null);
 
+  // Mirrors `cancelSubscription`'s optimistic update below: `user` is only
+  // the snapshot passed in when the panel opened, and onChanged() refreshes
+  // the LIST in the background, not this already-open modal — without this
+  // local mirror the role <select> and status buttons kept showing the old
+  // value even after a successful change, since the panel never re-reads
+  // the refreshed row.
+  const [role, setRole] = useState<UserRole>(user.role);
+  const [status, setStatusValue] = useState<UserStatus>(user.status);
+
   const [sub, setSub] = useState<SubscriptionSummary | null | undefined>(undefined); // undefined = loading
 
   useEffect(() => {
@@ -102,21 +111,26 @@ export function AdminUserManagePanel({
     return message;
   }
 
-  async function changeRole(role: UserRole) {
+  async function changeRole(nextRole: UserRole) {
     await roleAction.run(async () => {
-      await api(`/api/admin/users/${user.id}/role`, { method: 'PATCH', body: { role } });
+      await api(`/api/admin/users/${user.id}/role`, { method: 'PATCH', body: { role: nextRole } });
+      setRole(nextRole);
       toast('Rôle mis à jour.', 'success');
       onChanged();
     }, reportError);
   }
 
-  async function setStatus(status: UserStatus) {
+  async function setStatus(nextStatus: UserStatus) {
     await statusAction.run(async () => {
-      await api(`/api/admin/users/${user.id}/status`, { method: 'PATCH', body: { status } });
+      await api(`/api/admin/users/${user.id}/status`, {
+        method: 'PATCH',
+        body: { status: nextStatus },
+      });
+      setStatusValue(nextStatus);
       toast(
-        status === 'ACTIVE'
+        nextStatus === 'ACTIVE'
           ? 'Compte réactivé.'
-          : status === 'SUSPENDED'
+          : nextStatus === 'SUSPENDED'
             ? 'Compte suspendu.'
             : 'Compte supprimé.',
         'success',
@@ -171,18 +185,11 @@ export function AdminUserManagePanel({
 
             <div className="flex flex-col gap-5 p-5">
               <div className="flex items-center gap-2 flex-wrap">
+                <AdminStatusPill label={STATUS_LABEL[status]} tone={STATUS_TONE[status]} />
                 <AdminStatusPill
-                  label={STATUS_LABEL[user.status]}
-                  tone={STATUS_TONE[user.status]}
-                />
-                <AdminStatusPill
-                  label={user.role}
+                  label={role}
                   tone={
-                    user.role === 'SUPERADMIN'
-                      ? 'warning'
-                      : user.role === 'ADMIN'
-                        ? 'positive'
-                        : 'neutral'
+                    role === 'SUPERADMIN' ? 'warning' : role === 'ADMIN' ? 'positive' : 'neutral'
                   }
                 />
                 <span className="text-xs text-muted-foreground">
@@ -196,7 +203,7 @@ export function AdminUserManagePanel({
                 </div>
                 {isSuperadmin ? (
                   <select
-                    value={user.role}
+                    value={role}
                     disabled={roleAction.pending}
                     onChange={(e) => void changeRole(e.target.value as UserRole)}
                     className="text-sm bg-input border border-border rounded-lg px-3 py-2 text-foreground"
@@ -217,7 +224,7 @@ export function AdminUserManagePanel({
                   Compte
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  {user.status === 'ACTIVE' && (
+                  {status === 'ACTIVE' && (
                     <button
                       type="button"
                       disabled={statusAction.pending}
@@ -234,7 +241,7 @@ export function AdminUserManagePanel({
                       Suspendre
                     </button>
                   )}
-                  {(user.status === 'SUSPENDED' || user.status === 'DELETED') && isSuperadmin && (
+                  {(status === 'SUSPENDED' || status === 'DELETED') && isSuperadmin && (
                     <button
                       type="button"
                       disabled={statusAction.pending}
@@ -244,7 +251,7 @@ export function AdminUserManagePanel({
                       Réactiver
                     </button>
                   )}
-                  {user.status !== 'DELETED' && isSuperadmin && (
+                  {status !== 'DELETED' && isSuperadmin && (
                     <button
                       type="button"
                       disabled={statusAction.pending}
@@ -262,7 +269,7 @@ export function AdminUserManagePanel({
                     </button>
                   )}
                 </div>
-                {!isSuperadmin && user.status !== 'ACTIVE' && (
+                {!isSuperadmin && status !== 'ACTIVE' && (
                   <div className="text-xs text-muted-foreground">
                     Seul un SUPERADMIN peut réactiver ou supprimer un compte.
                   </div>

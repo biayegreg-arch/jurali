@@ -28,10 +28,13 @@ describe('getRecentSubscriptionPayments', () => {
     prismaMock.webhookLog.findMany.mockResolvedValueOnce([
       webhookLog({ id: 'wh_1', chargeId: 'ch_1', status: 'succeeded' }),
     ] as never);
-    prismaMock.subscription.findFirst.mockResolvedValueOnce({
-      planAmountFcfa: 2500,
-      owner: { email: 'a@test.local', shopName: 'Boutique A' },
-    } as never);
+    prismaMock.subscription.findMany.mockResolvedValueOnce([
+      {
+        providerChargeId: 'ch_1',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: 'Boutique A' },
+      },
+    ] as never);
 
     const events = await getRecentSubscriptionPayments(prismaMock, 10);
     expect(events).toEqual([
@@ -51,10 +54,13 @@ describe('getRecentSubscriptionPayments', () => {
       prismaMock.webhookLog.findMany.mockResolvedValueOnce([
         webhookLog({ status, chargeId: 'ch_x' }),
       ] as never);
-      prismaMock.subscription.findFirst.mockResolvedValueOnce({
-        planAmountFcfa: 2500,
-        owner: { email: 'x@test.local', shopName: null },
-      } as never);
+      prismaMock.subscription.findMany.mockResolvedValueOnce([
+        {
+          providerChargeId: 'ch_x',
+          planAmountFcfa: 2500,
+          owner: { email: 'x@test.local', shopName: null },
+        },
+      ] as never);
       const events = await getRecentSubscriptionPayments(prismaMock, 10);
       expect(events[0]?.status).toBe('FAILED');
     }
@@ -66,31 +72,44 @@ describe('getRecentSubscriptionPayments', () => {
     ] as never);
     const events = await getRecentSubscriptionPayments(prismaMock, 10);
     expect(events).toEqual([]);
-    expect(prismaMock.subscription.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.subscription.findMany).not.toHaveBeenCalled();
   });
 
   it('skips a webhook with no matching Subscription (e.g. an Order charge)', async () => {
     prismaMock.webhookLog.findMany.mockResolvedValueOnce([
       webhookLog({ status: 'succeeded', chargeId: 'ch_order' }),
     ] as never);
-    prismaMock.subscription.findFirst.mockResolvedValueOnce(null);
+    prismaMock.subscription.findMany.mockResolvedValueOnce([]);
     const events = await getRecentSubscriptionPayments(prismaMock, 10);
     expect(events).toEqual([]);
   });
 
-  it('stops once `limit` correlated events are collected', async () => {
+  it('stops once `limit` correlated events are collected, via a single batched Subscription query', async () => {
     prismaMock.webhookLog.findMany.mockResolvedValueOnce([
       webhookLog({ id: 'wh_1', chargeId: 'ch_1' }),
       webhookLog({ id: 'wh_2', chargeId: 'ch_2' }),
       webhookLog({ id: 'wh_3', chargeId: 'ch_3' }),
     ] as never);
-    prismaMock.subscription.findFirst.mockResolvedValue({
-      planAmountFcfa: 2500,
-      owner: { email: 'a@test.local', shopName: null },
-    } as never);
+    prismaMock.subscription.findMany.mockResolvedValueOnce([
+      {
+        providerChargeId: 'ch_1',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: null },
+      },
+      {
+        providerChargeId: 'ch_2',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: null },
+      },
+      {
+        providerChargeId: 'ch_3',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: null },
+      },
+    ] as never);
     const events = await getRecentSubscriptionPayments(prismaMock, 2);
     expect(events).toHaveLength(2);
-    expect(prismaMock.subscription.findFirst).toHaveBeenCalledTimes(2);
+    expect(prismaMock.subscription.findMany).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -119,10 +138,23 @@ describe('getMonthlyRevenue', () => {
         createdAt: new Date('2026-07-05T00:00:00Z'),
       }),
     ] as never);
-    prismaMock.subscription.findFirst.mockResolvedValue({
-      planAmountFcfa: 2500,
-      owner: { email: 'a@test.local', shopName: null },
-    } as never);
+    prismaMock.subscription.findMany.mockResolvedValueOnce([
+      {
+        providerChargeId: 'ch_1',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: null },
+      },
+      {
+        providerChargeId: 'ch_2',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: null },
+      },
+      {
+        providerChargeId: 'ch_3',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: null },
+      },
+    ] as never);
 
     const points = await getMonthlyRevenue(prismaMock, 3);
     expect(points).toEqual([

@@ -60,24 +60,46 @@ export async function getRecentSubscriptionPayments(
     select: { id: true, createdAt: true, payload: true },
   });
 
-  const events: SubscriptionPaymentEvent[] = [];
+  const candidates: Array<{
+    id: string;
+    createdAt: Date;
+    status: 'PAID' | 'FAILED';
+    externalId: string;
+  }> = [];
   for (const log of logs) {
-    if (events.length >= limit) break;
     const status = classifyPayloadStatus(log.payload);
     if (!status) continue;
     const externalId = extractChargeId(log.payload);
     if (!externalId) continue;
+    candidates.push({ id: log.id, createdAt: log.createdAt, status, externalId });
+  }
 
-    const sub = await prisma.subscription.findFirst({
-      where: { providerChargeId: externalId },
-      select: { planAmountFcfa: true, owner: { select: { email: true, shopName: true } } },
-    });
+  // Batch the Subscription correlation into a single query instead of one
+  // `findFirst` per webhook log (up to SCAN_LIMIT=200 sequential round
+  // trips) — this endpoint backs an admin dashboard that can be reloaded
+  // often, so 200 serial DB calls per hit was a real latency/load problem.
+  const subs = candidates.length
+    ? await prisma.subscription.findMany({
+        where: { providerChargeId: { in: candidates.map((c) => c.externalId) } },
+        select: {
+          providerChargeId: true,
+          planAmountFcfa: true,
+          owner: { select: { email: true, shopName: true } },
+        },
+      })
+    : [];
+  const subByChargeId = new Map(subs.map((s) => [s.providerChargeId, s]));
+
+  const events: SubscriptionPaymentEvent[] = [];
+  for (const c of candidates) {
+    if (events.length >= limit) break;
+    const sub = subByChargeId.get(c.externalId);
     if (!sub) continue; // an Order charge, or a renewal whose row has since moved on
 
     events.push({
-      id: log.id,
-      createdAt: log.createdAt,
-      status,
+      id: c.id,
+      createdAt: c.createdAt,
+      status: c.status,
       amountFcfa: sub.planAmountFcfa,
       ownerEmail: sub.owner.email,
       ownerShopName: sub.owner.shopName,

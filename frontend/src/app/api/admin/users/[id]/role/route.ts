@@ -61,14 +61,28 @@ export async function PATCH(
     const result: Discriminator = await prisma.$transaction(async (tx) => {
       const target = await tx.user.findUnique({
         where: { id },
-        select: { id: true, role: true },
+        select: { id: true, role: true, status: true },
       });
       if (!target) return { kind: 'NOT_FOUND' as const };
 
       // CF-09 / Pitfall 1: COUNT + UPDATE in same tx prevents the race where
-      // two concurrent demotions both see count=2 and both succeed.
-      if (target.role === 'SUPERADMIN' && parsed.data.role !== 'SUPERADMIN') {
-        const superadminCount = await tx.user.count({ where: { role: 'SUPERADMIN' } });
+      // two concurrent demotions both see count=2 and both succeed. Scoped to
+      // status: 'ACTIVE' (matching status/route.ts's own last-SUPERADMIN
+      // guard) — a SUSPENDED/DELETED SUPERADMIN can't authenticate, so
+      // counting it as "still available" let an active SUPERADMIN suspend a
+      // co-SUPERADMIN, then demote themselves, locking the console out with
+      // zero usable SUPERADMINs despite this guard reporting count=2. The
+      // guard itself only applies when target is currently ACTIVE — demoting
+      // an already-suspended/deleted SUPERADMIN's role never reduces the
+      // active-SUPERADMIN count, so it shouldn't be blocked by it.
+      if (
+        target.role === 'SUPERADMIN' &&
+        target.status === 'ACTIVE' &&
+        parsed.data.role !== 'SUPERADMIN'
+      ) {
+        const superadminCount = await tx.user.count({
+          where: { role: 'SUPERADMIN', status: 'ACTIVE' },
+        });
         if (superadminCount <= 1) {
           return { kind: 'LAST_SUPERADMIN' as const };
         }

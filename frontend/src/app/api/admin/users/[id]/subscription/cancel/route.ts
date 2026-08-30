@@ -46,7 +46,17 @@ export async function POST(
       );
     }
 
+    // Re-check status inside the transaction (not just the pre-tx `existing`
+    // read above): two concurrent cancel calls can both pass the check
+    // above before either commits, and without this re-check both would
+    // write an `AdminAction` claiming `from: 'ACTIVE'`, even though the
+    // second one's real transition is CANCELED -> CANCELED — an inaccurate
+    // audit trail, not a double-spend (the field write itself is
+    // idempotent).
     const updated = await prisma.$transaction(async (tx) => {
+      const current = await tx.subscription.findUnique({ where: { ownerId: id } });
+      if (!current || current.status === 'CANCELED') return current;
+
       const sub = await tx.subscription.update({
         where: { ownerId: id },
         data: { status: 'CANCELED' },
@@ -56,10 +66,17 @@ export async function POST(
         action: 'subscription.admin_cancel',
         targetType: 'Subscription',
         targetId: sub.id,
-        metadata: { ownerId: id, from: existing.status, to: 'CANCELED' },
+        metadata: { ownerId: id, from: current.status, to: 'CANCELED' },
       });
       return sub;
     });
+
+    if (!updated) {
+      return NextResponse.json(
+        { error: 'SUBSCRIPTION_NOT_FOUND', message: 'This user has no subscription.' },
+        { status: 404, headers: { 'x-request-id': reqCtx.requestId } },
+      );
+    }
 
     return NextResponse.json(
       { subscription: { id: updated.id, status: updated.status } },

@@ -272,6 +272,7 @@ describe('/api/admin/users/[id]/role [Wave 2] — role change', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: demotable.id,
       role: 'SUPERADMIN',
+      status: 'ACTIVE',
     } as never);
     prismaMock.user.count.mockResolvedValueOnce(2);
     prismaMock.user.update.mockResolvedValueOnce({ id: demotable.id, role: 'ADMIN' } as never);
@@ -284,6 +285,9 @@ describe('/api/admin/users/[id]/role [Wave 2] — role change', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { user: { id: string; role: string } };
     expect(body.user).toEqual({ id: demotable.id, role: 'ADMIN' });
+    expect(prismaMock.user.count).toHaveBeenCalledWith({
+      where: { role: 'SUPERADMIN', status: 'ACTIVE' },
+    });
     expect(prismaMock.user.update).toHaveBeenCalledWith({
       where: { id: demotable.id },
       data: { role: 'ADMIN' },
@@ -332,6 +336,7 @@ describe('/api/admin/users/[id]/role [Wave 2] — role change', () => {
     prismaMock.user.findUnique.mockResolvedValueOnce({
       id: onlyOne.id,
       role: 'SUPERADMIN',
+      status: 'ACTIVE',
     } as never);
     prismaMock.user.count.mockResolvedValueOnce(1);
 
@@ -343,6 +348,9 @@ describe('/api/admin/users/[id]/role [Wave 2] — role change', () => {
     expect(res.status).toBe(409);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe('LAST_SUPERADMIN');
+    expect(prismaMock.user.count).toHaveBeenCalledWith({
+      where: { role: 'SUPERADMIN', status: 'ACTIVE' },
+    });
     expect(prismaMock.user.update).not.toHaveBeenCalled();
     expect(mockLogAdminAction).not.toHaveBeenCalled();
   });

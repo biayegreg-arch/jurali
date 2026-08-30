@@ -62,7 +62,10 @@ beforeEach(() => {
 
 describe('POST /api/admin/users/[id]/subscription/cancel', () => {
   it('cancels an ACTIVE subscription and logs subscription.admin_cancel', async () => {
-    prismaMock.subscription.findUnique.mockResolvedValueOnce({
+    // Called twice: once before the transaction (existing/short-circuit
+    // check) and once re-fetched inside it (race-safety re-check) — both
+    // resolve the same ACTIVE row here.
+    prismaMock.subscription.findUnique.mockResolvedValue({
       id: 'sub_1',
       ownerId: 'u1',
       status: 'ACTIVE',
@@ -98,6 +101,23 @@ describe('POST /api/admin/users/[id]/subscription/cancel', () => {
 
     const res = await POST(makeReq('u2'), paramsOf('u2'));
     expect(res.status).toBe(200);
+    expect(prismaMock.subscription.update).not.toHaveBeenCalled();
+    expect(mockLogAdminAction).not.toHaveBeenCalled();
+  });
+
+  it('regression: a concurrent cancel that lands first is not double-logged', async () => {
+    // Pre-tx read sees ACTIVE (passes the short-circuit), but by the time
+    // this request's transaction re-reads, a concurrent request already
+    // committed CANCELED — the in-tx re-check must catch this and skip the
+    // update/log rather than writing a second `from: 'ACTIVE'` AdminAction.
+    prismaMock.subscription.findUnique
+      .mockResolvedValueOnce({ id: 'sub_4', ownerId: 'u4', status: 'ACTIVE' } as never)
+      .mockResolvedValueOnce({ id: 'sub_4', ownerId: 'u4', status: 'CANCELED' } as never);
+
+    const res = await POST(makeReq('u4'), paramsOf('u4'));
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { subscription: { status: string } };
+    expect(body.subscription.status).toBe('CANCELED');
     expect(prismaMock.subscription.update).not.toHaveBeenCalled();
     expect(mockLogAdminAction).not.toHaveBeenCalled();
   });

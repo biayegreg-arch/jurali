@@ -61,10 +61,18 @@ describe('GET /api/admin/revenue', () => {
         payload: { status: 'failed', charge_id: 'ch_2' },
       },
     ] as never);
-    prismaMock.subscription.findFirst.mockResolvedValue({
-      planAmountFcfa: 2500,
-      owner: { email: 'a@test.local', shopName: null },
-    } as never);
+    prismaMock.subscription.findMany.mockResolvedValueOnce([
+      {
+        providerChargeId: 'ch_1',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: null },
+      },
+      {
+        providerChargeId: 'ch_2',
+        planAmountFcfa: 2500,
+        owner: { email: 'a@test.local', shopName: null },
+      },
+    ] as never);
 
     const res = await GET(makeGet());
     const body = (await res.json()) as { paidCount: number; failedCount: number };
