@@ -144,7 +144,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         onCancel={() => setShowLogoutConfirm(false)}
         onConfirm={() => {
           setShowLogoutConfirm(false);
-          void logout();
+          void logout().then(() => router.replace('/'));
         }}
       />
     </div>
