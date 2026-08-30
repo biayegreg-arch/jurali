@@ -45,10 +45,19 @@ function isAuthedPath(pathname: string): boolean {
 // host (no tunnelRoute configured — see next.config.ts) — connect-src must
 // allow it whenever NEXT_PUBLIC_SENTRY_DSN is set. Wildcarded since the
 // exact ingest subdomain varies by Sentry org/region.
+//
+// script-src deliberately does NOT use 'strict-dynamic': that directive
+// makes browsers ignore the 'self' allowlist entirely and trust ONLY
+// nonce'd scripts (plus scripts a nonce'd script injects at runtime) —
+// this Turbopack build does not thread the nonce onto Next's own
+// /_next/static bootstrap <script> tags, so 'strict-dynamic' blocked every
+// script on every page (confirmed: 0 of 17 <script> tags carried a nonce
+// in production). 'self' already covers those same-origin chunks fine;
+// the nonce here exists only for our own inline JSON-LD <script>.
 function buildCsp(nonce: string): string {
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}' 'strict-dynamic';
+    script-src 'self' 'nonce-${nonce}';
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data:;
     font-src 'self';
