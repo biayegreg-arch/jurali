@@ -430,7 +430,7 @@ export default function LandingPage() {
         <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
           <div>
             <JuraliMark size={24} textSize="text-lg" className="mb-3" />
-            <p className="text-xs text-muted-foreground">Pour les boutiquiers du Sénégal</p>
+            <p className="text-xs text-muted-foreground">Pour les boutiquiers d’Afrique</p>
           </div>
           <div>
             <div className="font-headings font-bold text-sm text-foreground mb-3">Produit</div>

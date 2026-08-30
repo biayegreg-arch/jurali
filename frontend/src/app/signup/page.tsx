@@ -138,7 +138,7 @@ export default function SignupPage() {
         </div>
 
         <div className="text-xs text-secondary">
-          © 2026 Jurali · Conçu pour les commerçants du Sénégal
+          © 2026 Jurali · Conçu pour les commerçants d’Afrique
         </div>
       </div>
 
