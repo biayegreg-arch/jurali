@@ -1,10 +1,17 @@
 'use client';
 
-// Client search + select + create-on-the-fly (US-05), shared by the
-// Nouvelle dette and Paiement reçu forms. See .planning/banani/new-debt.md.
+// Client search + select, shared by the Nouvelle dette and Paiement reçu
+// forms. See .planning/banani/new-debt.md.
+//
+// No inline "create with just a name" shortcut on purpose (2026-08-31):
+// a shop owner must go through the real /clients/new form — phone/email/
+// address get a real chance to be filled in there — before a debt can be
+// logged against a brand-new client. Un-matched names link out to that
+// form (prefilled) and back via `?next=`/`?clientId=` instead.
 import { useEffect, useRef, useState } from 'react';
-import { api, ApiError } from '@/lib/api';
-import { invalidateAllCache } from '@/lib/useApi';
+import { usePathname } from 'next/navigation';
+import Link from 'next/link';
+import { api } from '@/lib/api';
 import { Icon } from './Icon';
 
 export interface PickedClient {
@@ -40,11 +47,10 @@ export function ClientPicker({
   helperText = 'Sélectionner un client existant',
   inputId,
 }: ClientPickerProps) {
+  const pathname = usePathname();
   const [query, setQuery] = useState(value?.firstName ?? '');
   const [matches, setMatches] = useState<ClientMatch[]>([]);
   const [open, setOpen] = useState(false);
-  const [creating, setCreating] = useState(false);
-  const [limitReached, setLimitReached] = useState(false);
   const requestIdRef = useRef(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -91,26 +97,8 @@ export function ClientPicker({
     setOpen(false);
   }
 
-  async function createAndSelect() {
-    setCreating(true);
-    setLimitReached(false);
-    try {
-      const created = await api<{ id: string; firstName: string }>('/api/clients', {
-        method: 'POST',
-        body: { firstName: query.trim() },
-      });
-      invalidateAllCache();
-      select(created);
-    } catch (err) {
-      if (err instanceof ApiError && err.code === 'CLIENT_LIMIT_REACHED') {
-        setLimitReached(true);
-      }
-    } finally {
-      setCreating(false);
-    }
-  }
-
   const exactMatch = matches.some((m) => m.firstName.toLowerCase() === query.trim().toLowerCase());
+  const createHref = `/clients/new?next=${encodeURIComponent(pathname)}&name=${encodeURIComponent(query.trim())}`;
 
   return (
     <div className="mb-5 relative" ref={containerRef}>
@@ -156,30 +144,19 @@ export function ClientPicker({
             </button>
           ))}
           {query.trim() && !exactMatch && (
-            <button
-              type="button"
-              onClick={createAndSelect}
-              disabled={creating}
-              className="w-full text-left px-3 py-2.5 text-base text-primary font-semibold disabled:opacity-50"
+            <Link
+              href={createHref}
+              className="flex items-center gap-2 w-full text-left px-3 py-2.5 text-base text-primary font-semibold"
             >
-              {creating ? 'Création…' : `Créer « ${query.trim()} »`}
-            </button>
+              <Icon i="user-plus" size={16} className="flex-shrink-0" />
+              Créer un nouveau client « {query.trim()} »
+            </Link>
           )}
           {matches.length === 0 && !query.trim() && (
             <div className="px-3 py-2.5 text-sm text-muted-foreground">
               Tape un nom pour chercher
             </div>
           )}
-        </div>
-      )}
-
-      {limitReached && (
-        <div className="text-xs text-danger mt-2">
-          Limite de 5 clients gratuits atteinte —{' '}
-          <a href="/premium" className="underline font-semibold">
-            passer à Premium
-          </a>
-          .
         </div>
       )}
     </div>

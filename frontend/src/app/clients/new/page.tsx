@@ -39,8 +39,6 @@ interface SubscriptionData {
   isActive: boolean;
 }
 
-const EMPTY: ClientFormValues = { firstName: '', phone: '', email: '', address: '' };
-
 export default function CreateClientPage() {
   return (
     <Suspense fallback={null}>
@@ -56,6 +54,10 @@ function CreateClientPageContent() {
   const { toast } = useToast();
   const next = params.get('next');
   const cancelHref = next ?? '/clients';
+  // ClientPicker (Nouvelle dette / Paiement reçu) links here with the name
+  // the shop owner already typed, instead of offering a name-only
+  // inline-create shortcut — see components/jurali/ClientPicker.tsx.
+  const prefillName = params.get('name') ?? '';
 
   const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
@@ -65,7 +67,12 @@ function CreateClientPageContent() {
     skip: !user,
   });
 
-  const [values, setValues] = useState<ClientFormValues>(EMPTY);
+  const [values, setValues] = useState<ClientFormValues>({
+    firstName: prefillName,
+    phone: '',
+    email: '',
+    address: '',
+  });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
