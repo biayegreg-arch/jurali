@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 
-// Silent-refresh gate for protected pages, PLUS a nonce-based
-// Content-Security-Policy applied to every page response (the matcher below
-// already excludes /api and static assets, which don't need CSP).
+// Silent-refresh gate for protected pages, PLUS a Content-Security-Policy
+// applied to every page response (the matcher below already excludes /api
+// and static assets, which don't need CSP).
 //
 // The (15-min) access cookie can expire while a (7-day) refresh cookie is
 // still valid — typically when a tab sat unfocused or the laptop slept. The
@@ -15,13 +15,9 @@ import { NextResponse, type NextRequest } from 'next/server';
 // e.g. "/dashboard,/account"). Empty by default — the API surface is the only
 // thing shipped, so out-of-the-box this middleware is a no-op.
 //
-// CSP: a fresh nonce is minted per request and exposed to Server Components
-// via the `x-nonce` request header (`(await headers()).get('x-nonce')`) so
-// any inline <script> (e.g. JSON-LD structured data) can carry a matching
-// `nonce` attribute — CSP's script-src covers ALL <script> tags regardless
-// of `type`, JSON-LD included. Next.js's own hydration scripts pick up the
-// nonce automatically once it sees `nonce-...` in the CSP header on the
-// incoming request — no extra wiring needed for those.
+// CSP script-src uses 'unsafe-inline' rather than a nonce — see the comment
+// above buildCsp() for why a nonce doesn't survive this Turbopack build's
+// own inline hydration scripts.
 //
 // Edge runtime: no DB, no bcrypt, no Prisma. We only inspect cookies and
 // build redirects — the heavy lifting happens in /api/auth/refresh-and-return
@@ -46,18 +42,32 @@ function isAuthedPath(pathname: string): boolean {
 // allow it whenever NEXT_PUBLIC_SENTRY_DSN is set. Wildcarded since the
 // exact ingest subdomain varies by Sentry org/region.
 //
-// script-src deliberately does NOT use 'strict-dynamic': that directive
-// makes browsers ignore the 'self' allowlist entirely and trust ONLY
-// nonce'd scripts (plus scripts a nonce'd script injects at runtime) —
-// this Turbopack build does not thread the nonce onto Next's own
-// /_next/static bootstrap <script> tags, so 'strict-dynamic' blocked every
-// script on every page (confirmed: 0 of 17 <script> tags carried a nonce
-// in production). 'self' already covers those same-origin chunks fine;
-// the nonce here exists only for our own inline JSON-LD <script>.
-function buildCsp(nonce: string): string {
+// script-src uses 'unsafe-inline' instead of a nonce, and deliberately
+// omits 'strict-dynamic'. Reasoning, found the hard way in production:
+//
+// 1. 'strict-dynamic' makes browsers ignore 'self' entirely and trust ONLY
+//    nonce'd scripts. This Turbopack build never threads the nonce onto
+//    Next's own /_next/static bootstrap <script src> tags (confirmed: 0 of
+//    17 carried one), so 'strict-dynamic' blocked every external script on
+//    every page.
+// 2. Dropping 'strict-dynamic' fixed pages with no server-streamed data
+//    (/, /login) because 'self' covers same-origin <script src> chunks
+//    regardless of nonce. But pages that stream RSC payloads to the client
+//    (e.g. /dashboard) emit several INLINE <script>self.__next_f.push(...)
+//    </script> tags carrying that data — inline scripts are never covered
+//    by 'self', only by a matching nonce or 'unsafe-inline'. Next.js is
+//    documented to auto-nonce those internal inline scripts, but doesn't
+//    in this Turbopack build either (confirmed via browser console: 8
+//    blocked inline-script CSP violations on /dashboard, zero carrying a
+//    nonce) — every authenticated page was hydration-dead, not just the
+//    ones this file's own diff had touched.
+// A nonce and 'unsafe-inline' in the same directive is a no-op ('unsafe-inline'
+// is ignored whenever a nonce-source is present), so we drop the nonce
+// entirely rather than ship a directive that silently does nothing.
+function buildCsp(): string {
   return `
     default-src 'self';
-    script-src 'self' 'nonce-${nonce}';
+    script-src 'self' 'unsafe-inline';
     style-src 'self' 'unsafe-inline';
     img-src 'self' blob: data:;
     font-src 'self';
@@ -73,11 +83,9 @@ function buildCsp(nonce: string): string {
 }
 
 export function proxy(req: NextRequest): NextResponse {
-  const nonce = Buffer.from(crypto.randomUUID()).toString('base64');
-  const csp = buildCsp(nonce);
+  const csp = buildCsp();
 
   const requestHeaders = new Headers(req.headers);
-  requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('Content-Security-Policy', csp);
   const nextInit = { request: { headers: requestHeaders } };
 
