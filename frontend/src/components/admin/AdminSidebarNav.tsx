@@ -14,6 +14,7 @@ export const ADMIN_NAV = [
   { href: '/admin', label: "Vue d'ensemble", icon: 'layout-dashboard' },
   { href: '/admin/users', label: 'Utilisateurs', icon: 'users' },
   { href: '/admin/subscriptions', label: 'Abonnements', icon: 'credit-card' },
+  { href: '/admin/coupons', label: 'Coupons', icon: 'tag' },
   { href: '/admin/revenue', label: 'Revenus', icon: 'bar-chart-2' },
   { href: '/admin/notifications', label: 'Notifications', icon: 'message-circle' },
   { href: '/admin/settings', label: 'Paramètres', icon: 'settings' },

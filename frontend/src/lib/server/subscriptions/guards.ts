@@ -62,3 +62,43 @@ export async function requirePremium(
     { status: 403, headers: { 'x-request-id': requestId } },
   );
 }
+
+export interface CouponValidationResult {
+  ok: boolean;
+  errorCode: 'COUPON_NOT_FOUND' | 'COUPON_INACTIVE' | 'COUPON_EXPIRED' | null;
+  coupon?: { id: string; code: string; percentOff: number };
+}
+
+/**
+ * Shared by POST /api/coupons/validate (live preview on the checkout page)
+ * and POST /api/subscriptions (the real charge) — the checkout page's
+ * client-computed discount is only a preview; this is re-run server-side
+ * at charge time so a stale/expired/deactivated code can never actually
+ * discount a real payment.
+ */
+export async function validateCoupon(
+  prisma: Pick<PrismaClient, 'coupon'>,
+  rawCode: string,
+  now: Date = new Date(),
+): Promise<CouponValidationResult> {
+  const code = rawCode.trim().toUpperCase();
+  if (!code) return { ok: false, errorCode: 'COUPON_NOT_FOUND' };
+
+  const coupon = await prisma.coupon.findUnique({ where: { code } });
+  if (!coupon) return { ok: false, errorCode: 'COUPON_NOT_FOUND' };
+  if (!coupon.active) return { ok: false, errorCode: 'COUPON_INACTIVE' };
+  if (coupon.expiresAt && coupon.expiresAt.getTime() <= now.getTime()) {
+    return { ok: false, errorCode: 'COUPON_EXPIRED' };
+  }
+
+  return {
+    ok: true,
+    errorCode: null,
+    coupon: { id: coupon.id, code: coupon.code, percentOff: coupon.percentOff },
+  };
+}
+
+/** Integer FCFA in, integer FCFA out — never introduce decimals. */
+export function applyCouponDiscount(priceFcfa: number, percentOff: number): number {
+  return Math.round((priceFcfa * (100 - percentOff)) / 100);
+}

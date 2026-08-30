@@ -50,7 +50,7 @@ function makeGet(): NextRequest {
 
 function makePost(
   csrf: 'match' | 'missing' = 'match',
-  body?: { paymentMethod?: string; phone?: string },
+  body?: { paymentMethod?: string; phone?: string; couponCode?: string },
 ): NextRequest {
   const headers: Record<string, string> = { 'content-type': 'application/json' };
   if (csrf === 'match') {
@@ -168,6 +168,33 @@ describe('GET /api/subscriptions', () => {
     const res = await GET(makeGet());
     const body = await res.json();
     expect(body).toMatchObject({ paymentMethod: null, paymentPhone: null, createdAt: null });
+  });
+
+  it('echoes paidAmountFcfa (the actually-charged, coupon-discounted amount) separately from the live list price', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue({
+      ...seededSub({
+        status: 'ACTIVE',
+        renewsAt: new Date(Date.now() + 86_400_000),
+        planAmountFcfa: 2000,
+      }),
+      coupon: { code: 'SUMMER20', percentOff: 20 },
+    } as never);
+    const res = await GET(makeGet());
+    const body = await res.json();
+    // planAmountFcfa stays the live config price (2500 default); paidAmountFcfa
+    // reflects what this subscription's current period actually cost.
+    expect(body).toMatchObject({
+      planAmountFcfa: 2500,
+      paidAmountFcfa: 2000,
+      coupon: { code: 'SUMMER20', percentOff: 20 },
+    });
+  });
+
+  it('coupon is null when no coupon was applied', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(seededSub() as never);
+    const res = await GET(makeGet());
+    const body = await res.json();
+    expect(body.coupon).toBeNull();
   });
 });
 
@@ -290,6 +317,104 @@ describe('POST /api/subscriptions — happy path', () => {
     const res = await POST(makePost('match', { phone: 'not-a-phone' }));
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe('VALIDATION_FAILED');
+  });
+});
+
+describe('POST /api/subscriptions — coupon application', () => {
+  it('discounts the charge amount and stores couponId for a valid, active coupon', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    prismaMock.coupon.findUnique.mockResolvedValueOnce({
+      id: 'coupon_1',
+      code: 'SUMMER20',
+      percentOff: 20,
+      active: true,
+      expiresAt: null,
+    } as never);
+    prismaMock.subscription.upsert.mockResolvedValue(
+      seededSub({ planAmountFcfa: 2000, couponId: 'coupon_1' }) as never,
+    );
+    prismaMock.subscription.update.mockResolvedValue(seededSub() as never);
+    const chargeSpy = vi.fn(async () => ({
+      providerChargeId: 'bictorys_charge_sub_1',
+      paymentUrl: 'https://checkout.test/bictorys/pay/sub',
+      status: 'PENDING' as const,
+    }));
+    mockGetProvider.mockReturnValue({ name: 'bictorys', charge: chargeSpy } as never);
+
+    const res = await POST(makePost('match', { couponCode: 'summer20' }));
+
+    expect(res.status).toBe(201);
+    expect(chargeSpy).toHaveBeenCalledWith(expect.objectContaining({ amount: 2000 }));
+    expect(prismaMock.subscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ planAmountFcfa: 2000, couponId: 'coupon_1' }),
+        update: expect.objectContaining({ planAmountFcfa: 2000, couponId: 'coupon_1' }),
+      }),
+    );
+  });
+
+  it('400 COUPON_NOT_FOUND for an unknown code, without creating a PENDING row', async () => {
+    prismaMock.coupon.findUnique.mockResolvedValueOnce(null);
+
+    const res = await POST(makePost('match', { couponCode: 'NOPE' }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('COUPON_NOT_FOUND');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('400 COUPON_EXPIRED for an expired code', async () => {
+    prismaMock.coupon.findUnique.mockResolvedValueOnce({
+      id: 'coupon_1',
+      code: 'OLD',
+      percentOff: 20,
+      active: true,
+      expiresAt: new Date('2020-01-01T00:00:00Z'),
+    } as never);
+
+    const res = await POST(makePost('match', { couponCode: 'OLD' }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('COUPON_EXPIRED');
+    expect(prismaMock.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('400 COUPON_INACTIVE for a deactivated code', async () => {
+    prismaMock.coupon.findUnique.mockResolvedValueOnce({
+      id: 'coupon_1',
+      code: 'OFF',
+      percentOff: 20,
+      active: false,
+      expiresAt: null,
+    } as never);
+
+    const res = await POST(makePost('match', { couponCode: 'OFF' }));
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('COUPON_INACTIVE');
+  });
+
+  it('charges the full price and stores no couponId when no code is supplied', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    prismaMock.subscription.upsert.mockResolvedValue(seededSub() as never);
+    prismaMock.subscription.update.mockResolvedValue(seededSub() as never);
+    const chargeSpy = vi.fn(async () => ({
+      providerChargeId: 'bictorys_charge_sub_1',
+      paymentUrl: 'https://checkout.test/bictorys/pay/sub',
+      status: 'PENDING' as const,
+    }));
+    mockGetProvider.mockReturnValue({ name: 'bictorys', charge: chargeSpy } as never);
+
+    await POST(makePost());
+
+    expect(chargeSpy).toHaveBeenCalledWith(expect.objectContaining({ amount: 2500 }));
+    expect(prismaMock.coupon.findUnique).not.toHaveBeenCalled();
+    expect(prismaMock.subscription.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ couponId: null }),
+      }),
+    );
   });
 });
 

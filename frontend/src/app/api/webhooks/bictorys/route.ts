@@ -65,6 +65,15 @@ export const POST = createWebhookHandler({
           renewsAt: new Date(Date.now() + SUBSCRIPTION_PERIOD_DAYS * 24 * 60 * 60 * 1000),
         },
       });
+      // Coupon.redemptionCount is informational only (no cap enforced) but
+      // must only count CONFIRMED payments, not checkout attempts — an
+      // abandoned/failed checkout with a coupon code never reaches here.
+      if (subscription.couponId) {
+        await tx.coupon.update({
+          where: { id: subscription.couponId },
+          data: { redemptionCount: { increment: 1 } },
+        });
+      }
       return {};
     }
 

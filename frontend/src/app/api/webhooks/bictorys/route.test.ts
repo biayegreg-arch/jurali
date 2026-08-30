@@ -9,6 +9,7 @@ const orderUpdate = vi.fn();
 const outboxCreate = vi.fn();
 const subscriptionFindFirst = vi.fn();
 const subscriptionUpdate = vi.fn();
+const couponUpdate = vi.fn();
 
 const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) =>
   fn({
@@ -16,6 +17,7 @@ const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?:
     order: { findFirst: orderFindFirst, update: orderUpdate },
     outboxEvent: { create: outboxCreate },
     subscription: { findFirst: subscriptionFindFirst, update: subscriptionUpdate },
+    coupon: { update: couponUpdate },
   }),
 );
 
@@ -36,6 +38,7 @@ beforeEach(() => {
   outboxCreate.mockReset();
   subscriptionFindFirst.mockReset();
   subscriptionUpdate.mockReset();
+  couponUpdate.mockReset();
 });
 
 afterEach(() => {
@@ -139,6 +142,22 @@ describe('POST /api/webhooks/bictorys', () => {
       );
       // No outbox emit for subscription events (see route.ts comment).
       expect(outboxCreate).not.toHaveBeenCalled();
+      // No coupon on this subscription — nothing to increment.
+      expect(couponUpdate).not.toHaveBeenCalled();
+    });
+
+    it('onPaid increments Coupon.redemptionCount when the activated Subscription used one', async () => {
+      findUnique.mockResolvedValueOnce(null);
+      orderFindFirst.mockResolvedValueOnce(null);
+      subscriptionFindFirst.mockResolvedValueOnce({ id: 'sub_1', couponId: 'coupon_1' });
+      const { POST } = await import('./route');
+      const { req } = bictorysFixtureRequest({ status: 'succeeded' });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(couponUpdate).toHaveBeenCalledWith({
+        where: { id: 'coupon_1' },
+        data: { redemptionCount: { increment: 1 } },
+      });
     });
 
     it('onFailed marks a Subscription FAILED found by providerChargeId', async () => {

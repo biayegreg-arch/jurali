@@ -76,6 +76,7 @@ model User {
   clients           Client[]
   transactions      Transaction[]
   subscription      Subscription?
+  couponsCreated    Coupon[]
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
   // Apps that need it (marketplace, B2B SaaS, classifieds) wire owner relations
@@ -431,7 +432,18 @@ model Subscription {
   status   String    @default("PENDING") // PENDING | ACTIVE | CANCELED | EXPIRED | FAILED
   renewsAt DateTime? // set to now()+30d when the webhook confirms payment
 
-  planAmountFcfa Int @default(2500) // PRD §6 monthly price, snapshotted per checkout
+  planAmountFcfa Int @default(2500) // PRD §6 monthly price, snapshotted per checkout — already
+  // net of any coupon discount applied at checkout time (see couponId below).
+
+  // Coupon applied at the checkout that produced the CURRENT planAmountFcfa,
+  // if any — set when the charge is initiated (POST /api/subscriptions),
+  // NOT re-validated/reused on the next renewal (each checkout must supply
+  // its own coupon code again). Coupon.redemptionCount is only incremented
+  // once the webhook confirms this charge actually succeeded (onPaid),
+  // never at checkout-initiation time, so an abandoned/failed checkout
+  // doesn't burn a redemption.
+  couponId String?
+  coupon   Coupon? @relation(fields: [couponId], references: [id], onDelete: SetNull)
 
   // Provider reference — same shape as Order, since checkout reuses
   // PaymentProvider.charge(). Unique per row: one in-flight/last checkout
@@ -473,4 +485,32 @@ model PlatformConfig {
   id                      String   @id @default("singleton")
   premiumMonthlyPriceFcfa Int      @default(2500)
   updatedAt               DateTime @updatedAt
+}
+
+// Premium checkout discount codes, SUPERADMIN-managed (/admin/coupons —
+// same bar as changing PlatformConfig.premiumMonthlyPriceFcfa, since both
+// affect what a customer is charged). No max-redemption cap by design
+// (confirmed with the user) — an admin retires a coupon by flipping
+// `active` to false or setting `expiresAt` in the past, not by exhausting
+// a counter. `redemptionCount` is purely informational, incremented only
+// when a checkout using this coupon is confirmed PAID by the webhook (see
+// Subscription.couponId) — never at checkout-initiation time.
+model Coupon {
+  id         String  @id @default(cuid())
+  code       String  @unique // stored uppercase; matched case-insensitively at validation time
+  percentOff Int // 1-100
+  active     Boolean @default(true)
+  expiresAt  DateTime?
+
+  redemptionCount Int @default(0)
+
+  createdById String
+  createdBy   User   @relation(fields: [createdById], references: [id], onDelete: Restrict)
+
+  subscriptions Subscription[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([active])
 }

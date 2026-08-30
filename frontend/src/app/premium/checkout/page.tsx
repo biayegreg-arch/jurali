@@ -31,6 +31,18 @@ interface SubscriptionData {
   planAmountFcfa: number;
 }
 
+interface CouponPreview {
+  code: string;
+  percentOff: number;
+  discountedAmountFcfa: number;
+}
+
+const COUPON_ERROR_MESSAGES: Record<string, string> = {
+  COUPON_NOT_FOUND: 'Code promo introuvable.',
+  COUPON_INACTIVE: 'Ce code promo n’est plus actif.',
+  COUPON_EXPIRED: 'Ce code promo a expiré.',
+};
+
 type PaymentMethod = 'WAVE' | 'ORANGE_MONEY' | 'FREE_MONEY';
 
 const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
@@ -47,6 +59,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   PAYMENT_IN_FLIGHT: 'Un paiement est déjà en cours. Réessaie dans quelques secondes.',
   PAYMENT_FAILED: 'Le paiement a échoué. Réessaie.',
   VALIDATION_FAILED: 'Vérifie ton numéro de téléphone.',
+  // The coupon was re-validated server-side at charge time and no longer
+  // holds (deactivated/expired between the preview and this submit) — rare,
+  // but the preview above is never the source of truth.
+  COUPON_NOT_FOUND: 'Le code promo appliqué n’est plus valide. Retire-le et réessaie.',
+  COUPON_INACTIVE: 'Le code promo appliqué n’est plus actif. Retire-le et réessaie.',
+  COUPON_EXPIRED: 'Le code promo appliqué a expiré. Retire-le et réessaie.',
 };
 
 export default function PremiumCheckoutPage() {
@@ -62,6 +80,11 @@ export default function PremiumCheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [couponInput, setCouponInput] = useState('');
+  const [appliedCoupon, setAppliedCoupon] = useState<CouponPreview | null>(null);
+  const [couponChecking, setCouponChecking] = useState(false);
+  const [couponError, setCouponError] = useState<string | null>(null);
+
   const isActive = sub?.isActive ?? false;
   useEffect(() => {
     if (isActive) router.replace('/premium/manage');
@@ -70,9 +93,39 @@ export default function PremiumCheckoutPage() {
   if (!user || isActive) return null;
 
   const planAmount = sub?.planAmountFcfa ?? 2500;
+  const totalAmount = appliedCoupon?.discountedAmountFcfa ?? planAmount;
   const phone = digits ? `+221${digits}` : '';
   const renewsAt = formatDateFr(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
   const methodLabel = PAYMENT_METHODS.find((m) => m.value === method)?.label ?? '';
+
+  async function applyCoupon() {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponChecking(true);
+    setCouponError(null);
+    try {
+      const res = await api<CouponPreview>('/api/coupons/validate', {
+        method: 'POST',
+        body: { code },
+      });
+      setAppliedCoupon(res);
+    } catch (err) {
+      setAppliedCoupon(null);
+      setCouponError(
+        err instanceof ApiError
+          ? (COUPON_ERROR_MESSAGES[err.code] ?? err.message)
+          : 'Erreur réseau. Réessaie.',
+      );
+    } finally {
+      setCouponChecking(false);
+    }
+  }
+
+  function removeCoupon() {
+    setAppliedCoupon(null);
+    setCouponInput('');
+    setCouponError(null);
+  }
 
   async function subscribe() {
     setSubmitting(true);
@@ -80,7 +133,11 @@ export default function PremiumCheckoutPage() {
     try {
       const res = await api<{ status: string; paymentUrl: string }>('/api/subscriptions', {
         method: 'POST',
-        body: { paymentMethod: method, ...(phone ? { phone } : {}) },
+        body: {
+          paymentMethod: method,
+          ...(phone ? { phone } : {}),
+          ...(appliedCoupon ? { couponCode: appliedCoupon.code } : {}),
+        },
       });
       window.location.href = res.paymentUrl;
     } catch (err) {
@@ -126,12 +183,25 @@ export default function PremiumCheckoutPage() {
             {renewsAt}
           </span>
         </div>
+        {appliedCoupon && (
+          <div className="flex justify-between">
+            <span className="text-sm text-secondary">
+              Code promo <span className="text-primary-foreground">{appliedCoupon.code}</span>
+            </span>
+            <span className="font-headings font-bold text-sm text-primary-foreground">
+              -{appliedCoupon.percentOff}%
+            </span>
+          </div>
+        )}
       </div>
       <div className="flex justify-between items-end mb-6">
         <span className="font-headings font-bold text-sm text-secondary">Total aujourd’hui</span>
         <div className="text-right">
+          {appliedCoupon && (
+            <div className="text-xs text-secondary line-through">{formatPrice(planAmount)}</div>
+          )}
           <div className="font-headings font-bold text-3xl text-primary-foreground">
-            {formatPrice(planAmount)}
+            {formatPrice(totalAmount)}
           </div>
           <div className="text-xs text-secondary">FCFA</div>
         </div>
@@ -267,6 +337,56 @@ export default function PremiumCheckoutPage() {
                     className="flex-1 bg-transparent text-sm text-foreground placeholder-muted-foreground outline-none"
                   />
                 </div>
+              </div>
+
+              <div className="bg-background border border-border rounded-xl p-5">
+                <div className="font-headings font-bold text-base text-foreground mb-1">
+                  Code promo
+                </div>
+                <div className="text-xs text-muted-foreground mb-3">Optionnel</div>
+                {appliedCoupon ? (
+                  <div className="flex items-center justify-between gap-3 bg-input border border-border rounded-lg px-4 py-3">
+                    <div className="flex items-center gap-2">
+                      <Icon i="tag" size={16} className="text-primary" />
+                      <span className="text-sm font-headings font-bold text-foreground">
+                        {appliedCoupon.code}
+                      </span>
+                      <span className="text-xs text-primary">-{appliedCoupon.percentOff}%</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={removeCoupon}
+                      className="text-xs font-headings font-bold text-muted-foreground"
+                    >
+                      Retirer
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={couponInput}
+                      onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          void applyCoupon();
+                        }
+                      }}
+                      placeholder="SUMMER20"
+                      disabled={couponChecking}
+                      className="flex-1 bg-input border border-border rounded-lg px-4 py-3 text-sm text-foreground placeholder-muted-foreground outline-none disabled:opacity-60"
+                    />
+                    <button
+                      type="button"
+                      onClick={applyCoupon}
+                      disabled={couponChecking || !couponInput.trim()}
+                      className="flex-shrink-0 bg-input border border-border font-headings font-bold text-sm text-foreground px-4 py-3 rounded-lg disabled:opacity-50"
+                    >
+                      {couponChecking ? '…' : 'Appliquer'}
+                    </button>
+                  </div>
+                )}
+                {couponError && <div className="text-xs text-danger mt-2">{couponError}</div>}
               </div>
             </div>
 

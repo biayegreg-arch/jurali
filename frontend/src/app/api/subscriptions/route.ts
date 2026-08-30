@@ -32,8 +32,10 @@ import {
   PaymentProviderUnconfiguredError,
 } from '@/lib/server/payments/provider-singleton';
 import {
+  applyCouponDiscount,
   getPremiumMonthlyPriceFcfa,
   isSubscriptionActive,
+  validateCoupon,
 } from '@/lib/server/subscriptions/guards';
 import { lockUserTx } from '@/lib/server/withdrawals/lock';
 import { isTransientConflict } from '@/lib/server/prisma-errors';
@@ -45,6 +47,7 @@ import { zPhone } from '@/lib/server/zod-helpers';
 const CheckoutBody = z.object({
   paymentMethod: z.enum(['WAVE', 'ORANGE_MONEY', 'FREE_MONEY']).optional(),
   phone: zPhone.optional(),
+  couponCode: z.string().trim().min(1).max(32).optional(),
 });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -54,7 +57,10 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     if (auth instanceof NextResponse) return auth;
 
     const [sub, priceFcfa] = await Promise.all([
-      prisma.subscription.findUnique({ where: { ownerId: auth.user.sub } }),
+      prisma.subscription.findUnique({
+        where: { ownerId: auth.user.sub },
+        include: { coupon: { select: { code: true, percentOff: true } } },
+      }),
       getPremiumMonthlyPriceFcfa(prisma),
     ]);
 
@@ -63,7 +69,16 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         status: sub?.status ?? 'NONE',
         renewsAt: sub?.renewsAt ?? null,
         isActive: isSubscriptionActive(sub),
+        // Current LIST price (for the checkout page's "what would I pay
+        // today" display) — NOT necessarily what this subscription's
+        // active period actually cost, see paidAmountFcfa below.
         planAmountFcfa: priceFcfa,
+        // What was actually charged for the CURRENT period (already net of
+        // any coupon discount) — the success/manage pages show this, since
+        // the live config price above can differ (price change since, or a
+        // coupon was applied at checkout).
+        paidAmountFcfa: sub?.planAmountFcfa ?? null,
+        coupon: sub?.coupon ? { code: sub.coupon.code, percentOff: sub.coupon.percentOff } : null,
         paymentMethod: sub?.paymentMethod ?? null,
         paymentPhone: sub?.paymentPhone ?? null,
         createdAt: sub?.createdAt ?? null,
@@ -93,7 +108,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         { status: 400, headers: { 'x-request-id': ctx.requestId } },
       );
     }
-    const { paymentMethod, phone } = parsed.data;
+    const { paymentMethod, phone, couponCode } = parsed.data;
 
     let provider;
     try {
@@ -120,6 +135,27 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     }
     const publicUrl = envPublicUrl ?? 'http://localhost:3000';
     const priceFcfa = await getPremiumMonthlyPriceFcfa(prisma);
+
+    // Re-validated here regardless of what /api/coupons/validate said
+    // earlier — that route is a preview only, never a source of truth.
+    // Rejected BEFORE the transaction below so an invalid/expired code
+    // never creates a PENDING row.
+    let couponId: string | null = null;
+    let chargeAmountFcfa = priceFcfa;
+    if (couponCode) {
+      const couponResult = await validateCoupon(prisma, couponCode);
+      if (!couponResult.ok || !couponResult.coupon) {
+        return NextResponse.json(
+          {
+            error: couponResult.errorCode ?? 'COUPON_NOT_FOUND',
+            message: 'Invalid or expired coupon code.',
+          },
+          { status: 400, headers: { 'x-request-id': ctx.requestId } },
+        );
+      }
+      couponId = couponResult.coupon.id;
+      chargeAmountFcfa = applyCouponDiscount(priceFcfa, couponResult.coupon.percentOff);
+    }
 
     // The read-then-upsert below used to run unguarded: two concurrent POSTs
     // could both read a non-PENDING `existing` row before either upsert
@@ -152,17 +188,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             create: {
               ownerId: auth.user.sub,
               status: 'PENDING',
-              planAmountFcfa: priceFcfa,
+              planAmountFcfa: chargeAmountFcfa,
               paymentMethod: paymentMethod ?? null,
               paymentPhone: phone ?? null,
+              couponId,
             },
             update: {
               status: 'PENDING',
-              planAmountFcfa: priceFcfa,
+              planAmountFcfa: chargeAmountFcfa,
               providerChargeId: null,
               paymentUrl: null,
               paymentMethod: paymentMethod ?? null,
               paymentPhone: phone ?? null,
+              couponId,
             },
           });
           return { kind: 'proceed' as const, subscription: row };
@@ -211,7 +249,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       // `providerChargeId` (Bictorys' own charge id), not this ref.
       const result = await breaker.execute(() =>
         provider.charge({
-          amount: priceFcfa,
+          amount: chargeAmountFcfa,
           currency: 'XOF',
           customer: { email: auth.user.email, ...(phone ? { phone } : {}) },
           ...(paymentMethod ? { metadata: { paymentType: paymentMethod } } : {}),
