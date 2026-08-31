@@ -1,12 +1,16 @@
 'use client';
 
 // Nouvelle dette — PRD 3.3 / US-01. Mobile reproduces Banani's
-// NewDebtForm.jsx + NewDebtForm2.jsx (single screen, two data states — see
+// NewDebtForm.jsx + NewDebtForm2.jsx (single screen — see
 // .planning/banani/new-debt.md). Desktop (lg+) reproduces `NewDebtDesktop`
 // (2026-08-26, reversing the earlier "no sidebar" decision) — sidebar +
-// 2-column layout with an itemized "Articles achetés" list, a Premium
-// "Rappel automatique" shortcut, and a "Clients récents" panel. Both
-// layouts share the SAME ClientPicker/AmountField instances (only the
+// 2-column layout with a Premium "Rappel automatique" shortcut and a
+// "Clients récents" panel. The itemized "Articles achetés" list and the
+// "+ Créer client" shortcut were desktop-only at first but are genuinely
+// useful on mobile too (mobile-first audit, 2026-08-31) — both are now
+// shared across breakpoints, with only the right-column-only widgets
+// (reminder toggle, Clients récents, Astuce) staying `hidden lg:flex`.
+// Both layouts share the SAME ClientPicker/AmountField instances (only the
 // surrounding chrome differs via `lg:` classes) so typing/searching never
 // fires duplicate `/api/clients` requests from two simultaneously-mounted
 // pickers — see .planning/banani/statistics.md for the sibling screen's
@@ -85,7 +89,6 @@ function NewDebtPageContent() {
 
   const [client, setClient] = useState<PickedClient | null>(null);
   const [amount, setAmount] = useState<number | null>(null);
-  const [note, setNote] = useState('');
   const [articles, setArticles] = useState<Article[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,7 +123,7 @@ function NewDebtPageContent() {
     if (!client || !amount || amount <= 0) return;
     setSubmitting(true);
     setError(null);
-    const composedNote = articles.length > 0 ? articles.map((a) => a.name).join(', ') : note.trim();
+    const composedNote = articles.length > 0 ? articles.map((a) => a.name).join(', ') : '';
     try {
       await api('/api/transactions', {
         method: 'POST',
@@ -203,27 +206,19 @@ function NewDebtPageContent() {
           <div className="flex-1 px-4 lg:px-8 pt-5 lg:pt-8 pb-8 flex flex-col lg:flex-row gap-6 lg:gap-8">
             {/* Form column */}
             <div className="flex-1 flex flex-col max-w-lg lg:max-w-none w-full mx-auto lg:mx-0">
+              <Link
+                href="/clients/new?next=/debts/new"
+                className="lg:hidden flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-headings font-bold text-sm py-3 rounded-xl mb-4"
+              >
+                <Icon i="plus" size={18} />
+                Créer client
+              </Link>
+
               <ClientPicker value={client} onChange={setClient} inputId={CLIENT_PICKER_INPUT_ID} />
 
               <AmountField label="Montant dû" value={amount} onChange={setAmount} />
 
-              {/* Mobile: free-text note (unchanged) */}
-              <div className="mb-6 lg:hidden">
-                <div className="text-xs font-headings uppercase tracking-wide text-foreground mb-2">
-                  Achetés
-                </div>
-                <div className="bg-input border border-border rounded-xl px-3 py-3 min-h-12 flex items-center">
-                  <input
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                    placeholder="Décris les articles... (optionnel)"
-                    className="flex-1 bg-transparent text-base text-foreground placeholder-muted-foreground outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Desktop: itemized articles list, replaces the free-text note */}
-              <div className="hidden lg:block mb-6">
+              <div className="mb-6">
                 <ArticlesList articles={articles} onChange={setArticles} />
               </div>
 
