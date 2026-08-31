@@ -98,7 +98,15 @@ export default function StatsPage() {
             isPremium={isPremium}
           />
           <div className="max-w-2xl w-full mx-auto flex flex-col px-4 pt-5 pb-8">
-            <div className="font-headings font-bold text-xl text-foreground mb-4">Statistiques</div>
+            <div className="flex items-center gap-3 mb-4">
+              <Link
+                href="/clients"
+                className="w-10 h-10 flex items-center justify-center bg-input border border-border rounded-lg flex-shrink-0"
+              >
+                <Icon i="chevron-left" size={20} className="text-foreground" />
+              </Link>
+              <div className="font-headings font-bold text-xl text-foreground">Statistiques</div>
+            </div>
             {subLoading ? (
               <div className="text-sm text-muted-foreground">Chargement…</div>
             ) : isPremium ? (
