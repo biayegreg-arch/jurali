@@ -373,12 +373,14 @@ function MobileFicheBody({
       </div>
 
       {client.phone && client.balanceFcfa > 0 && (
-        <ReminderCard
-          client={client}
-          isPremium={isPremium}
-          nextEligibleDate={nextEligibleDate}
-          onReminderSent={onRefresh}
-        />
+        <div id="reminder-card">
+          <ReminderCard
+            client={client}
+            isPremium={isPremium}
+            nextEligibleDate={nextEligibleDate}
+            onReminderSent={onRefresh}
+          />
+        </div>
       )}
 
       {derived.overdueBalanceFcfa > 0 && (
@@ -428,6 +430,16 @@ function MobileFicheBody({
         <Icon i="plus" size={20} />
         Ajouter une dette
       </Link>
+
+      {client.phone && client.balanceFcfa > 0 && (
+        <Link
+          href={isPremium ? '#reminder-card' : '/premium'}
+          className="flex items-center justify-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-base py-4 rounded-xl"
+        >
+          <Icon i="message-circle" size={20} />
+          Envoyer WhatsApp
+        </Link>
+      )}
     </div>
   );
 }

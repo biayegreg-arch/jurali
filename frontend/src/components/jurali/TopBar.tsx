@@ -69,6 +69,17 @@ export function TopBar({
                 </span>
               </Link>
             )}
+            {/* Only entry point to /stats on mobile — DesktopSidebar's
+                "Statistiques" nav item has no mobile equivalent otherwise,
+                which made that whole page unreachable from a phone (mobile
+                nav-parity audit, 2026-08-31). */}
+            <Link
+              href="/stats"
+              aria-label="Statistiques"
+              className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center"
+            >
+              <Icon i="bar-chart-2" size={15} className="text-secondary-foreground" />
+            </Link>
             <NotificationBell count={notificationCount} />
             <Link
               href="/settings"
