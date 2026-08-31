@@ -131,7 +131,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         )}
       </AnimatePresence>
 
-      <main className="flex-1 min-w-0 pt-14 lg:pt-0">{children}</main>
+      <main className="flex-1 min-w-0 pt-16 lg:pt-0">{children}</main>
 
       <ConfirmDialog
         open={showLogoutConfirm}
@@ -188,7 +188,12 @@ function SidebarFooter({
             {role === 'SUPERADMIN' ? 'Super Admin' : 'Admin'}
           </div>
         </div>
-        <button type="button" onClick={onLogout} aria-label="Se déconnecter" className="p-1">
+        <button
+          type="button"
+          onClick={onLogout}
+          aria-label="Se déconnecter"
+          className="w-10 h-10 flex items-center justify-center flex-shrink-0"
+        >
           <Icon i="log-out" size={14} className="text-muted-foreground flex-shrink-0" />
         </button>
       </div>

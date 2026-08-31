@@ -108,7 +108,7 @@ export default function PremiumManagePage() {
               <button
                 type="button"
                 onClick={() => router.push('/dashboard')}
-                className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
+                className="w-10 h-10 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
               >
                 <Icon i="chevron-left" size={20} className="text-foreground" />
               </button>
@@ -145,7 +145,7 @@ export default function PremiumManagePage() {
                     Actif
                   </span>
                 </div>
-                <div className="font-headings font-bold text-4xl text-primary-foreground mb-1">
+                <div className="font-headings font-bold text-3xl lg:text-4xl text-primary-foreground mb-1">
                   Premium
                 </div>
                 <div className="font-headings font-bold text-2xl text-primary-foreground mt-2">

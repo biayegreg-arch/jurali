@@ -241,7 +241,7 @@ export default function PremiumCheckoutPage() {
           <div className="flex items-center gap-3 px-4 lg:px-8 pt-6 lg:pt-8 pb-5 border-b border-border">
             <Link
               href="/premium"
-              className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
+              className="w-10 h-10 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
             >
               <Icon i="chevron-left" size={20} className="text-foreground" />
             </Link>
@@ -356,7 +356,7 @@ export default function PremiumCheckoutPage() {
                     <button
                       type="button"
                       onClick={removeCoupon}
-                      className="text-xs font-headings font-bold text-muted-foreground"
+                      className="text-xs font-headings font-bold text-muted-foreground px-3 py-2 min-h-[40px]"
                     >
                       Retirer
                     </button>

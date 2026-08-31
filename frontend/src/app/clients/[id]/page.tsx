@@ -123,7 +123,7 @@ export default function ClientFichePage() {
             <div className="flex items-center gap-3">
               <Link
                 href="/clients"
-                className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+                className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
               >
                 <Icon i="chevron-left" size={20} className="text-primary-foreground" />
               </Link>
@@ -335,7 +335,7 @@ function MobileFicheBody({
           </div>
           <Link
             href={`/clients/${client.id}/edit`}
-            className="w-8 h-8 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
+            className="w-10 h-10 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
           >
             <Icon i="pencil" size={14} className="text-foreground" />
           </Link>

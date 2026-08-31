@@ -30,7 +30,7 @@ export default function ConfidentialitePage() {
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="w-8 h-8 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+            className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
           >
             <Icon i="chevron-left" size={20} className="text-primary-foreground" />
           </Link>

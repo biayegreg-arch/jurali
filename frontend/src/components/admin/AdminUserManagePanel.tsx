@@ -177,7 +177,7 @@ export function AdminUserManagePanel({
                 type="button"
                 onClick={onClose}
                 aria-label="Fermer"
-                className="w-8 h-8 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
+                className="w-10 h-10 rounded-lg bg-input border border-border flex items-center justify-center flex-shrink-0"
               >
                 <Icon i="x" size={16} className="text-foreground" />
               </button>
