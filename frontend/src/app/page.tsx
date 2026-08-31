@@ -472,8 +472,18 @@ export default function LandingPage() {
             </ul>
           </div>
         </div>
-        <div className="max-w-5xl mx-auto mt-8 pt-8 border-t border-border text-center">
+        <div className="max-w-5xl mx-auto mt-8 pt-8 border-t border-border flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-2 text-center">
           <p className="text-xs text-muted-foreground">© 2026 Jurali. Tous droits réservés.</p>
+          <span className="hidden sm:inline text-xs text-muted-foreground">·</span>
+          <div className="flex items-center gap-3">
+            <Link href="/cgu" className="text-xs text-muted-foreground underline">
+              Conditions d’utilisation
+            </Link>
+            <span className="text-xs text-muted-foreground">·</span>
+            <Link href="/confidentialite" className="text-xs text-muted-foreground underline">
+              Confidentialité
+            </Link>
+          </div>
         </div>
       </footer>
     </div>
