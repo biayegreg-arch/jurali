@@ -155,7 +155,7 @@ export default function LandingPage() {
             Plus de papier, plus d’erreurs. Jurali t’aide à suivre les dettes de tes clients
             automatiquement, avec rappels WhatsApp et statistiques en temps réel.
           </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-4">
+          <div className="flex justify-center">
             <Link
               href="/signup"
               className="w-full sm:w-auto flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base px-8 py-4 rounded-xl"
@@ -163,13 +163,6 @@ export default function LandingPage() {
               <Icon i="check-circle" size={20} />
               Commencer gratuitement
             </Link>
-            <a
-              href="#produit"
-              className="w-full sm:w-auto flex items-center justify-center gap-2 border border-primary-foreground text-primary-foreground font-headings font-bold text-base px-8 py-4 rounded-xl"
-            >
-              <Icon i="play" size={18} />
-              Voir la démo
-            </a>
           </div>
           <p className="text-xs text-secondary mt-5">Sans carte bancaire pour démarrer</p>
         </div>
