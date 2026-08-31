@@ -201,6 +201,28 @@ function mapMethodToBictorysType(method: string): string {
   return method.toLowerCase();
 }
 
+/**
+ * Appends `payment_category` to Bictorys' hosted checkout URL so the
+ * buyer lands on the right tab (Mobile Money vs Card) instead of the
+ * default picker. `category` is always one of our own two literals
+ * ('card' | 'mobile_money'), never raw user input — safe to append
+ * unvalidated.
+ */
+function appendPaymentCategory(rawUrl: string, category: 'card' | 'mobile_money'): string {
+  if (!rawUrl) return rawUrl;
+  try {
+    const u = new URL(rawUrl);
+    if (!u.searchParams.has('payment_category')) {
+      u.searchParams.set('payment_category', category);
+    }
+    return u.toString();
+  } catch {
+    // Malformed URL from the provider — return as-is rather than throw;
+    // the caller already has a valid charge, just without a pre-picked tab.
+    return rawUrl;
+  }
+}
+
 // ───────────────────────────────────────────────────────────────────────
 // Factory
 // ───────────────────────────────────────────────────────────────────────
@@ -222,15 +244,26 @@ export function createBictorysProvider(env: BictorysEnv): BictorysProviderHandle
 
   // ── charge ─────────────────────────────────────────────────────────
   async function charge(input: ChargeInput): Promise<ChargeResult> {
-    // Default to wave_money — apps wanting per-method routing should pass
-    // `metadata.paymentType` (mapped just below).
-    const paymentTypeRaw =
-      typeof input.metadata?.paymentType === 'string'
-        ? (input.metadata.paymentType as string)
-        : 'wave_money';
-    const paymentType = mapMethodToBictorysType(paymentTypeRaw);
+    // 'card' — no phone-based operator, buyer pays by bank card on the
+    // hosted page. Anything else defaults to mobile money.
+    const paymentCategory = input.metadata?.paymentCategory === 'card' ? 'card' : 'mobile_money';
 
-    const url = `${baseUrl}/pay/v1/charges?payment_type=${encodeURIComponent(paymentType)}`;
+    // A specific Senegal operator (Wave/Orange Money/Free Money) is the
+    // only case pre-selected via `payment_type` — tested and working.
+    // Other countries' operators aren't reliably nameable from our side
+    // (Bictorys' hosted page auto-detects the country from the phone
+    // number and lists the right local operators itself), so we only
+    // force `payment_type` when a caller explicitly passes one.
+    const paymentTypeRaw =
+      paymentCategory === 'card'
+        ? null
+        : typeof input.metadata?.paymentType === 'string'
+          ? (input.metadata.paymentType as string)
+          : null;
+
+    const url = paymentTypeRaw
+      ? `${baseUrl}/pay/v1/charges?payment_type=${encodeURIComponent(mapMethodToBictorysType(paymentTypeRaw))}`
+      : `${baseUrl}/pay/v1/charges?payment_category=${encodeURIComponent(paymentCategory)}`;
 
     const customerObject: Record<string, unknown> = {
       name: input.customer.name ?? 'Customer',
@@ -290,7 +323,8 @@ export function createBictorysProvider(env: BictorysEnv): BictorysProviderHandle
         if (!providerChargeId) {
           throw new Error('Bictorys returned no charge id');
         }
-        const paymentUrl = data.redirectUrl ?? data.link ?? '';
+        const rawPaymentUrl = data.redirectUrl ?? data.link ?? '';
+        const paymentUrl = appendPaymentCategory(rawPaymentUrl, paymentCategory);
         return {
           providerChargeId,
           paymentUrl,

@@ -13,10 +13,12 @@ import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { PageTransition } from '@/components/jurali/PageTransition';
+import { PhoneField } from '@/components/jurali/PhoneField';
 import { formatPrice } from '@/lib/utils';
 import { formatDateFr } from '@/lib/jurali-format';
 import { PREMIUM_FEATURES } from '@/lib/jurali-premium';
 import { tapScale } from '@/lib/motion';
+import { findCountryByDialPrefix } from '@/lib/jurali-countries';
 
 interface DashboardData {
   totalDueFcfa: number;
@@ -43,13 +45,29 @@ const COUPON_ERROR_MESSAGES: Record<string, string> = {
   COUPON_EXPIRED: 'Ce code promo a expiré.',
 };
 
-type PaymentMethod = 'WAVE' | 'ORANGE_MONEY' | 'FREE_MONEY';
+type PaymentMethod = 'WAVE' | 'ORANGE_MONEY' | 'FREE_MONEY' | 'MOBILE_MONEY' | 'CARD';
 
-const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+// Wave / Orange Money / Free Money are the Senegal-specific operators
+// Bictorys lets us pre-select — shown only when the phone number's country
+// is Sénégal. Any other country falls back to the generic "Mobile Money"
+// option: Bictorys' hosted checkout auto-detects the country from the
+// phone number and lists the right local operators itself (Wave/Orange/MTN
+// in Côte d'Ivoire, Flooz/T-Money in Togo, etc.) — we can't reliably
+// pre-name an operator we've never tested against their API. Carte
+// bancaire needs no phone number and works from any country.
+const SENEGAL_MOBILE_METHODS: { value: PaymentMethod; label: string }[] = [
   { value: 'WAVE', label: 'Wave' },
   { value: 'ORANGE_MONEY', label: 'Orange Money' },
   { value: 'FREE_MONEY', label: 'Free Money' },
 ];
+const GENERIC_MOBILE_METHOD: { value: PaymentMethod; label: string } = {
+  value: 'MOBILE_MONEY',
+  label: 'Mobile Money',
+};
+const CARD_METHOD: { value: PaymentMethod; label: string } = {
+  value: 'CARD',
+  label: 'Carte bancaire',
+};
 
 const ERROR_MESSAGES: Record<string, string> = {
   ALREADY_SUBSCRIBED: 'Tu es déjà Premium.',
@@ -76,7 +94,7 @@ export default function PremiumCheckoutPage() {
   const { data: sub } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
 
   const [method, setMethod] = useState<PaymentMethod>('WAVE');
-  const [digits, setDigits] = useState('');
+  const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -94,9 +112,22 @@ export default function PremiumCheckoutPage() {
 
   const planAmount = sub?.planAmountFcfa ?? 2500;
   const totalAmount = appliedCoupon?.discountedAmountFcfa ?? planAmount;
-  const phone = digits ? `+221${digits}` : '';
   const renewsAt = formatDateFr(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
-  const methodLabel = PAYMENT_METHODS.find((m) => m.value === method)?.label ?? '';
+
+  const country = findCountryByDialPrefix(phone);
+  const mobileMethods = country.iso2 === 'SN' ? SENEGAL_MOBILE_METHODS : [GENERIC_MOBILE_METHOD];
+  const paymentMethods = [...mobileMethods, CARD_METHOD];
+  const methodLabel = paymentMethods.find((m) => m.value === method)?.label ?? '';
+  const isCard = method === 'CARD';
+
+  // Switching country away from Sénégal while a Wave/Orange/Free button
+  // was selected (or back to Sénégal from generic Mobile Money) would
+  // otherwise leave `method` pointing at an option no longer shown.
+  useEffect(() => {
+    if (!isCard && !mobileMethods.some((m) => m.value === method)) {
+      setMethod(mobileMethods[0]!.value);
+    }
+  }, [country.iso2]);
 
   async function applyCoupon() {
     const code = couponInput.trim();
@@ -135,7 +166,7 @@ export default function PremiumCheckoutPage() {
         method: 'POST',
         body: {
           paymentMethod: method,
-          ...(phone ? { phone } : {}),
+          ...(!isCard && phone ? { phone } : {}),
           ...(appliedCoupon ? { couponCode: appliedCoupon.code } : {}),
         },
       });
@@ -171,7 +202,7 @@ export default function PremiumCheckoutPage() {
             {methodLabel}
           </span>
         </div>
-        {phone && (
+        {!isCard && phone && (
           <div className="flex justify-between">
             <span className="text-sm text-secondary">Numéro</span>
             <span className="font-headings font-bold text-sm text-primary-foreground">{phone}</span>
@@ -277,7 +308,7 @@ export default function PremiumCheckoutPage() {
                   Moyen de paiement
                 </div>
                 <div className="flex flex-col gap-2">
-                  {PAYMENT_METHODS.map((m) => (
+                  {paymentMethods.map((m) => (
                     <button
                       key={m.value}
                       type="button"
@@ -292,7 +323,7 @@ export default function PremiumCheckoutPage() {
                         }`}
                       >
                         <Icon
-                          i="smartphone"
+                          i={m.value === 'CARD' ? 'credit-card' : 'smartphone'}
                           size={18}
                           className={
                             method === m.value
@@ -305,7 +336,9 @@ export default function PremiumCheckoutPage() {
                         <div className="font-headings font-bold text-sm text-foreground">
                           {m.label}
                         </div>
-                        <div className="text-xs text-muted-foreground">Mobile Money</div>
+                        <div className="text-xs text-muted-foreground">
+                          {m.value === 'CARD' ? 'Visa, Mastercard' : 'Mobile Money'}
+                        </div>
                       </div>
                       <div
                         className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${
@@ -319,25 +352,17 @@ export default function PremiumCheckoutPage() {
                 </div>
               </div>
 
-              <div className="bg-background border border-border rounded-xl p-5">
-                <div className="font-headings font-bold text-base text-foreground mb-1">
-                  Numéro {methodLabel}
+              {!isCard && (
+                <div className="bg-background border border-border rounded-xl p-5">
+                  <div className="font-headings font-bold text-base text-foreground mb-1">
+                    Numéro {methodLabel}
+                  </div>
+                  <div className="text-xs text-muted-foreground mb-3">
+                    Choisis le pays puis le numéro sur lequel initier le paiement
+                  </div>
+                  <PhoneField value={phone} onChange={setPhone} showLabel={false} />
                 </div>
-                <div className="text-xs text-muted-foreground mb-3">
-                  Le paiement sera initié sur ce numéro
-                </div>
-                <div className="flex items-center gap-2 bg-input border border-border rounded-lg px-4 py-3">
-                  <span className="text-sm font-headings font-bold text-foreground">+221</span>
-                  <div className="w-px h-4 bg-border" />
-                  <input
-                    value={digits}
-                    onChange={(e) => setDigits(e.target.value.replace(/\D/g, '').slice(0, 9))}
-                    inputMode="numeric"
-                    placeholder="77 123 45 67"
-                    className="flex-1 bg-transparent text-sm text-foreground placeholder-muted-foreground outline-none"
-                  />
-                </div>
-              </div>
+              )}
 
               <div className="bg-background border border-border rounded-xl p-5">
                 <div className="font-headings font-bold text-base text-foreground mb-1">

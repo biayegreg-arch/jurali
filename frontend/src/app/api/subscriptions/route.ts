@@ -41,11 +41,15 @@ import { lockUserTx } from '@/lib/server/withdrawals/lock';
 import { isTransientConflict } from '@/lib/server/prisma-errors';
 import { zPhone } from '@/lib/server/zod-helpers';
 
-// Premium checkout's payment-method choice (/premium/checkout) — fixed to
-// Senegalese Mobile Money operators, same vocabulary Bictorys accepts
-// (see bictorys.ts's mapMethodToBictorysType).
+// Premium checkout's payment-method choice (/premium/checkout). WAVE /
+// ORANGE_MONEY / FREE_MONEY are the Senegal-specific operators Bictorys
+// lets us pre-select (see bictorys.ts's mapMethodToBictorysType).
+// MOBILE_MONEY is the generic choice for other UEMOA countries — Bictorys'
+// hosted page auto-detects the country from the phone number and lists
+// the right local operators itself, so we don't force one. CARD needs no
+// phone number at all.
 const CheckoutBody = z.object({
-  paymentMethod: z.enum(['WAVE', 'ORANGE_MONEY', 'FREE_MONEY']).optional(),
+  paymentMethod: z.enum(['WAVE', 'ORANGE_MONEY', 'FREE_MONEY', 'MOBILE_MONEY', 'CARD']).optional(),
   phone: zPhone.optional(),
   couponCode: z.string().trim().min(1).max(32).optional(),
 });
@@ -252,7 +256,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           amount: chargeAmountFcfa,
           currency: 'XOF',
           customer: { email: auth.user.email, ...(phone ? { phone } : {}) },
-          ...(paymentMethod ? { metadata: { paymentType: paymentMethod } } : {}),
+          // CARD and generic MOBILE_MONEY (non-Senegal countries) carry no
+          // specific Bictorys operator string — bictorys.ts falls back to
+          // `payment_category` and lets the hosted page auto-detect the
+          // right local operator from the phone number.
+          ...(paymentMethod === 'CARD'
+            ? { metadata: { paymentCategory: 'card' } }
+            : paymentMethod === 'MOBILE_MONEY'
+              ? { metadata: { paymentCategory: 'mobile_money' } }
+              : paymentMethod
+                ? { metadata: { paymentType: paymentMethod } }
+                : {}),
           successUrl: `${publicUrl}/premium/success`,
           failureUrl: `${publicUrl}/premium/failed`,
           // Bictorys' paymentReference rejects dashes (E400-46) — strip them
