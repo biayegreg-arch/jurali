@@ -379,7 +379,15 @@ export default function LandingPage() {
               </div>
               <div>
                 <h3 className="font-headings font-bold text-xl md:text-2xl">Premium</h3>
-                <div className="font-headings font-bold text-2xl md:text-3xl mt-2">
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-sm md:text-base font-body text-secondary line-through decoration-danger decoration-2">
+                    3 900 FCFA
+                  </span>
+                  <span className="bg-danger text-danger-foreground font-headings font-bold text-[10px] md:text-xs px-2 py-0.5 rounded-md uppercase tracking-wide">
+                    Promo
+                  </span>
+                </div>
+                <div className="font-headings font-bold text-2xl md:text-3xl mt-1">
                   2 500{' '}
                   <span className="text-base font-body font-normal text-secondary">FCFA/mois</span>
                 </div>
