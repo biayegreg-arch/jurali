@@ -155,13 +155,13 @@ export default function ClientFichePage() {
             <div className="flex items-center gap-2">
               <NotificationBell count={notifData?.count} />
               {client && client.phone && client.balanceFcfa > 0 && (
-                <a
-                  href="#reminder-card"
+                <Link
+                  href={isPremium ? '#reminder-card' : '/premium'}
                   className="flex items-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
                 >
                   <Icon i="message-circle" size={16} />
                   Envoyer WhatsApp
-                </a>
+                </Link>
               )}
               {client && (
                 <Link
