@@ -28,6 +28,12 @@ export interface PhoneFieldProps {
   /** Shrinks padding/radius/text to match a compact unlabeled form stack
    * (Settings' profile edit) instead of `ClientForm`'s roomy fields. */
   compact?: boolean;
+  /** Fires whenever the picked country changes, including before any
+   * digit is typed — `value` alone can't signal this (it stays '' until
+   * digits exist, see the `selected` state comment below). Callers that
+   * need to react to the country itself (e.g. showing country-specific
+   * payment options) should use this instead of deriving it from `value`. */
+  onCountryChange?: (country: CountryDialCode) => void;
 }
 
 export function PhoneField({
@@ -37,6 +43,7 @@ export function PhoneField({
   helper,
   showLabel = true,
   compact = false,
+  onCountryChange,
 }: PhoneFieldProps) {
   // Country choice can't be derived purely from `value`: while no digits
   // are typed yet, the composed value stays '' (so the phone remains
@@ -73,6 +80,7 @@ export function PhoneField({
     setSearch('');
     setSelected(country);
     onChange(localDigits ? `+${country.dialCode}${localDigits}` : '');
+    onCountryChange?.(country);
   }
 
   function setLocalDigits(raw: string) {

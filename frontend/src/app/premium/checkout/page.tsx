@@ -18,7 +18,7 @@ import { formatPrice } from '@/lib/utils';
 import { formatDateFr } from '@/lib/jurali-format';
 import { PREMIUM_FEATURES } from '@/lib/jurali-premium';
 import { tapScale } from '@/lib/motion';
-import { findCountryByDialPrefix } from '@/lib/jurali-countries';
+import { findCountryByDialPrefix, type CountryDialCode } from '@/lib/jurali-countries';
 
 interface DashboardData {
   totalDueFcfa: number;
@@ -95,6 +95,11 @@ export default function PremiumCheckoutPage() {
 
   const [method, setMethod] = useState<PaymentMethod>('WAVE');
   const [phone, setPhone] = useState('');
+  // Tracked separately from `phone`: PhoneField only folds the picked
+  // country into its composed value once digits exist, so deriving the
+  // country from `phone` alone misses a country picked before typing —
+  // exactly the case where the payment-method list needs to update.
+  const [country, setCountry] = useState<CountryDialCode>(() => findCountryByDialPrefix(''));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -114,7 +119,6 @@ export default function PremiumCheckoutPage() {
   const totalAmount = appliedCoupon?.discountedAmountFcfa ?? planAmount;
   const renewsAt = formatDateFr(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString());
 
-  const country = findCountryByDialPrefix(phone);
   const mobileMethods = country.iso2 === 'SN' ? SENEGAL_MOBILE_METHODS : [GENERIC_MOBILE_METHOD];
   const paymentMethods = [...mobileMethods, CARD_METHOD];
   const methodLabel = paymentMethods.find((m) => m.value === method)?.label ?? '';
@@ -360,7 +364,12 @@ export default function PremiumCheckoutPage() {
                   <div className="text-xs text-muted-foreground mb-3">
                     Choisis le pays puis le numéro sur lequel initier le paiement
                   </div>
-                  <PhoneField value={phone} onChange={setPhone} showLabel={false} />
+                  <PhoneField
+                    value={phone}
+                    onChange={setPhone}
+                    onCountryChange={setCountry}
+                    showLabel={false}
+                  />
                 </div>
               )}
 
