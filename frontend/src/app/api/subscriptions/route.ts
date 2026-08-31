@@ -41,15 +41,16 @@ import { lockUserTx } from '@/lib/server/withdrawals/lock';
 import { isTransientConflict } from '@/lib/server/prisma-errors';
 import { zPhone } from '@/lib/server/zod-helpers';
 
-// Premium checkout's payment-method choice (/premium/checkout). WAVE /
-// ORANGE_MONEY / FREE_MONEY are the Senegal-specific operators Bictorys
-// lets us pre-select (see bictorys.ts's mapMethodToBictorysType).
-// MOBILE_MONEY is the generic choice for other UEMOA countries — Bictorys'
-// hosted page auto-detects the country from the phone number and lists
-// the right local operators itself, so we don't force one. CARD needs no
-// phone number at all.
+// Premium checkout's payment-method choice (/premium/checkout).
+// MOBILE_MONEY covers Wave/Orange Money/Free Money and every other UEMOA
+// operator — live-tested 2026-08-31: Bictorys' hosted checkout does NOT
+// honor a specific operator pre-selection (a real Orange Money pick still
+// landed on Wave's page), so we don't pretend to offer one. CARD needs no
+// phone number at all. Historical Subscription rows may still carry the
+// old WAVE/ORANGE_MONEY/FREE_MONEY values (read-only display via GET,
+// never re-validated against this schema).
 const CheckoutBody = z.object({
-  paymentMethod: z.enum(['WAVE', 'ORANGE_MONEY', 'FREE_MONEY', 'MOBILE_MONEY', 'CARD']).optional(),
+  paymentMethod: z.enum(['MOBILE_MONEY', 'CARD']).optional(),
   phone: zPhone.optional(),
   couponCode: z.string().trim().min(1).max(32).optional(),
 });
@@ -256,17 +257,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           amount: chargeAmountFcfa,
           currency: 'XOF',
           customer: { email: auth.user.email, ...(phone ? { phone } : {}) },
-          // CARD and generic MOBILE_MONEY (non-Senegal countries) carry no
-          // specific Bictorys operator string — bictorys.ts falls back to
-          // `payment_category` and lets the hosted page auto-detect the
-          // right local operator from the phone number.
-          ...(paymentMethod === 'CARD'
-            ? { metadata: { paymentCategory: 'card' } }
-            : paymentMethod === 'MOBILE_MONEY'
-              ? { metadata: { paymentCategory: 'mobile_money' } }
-              : paymentMethod
-                ? { metadata: { paymentType: paymentMethod } }
-                : {}),
+          ...(paymentMethod === 'CARD' ? { metadata: { paymentCategory: 'card' } } : {}),
           successUrl: `${publicUrl}/premium/success`,
           failureUrl: `${publicUrl}/premium/failed`,
           // Bictorys' paymentReference rejects dashes (E400-46) — strip them

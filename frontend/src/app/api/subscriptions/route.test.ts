@@ -258,15 +258,17 @@ describe('POST /api/subscriptions — happy path', () => {
     prismaMock.subscription.findUnique.mockResolvedValue(null);
     prismaMock.subscription.upsert.mockResolvedValue(seededSub() as never);
     prismaMock.subscription.update.mockResolvedValue(seededSub() as never);
-    const chargeSpy = vi.fn(async () => ({
-      providerChargeId: 'bictorys_charge_sub_1',
-      paymentUrl: 'https://checkout.test/bictorys/pay/sub',
-      status: 'PENDING' as const,
-    }));
+    const chargeSpy = vi.fn(
+      async (_input: { customer: { phone?: string }; metadata?: unknown }) => ({
+        providerChargeId: 'bictorys_charge_sub_1',
+        paymentUrl: 'https://checkout.test/bictorys/pay/sub',
+        status: 'PENDING' as const,
+      }),
+    );
     mockGetProvider.mockReturnValue({ name: 'bictorys', charge: chargeSpy } as never);
 
     const res = await POST(
-      makePost('match', { paymentMethod: 'ORANGE_MONEY', phone: '+221771234567' }),
+      makePost('match', { paymentMethod: 'MOBILE_MONEY', phone: '+221771234567' }),
     );
 
     expect(res.status).toBe(201);
@@ -276,21 +278,45 @@ describe('POST /api/subscriptions — happy path', () => {
           email: 'me@example.com',
           phone: '+221771234567',
         }),
-        metadata: { paymentType: 'ORANGE_MONEY' },
       }),
     );
+    // No forced operator — Bictorys' hosted page doesn't honor a
+    // per-operator payment_type for mobile money (see bictorys.ts).
+    expect(chargeSpy.mock.calls[0]![0]).not.toHaveProperty('metadata');
     expect(prismaMock.subscription.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
         create: expect.objectContaining({
-          paymentMethod: 'ORANGE_MONEY',
+          paymentMethod: 'MOBILE_MONEY',
           paymentPhone: '+221771234567',
         }),
         update: expect.objectContaining({
-          paymentMethod: 'ORANGE_MONEY',
+          paymentMethod: 'MOBILE_MONEY',
           paymentPhone: '+221771234567',
         }),
       }),
     );
+  });
+
+  it('sends paymentCategory:card and no phone for a CARD checkout', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(null);
+    prismaMock.subscription.upsert.mockResolvedValue(seededSub() as never);
+    prismaMock.subscription.update.mockResolvedValue(seededSub() as never);
+    const chargeSpy = vi.fn(
+      async (_input: { customer: { phone?: string }; metadata?: unknown }) => ({
+        providerChargeId: 'bictorys_charge_sub_1',
+        paymentUrl: 'https://checkout.test/bictorys/pay/sub',
+        status: 'PENDING' as const,
+      }),
+    );
+    mockGetProvider.mockReturnValue({ name: 'bictorys', charge: chargeSpy } as never);
+
+    const res = await POST(makePost('match', { paymentMethod: 'CARD' }));
+
+    expect(res.status).toBe(201);
+    expect(chargeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ metadata: { paymentCategory: 'card' } }),
+    );
+    expect(chargeSpy.mock.calls[0]![0].customer.phone).toBeUndefined();
   });
 
   it('defaults to no metadata/phone when paymentMethod/phone are omitted (unchanged behavior)', async () => {

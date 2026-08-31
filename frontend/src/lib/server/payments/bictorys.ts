@@ -190,7 +190,8 @@ async function curlFetch(
 
 /**
  * Map our generic destination.method (WAVE / ORANGE_MONEY / FREE_MONEY)
- * to Bictorys' payment_type query parameter.
+ * to Bictorys' payment_type query parameter. Used by `payout()` only —
+ * `charge()` no longer forces a specific operator (see its own comment).
  */
 function mapMethodToBictorysType(method: string): string {
   const m = method.toUpperCase();
@@ -245,25 +246,15 @@ export function createBictorysProvider(env: BictorysEnv): BictorysProviderHandle
   // ── charge ─────────────────────────────────────────────────────────
   async function charge(input: ChargeInput): Promise<ChargeResult> {
     // 'card' — no phone-based operator, buyer pays by bank card on the
-    // hosted page. Anything else defaults to mobile money.
+    // hosted page. Anything else defaults to mobile money. A specific
+    // operator (Wave/Orange Money/Free Money) can't be reliably forced —
+    // live-tested 2026-08-31: Bictorys' `payment_type` request param does
+    // NOT route to that operator's hosted page (a real Orange Money pick
+    // still landed on Wave), so we only ever request the coarser
+    // mobile_money vs card category.
     const paymentCategory = input.metadata?.paymentCategory === 'card' ? 'card' : 'mobile_money';
 
-    // A specific Senegal operator (Wave/Orange Money/Free Money) is the
-    // only case pre-selected via `payment_type` — tested and working.
-    // Other countries' operators aren't reliably nameable from our side
-    // (Bictorys' hosted page auto-detects the country from the phone
-    // number and lists the right local operators itself), so we only
-    // force `payment_type` when a caller explicitly passes one.
-    const paymentTypeRaw =
-      paymentCategory === 'card'
-        ? null
-        : typeof input.metadata?.paymentType === 'string'
-          ? (input.metadata.paymentType as string)
-          : null;
-
-    const url = paymentTypeRaw
-      ? `${baseUrl}/pay/v1/charges?payment_type=${encodeURIComponent(mapMethodToBictorysType(paymentTypeRaw))}`
-      : `${baseUrl}/pay/v1/charges?payment_category=${encodeURIComponent(paymentCategory)}`;
+    const url = `${baseUrl}/pay/v1/charges?payment_category=${encodeURIComponent(paymentCategory)}`;
 
     const customerObject: Record<string, unknown> = {
       name: input.customer.name ?? 'Customer',
