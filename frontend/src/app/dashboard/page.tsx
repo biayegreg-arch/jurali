@@ -259,6 +259,7 @@ export default function DashboardPage() {
           clientsLoading={debtorItemsLoading}
           notificationCount={notificationCount}
           onDelete={deleteClient.requestDelete}
+          showPaymentAction
         />
       </div>
 

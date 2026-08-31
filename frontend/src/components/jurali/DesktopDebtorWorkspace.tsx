@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Icon } from './Icon';
 import { NotificationBell } from './TopBar';
 import { DebtorTableRow } from './DebtorTableRow';
@@ -26,6 +27,11 @@ export interface DesktopDebtorWorkspaceProps {
   clientsLoading: boolean;
   notificationCount: number;
   onDelete?: (id: string, name: string) => void;
+  /** /dashboard-only — mirrors mobile's always-visible "Nouvelle dette" +
+   * "Paiement reçu" pair (PRD 3.2/§4); /clients' mobile view only shows
+   * "Nouvelle dette", so this stays opt-in rather than always-on here
+   * (mobile/desktop parity audit, 2026-08-31). */
+  showPaymentAction?: boolean;
 }
 
 export function DesktopDebtorWorkspace({
@@ -43,6 +49,7 @@ export function DesktopDebtorWorkspace({
   clientsLoading,
   notificationCount,
   onDelete,
+  showPaymentAction = false,
 }: DesktopDebtorWorkspaceProps) {
   return (
     <div className="hidden lg:flex flex-1 flex-col">
@@ -59,7 +66,18 @@ export function DesktopDebtorWorkspace({
             </div>
           )}
         </div>
-        <NotificationBell count={notificationCount} />
+        <div className="flex items-center gap-3">
+          {showPaymentAction && (
+            <Link
+              href="/payments/new"
+              className="flex items-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
+            >
+              <Icon i="check" size={16} />
+              Paiement reçu
+            </Link>
+          )}
+          <NotificationBell count={notificationCount} />
+        </div>
       </div>
 
       <div className="px-8 pt-5 pb-4 flex items-center gap-4">
