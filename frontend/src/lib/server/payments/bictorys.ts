@@ -202,28 +202,6 @@ function mapMethodToBictorysType(method: string): string {
   return method.toLowerCase();
 }
 
-/**
- * Appends `payment_category` to Bictorys' hosted checkout URL so the
- * buyer lands on the right tab (Mobile Money vs Card) instead of the
- * default picker. `category` is always one of our own two literals
- * ('card' | 'mobile_money'), never raw user input — safe to append
- * unvalidated.
- */
-function appendPaymentCategory(rawUrl: string, category: 'card' | 'mobile_money'): string {
-  if (!rawUrl) return rawUrl;
-  try {
-    const u = new URL(rawUrl);
-    if (!u.searchParams.has('payment_category')) {
-      u.searchParams.set('payment_category', category);
-    }
-    return u.toString();
-  } catch {
-    // Malformed URL from the provider — return as-is rather than throw;
-    // the caller already has a valid charge, just without a pre-picked tab.
-    return rawUrl;
-  }
-}
-
 // ───────────────────────────────────────────────────────────────────────
 // Factory
 // ───────────────────────────────────────────────────────────────────────
@@ -314,8 +292,12 @@ export function createBictorysProvider(env: BictorysEnv): BictorysProviderHandle
         if (!providerChargeId) {
           throw new Error('Bictorys returned no charge id');
         }
-        const rawPaymentUrl = data.redirectUrl ?? data.link ?? '';
-        const paymentUrl = appendPaymentCategory(rawPaymentUrl, paymentCategory);
+        // `payment_category` was already sent on the create request above —
+        // Bictorys' redirectUrl/op_token is signed for that exact charge, so
+        // it's returned as-is. Appending query params to it here used to
+        // invalidate the signed op_token (live-tested 2026-09-01: every
+        // checkout landed on "Token Expired" once we mutated this URL).
+        const paymentUrl = data.redirectUrl ?? data.link ?? '';
         return {
           providerChargeId,
           paymentUrl,
