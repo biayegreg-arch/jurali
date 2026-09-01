@@ -178,6 +178,7 @@ export default function LandingPage() {
             width={1424}
             height={811}
             className="w-full h-auto"
+            sizes="(min-width: 1024px) 1024px, 100vw"
             priority
           />
         </div>
@@ -256,6 +257,7 @@ export default function LandingPage() {
                 alt="Écran Nouvelle dette de Jurali — enregistrer une dette en quelques secondes"
                 fill
                 className="object-cover"
+                sizes="(min-width: 1024px) 50vw, 100vw"
               />
             </div>
           </div>
