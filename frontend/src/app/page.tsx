@@ -4,6 +4,7 @@
 // `/dashboard`) and copy/interaction fixes (trial language dropped, dead nav
 // links removed, "Voir la démo" repointed to a real in-page anchor).
 //
+import Image from 'next/image';
 import Link from 'next/link';
 import { Icon } from '@/components/jurali/Icon';
 import { JuraliMark } from '@/components/jurali/JuraliMark';
@@ -170,11 +171,15 @@ export default function LandingPage() {
 
       {/* === HERO IMAGE SPACE === */}
       <section className="bg-background px-4 md:px-8 py-10 md:py-12">
-        <div className="max-w-5xl mx-auto bg-input border border-border rounded-2xl flex items-center justify-center min-h-[240px] md:min-h-[400px]">
-          <div className="text-center">
-            <Icon i="smartphone" size={56} className="text-muted-foreground mx-auto mb-4" />
-            <p className="text-sm text-muted-foreground">Dashboard Jurali en action</p>
-          </div>
+        <div className="max-w-5xl mx-auto bg-input border border-border rounded-2xl overflow-hidden">
+          <Image
+            src="/dashboard-preview.png"
+            alt="Fiche client Jurali — suivi des paiements et historique des dettes"
+            width={1424}
+            height={811}
+            className="w-full h-auto"
+            priority
+          />
         </div>
       </section>
 
