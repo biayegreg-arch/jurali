@@ -250,8 +250,13 @@ export default function LandingPage() {
       <section id="produit" className="bg-background px-4 md:px-8 py-12 md:py-16 scroll-mt-16">
         <div className="max-w-5xl mx-auto flex flex-col lg:flex-row gap-8 lg:gap-12 lg:items-center">
           <div className="flex-1">
-            <div className="bg-input border border-border rounded-2xl aspect-video flex items-center justify-center">
-              <Icon i="smartphone" size={64} className="text-muted-foreground" />
+            <div className="relative bg-input border border-border rounded-2xl aspect-video overflow-hidden">
+              <Image
+                src="/nouvelle-dette-preview.png"
+                alt="Écran Nouvelle dette de Jurali — enregistrer une dette en quelques secondes"
+                fill
+                className="object-cover"
+              />
             </div>
           </div>
           <div className="flex-1">
