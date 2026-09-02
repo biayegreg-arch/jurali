@@ -39,3 +39,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     );
   });
 }
+
+// Vercel Cron invokes scheduled jobs with a GET request, not POST — this
+// route was only reachable manually (curl -X POST) until now, so the real
+// scheduled trigger has been silently 405ing in production. Alias GET to
+// the same handler rather than rename POST, so existing tests/manual
+// curl-based invocations keep working unchanged.
+export const GET = POST;
