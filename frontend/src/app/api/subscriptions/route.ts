@@ -179,13 +179,24 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
             return { kind: 'already-subscribed' as const };
           }
           if (existing?.status === 'PENDING') {
-            if (existing.paymentUrl) {
-              // Replay — same in-flight checkout, don't double-charge.
-              return { kind: 'pending-replay' as const, paymentUrl: existing.paymentUrl };
+            // Bictorys' hosted-checkout token expires within minutes, and a
+            // declined/abandoned attempt does not reliably trigger an
+            // onFailed webhook (no real charge was ever attempted against
+            // an operator) — so a PENDING row can otherwise get stuck
+            // forever, replaying a dead link on every retry (live-tested
+            // 2026-09-02: same charge_id/op_token, permanently
+            // "Token Expired"). Past this TTL, treat it as abandoned and
+            // fall through to start a fresh checkout below.
+            const pendingIsFresh = Date.now() - existing.updatedAt.getTime() < 10 * 60 * 1000;
+            if (pendingIsFresh) {
+              if (existing.paymentUrl) {
+                // Replay — same in-flight checkout, don't double-charge.
+                return { kind: 'pending-replay' as const, paymentUrl: existing.paymentUrl };
+              }
+              // Crash-race guard (mirrors /api/orders WR-01): a prior attempt
+              // created the row but never got a paymentUrl back.
+              return { kind: 'in-flight' as const };
             }
-            // Crash-race guard (mirrors /api/orders WR-01): a prior attempt
-            // created the row but never got a paymentUrl back.
-            return { kind: 'in-flight' as const };
           }
 
           const row = await tx.subscription.upsert({

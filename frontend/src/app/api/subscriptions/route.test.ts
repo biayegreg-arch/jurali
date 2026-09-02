@@ -494,7 +494,7 @@ describe('POST /api/subscriptions — replay + guard branches', () => {
 
   it('replays the existing paymentUrl (200) for a PENDING checkout already in flight', async () => {
     prismaMock.subscription.findUnique.mockResolvedValue(
-      seededSub({ paymentUrl: 'https://checkout.test/prior' }) as never,
+      seededSub({ paymentUrl: 'https://checkout.test/prior', updatedAt: new Date() }) as never,
     );
     const res = await POST(makePost());
     expect(res.status).toBe(200);
@@ -503,11 +503,33 @@ describe('POST /api/subscriptions — replay + guard branches', () => {
   });
 
   it('503 PAYMENT_IN_FLIGHT for a PENDING row with no paymentUrl (crash race)', async () => {
-    prismaMock.subscription.findUnique.mockResolvedValue(seededSub({ paymentUrl: null }) as never);
+    prismaMock.subscription.findUnique.mockResolvedValue(
+      seededSub({ paymentUrl: null, updatedAt: new Date() }) as never,
+    );
     const res = await POST(makePost());
     expect(res.status).toBe(503);
     expect((await res.json()).error).toBe('PAYMENT_IN_FLIGHT');
     expect(mockExecute).not.toHaveBeenCalled();
+  });
+
+  it('starts a fresh checkout instead of replaying a PENDING row past the TTL (dead Bictorys token)', async () => {
+    prismaMock.subscription.findUnique.mockResolvedValue(
+      seededSub({
+        paymentUrl: 'https://checkout.test/dead-and-expired',
+        updatedAt: new Date(Date.now() - 11 * 60 * 1000),
+      }) as never,
+    );
+    prismaMock.subscription.upsert.mockResolvedValue(seededSub() as never);
+    prismaMock.subscription.update.mockResolvedValue(seededSub() as never);
+    mockExecute.mockResolvedValue({
+      providerChargeId: 'bictorys_charge_fresh',
+      paymentUrl: 'https://checkout.test/fresh',
+      status: 'PENDING' as const,
+    } as never);
+    const res = await POST(makePost());
+    expect(res.status).toBe(201);
+    expect((await res.json()).paymentUrl).toBe('https://checkout.test/fresh');
+    expect(mockExecute).toHaveBeenCalledTimes(1);
   });
 
   it('403 when CSRF token is missing', async () => {
