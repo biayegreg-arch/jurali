@@ -109,6 +109,20 @@ describe('GET /api/auth/me', () => {
     expect(body.user.address).toBe('Médina, Dakar');
   });
 
+  it('returns avatarUrl when set, null otherwise', async () => {
+    vi.mocked(verifyToken).mockResolvedValue({ sub: 'u1', email: 'a@b.com', tokenVersion: 0 });
+    prismaMock.user.findUnique.mockResolvedValue({
+      id: 'u1',
+      email: 'a@b.com',
+      tokenVersion: 0,
+      avatarUrl: 'https://res.cloudinary.com/demo/image/upload/u1/photo.jpg',
+    } as never);
+
+    const res = await GET(makeReq({ bearer: 'valid-access-token' }));
+    const body = (await res.json()) as { user: { avatarUrl: string | null } };
+    expect(body.user.avatarUrl).toBe('https://res.cloudinary.com/demo/image/upload/u1/photo.jpg');
+  });
+
   it('Test 2: no cookie + no bearer — 401 missing token', async () => {
     const res = await GET(makeReq());
     expect(res.status).toBe(401);
@@ -222,6 +236,40 @@ describe('PATCH /api/auth/me', () => {
     expect(prismaMock.user.update).toHaveBeenCalledWith(
       expect.objectContaining({ data: { address: 'Plateau, Dakar' } }),
     );
+  });
+
+  it('updates avatarUrl when provided', async () => {
+    prismaMock.user.update.mockResolvedValue({
+      avatarUrl: 'https://res.cloudinary.com/demo/image/upload/u1/photo.jpg',
+    } as never);
+
+    const res = await PATCH(
+      makePatchReq(
+        { avatarUrl: 'https://res.cloudinary.com/demo/image/upload/u1/photo.jpg' },
+        { bearer: 'tok' },
+      ),
+    );
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { avatarUrl: 'https://res.cloudinary.com/demo/image/upload/u1/photo.jpg' },
+      }),
+    );
+  });
+
+  it('clears avatarUrl back to null when given an empty string', async () => {
+    prismaMock.user.update.mockResolvedValue({ avatarUrl: null } as never);
+
+    const res = await PATCH(makePatchReq({ avatarUrl: '' }, { bearer: 'tok' }));
+    expect(res.status).toBe(200);
+    expect(prismaMock.user.update).toHaveBeenCalledWith(
+      expect.objectContaining({ data: { avatarUrl: null } }),
+    );
+  });
+
+  it('returns 400 VALIDATION_FAILED for a non-URL avatarUrl', async () => {
+    const res = await PATCH(makePatchReq({ avatarUrl: 'not-a-url' }, { bearer: 'tok' }));
+    expect(res.status).toBe(400);
   });
 
   it('returns 409 PHONE_REQUIRED when clearing phone would lock a phone-only account out', async () => {

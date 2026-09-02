@@ -5,9 +5,10 @@
 // and a Premium CSV export. See .planning/banani/parametres.md.
 'use client';
 
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Link from 'next/link';
 import { api, ApiError } from '@/lib/api';
+import { uploadFile } from '@/lib/uploadFile';
 import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useToast } from '@/contexts/ToastContext';
 import { useApi, invalidateAllCache } from '@/lib/useApi';
@@ -185,9 +186,19 @@ interface User {
   shopName: string | null;
   phone: string | null;
   address: string | null;
+  avatarUrl: string | null;
   hasPassword: boolean;
   linkedProviders: string[];
 }
+
+const PHOTO_ERROR_MESSAGES: Record<string, string> = {
+  STORAGE_NOT_CONFIGURED: 'Envoi de photo indisponible pour le moment.',
+  FILE_TOO_LARGE: 'Photo trop volumineuse.',
+  INVALID_MIME: 'Format non pris en charge — utilise une image JPEG, PNG ou WebP.',
+  MAGIC_BYTE_MISMATCH: 'Ce fichier n’est pas une image valide.',
+  HEIC_CONVERSION_FAILED: 'Impossible de convertir cette photo. Essaie un autre format.',
+  UPLOAD_FAILED: 'Envoi échoué. Réessaie.',
+};
 
 function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<void> }) {
   const { toast } = useToast();
@@ -198,6 +209,30 @@ function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<
   const [address, setAddress] = useState(user.address ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+
+  async function handlePhotoSelect(e: ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploadingPhoto(true);
+    try {
+      const { url } = await uploadFile(file);
+      await api('/api/auth/me', { method: 'PATCH', body: { avatarUrl: url } });
+      invalidateAllCache();
+      await refresh();
+      toast('Photo mise à jour.', 'success');
+    } catch (err) {
+      const message =
+        err instanceof ApiError
+          ? (PHOTO_ERROR_MESSAGES[err.code] ?? err.message)
+          : 'Erreur réseau. Réessaie.';
+      toast(message, 'error');
+    } finally {
+      setUploadingPhoto(false);
+    }
+  }
 
   async function submit(e: FormEvent) {
     e.preventDefault();
@@ -238,10 +273,36 @@ function ProfileSection({ user, refresh }: { user: User; refresh: () => Promise<
     <SettingsSection title="Profil & Boutique">
       <div className={`px-5 py-5 ${editing ? '' : 'border-b border-border'}`}>
         <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center flex-shrink-0">
-            <span className="font-headings font-bold text-lg text-secondary-foreground">
-              {(user.name || user.shopName || user.email).charAt(0).toUpperCase()}
-            </span>
+          <div className="relative flex-shrink-0">
+            {user.avatarUrl ? (
+              <img
+                src={user.avatarUrl}
+                alt=""
+                className="w-14 h-14 rounded-2xl object-cover bg-secondary"
+              />
+            ) : (
+              <div className="w-14 h-14 rounded-2xl bg-secondary flex items-center justify-center">
+                <span className="font-headings font-bold text-lg text-secondary-foreground">
+                  {(user.name || user.shopName || user.email).charAt(0).toUpperCase()}
+                </span>
+              </div>
+            )}
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+              onChange={handlePhotoSelect}
+              className="hidden"
+            />
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              disabled={uploadingPhoto}
+              aria-label="Changer la photo"
+              className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-primary border-2 border-background flex items-center justify-center disabled:opacity-60"
+            >
+              <Icon i="camera" size={11} className="text-primary-foreground" />
+            </button>
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-headings font-bold text-base text-foreground truncate">

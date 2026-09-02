@@ -36,6 +36,10 @@ const PatchBody = z.object({
   shopName: z.string().trim().min(1).max(120).optional(),
   phone: z.union([zPhone, z.literal('')]).optional(),
   address: z.union([z.string().trim().min(1).max(200), z.literal('')]).optional(),
+  // Set via POST /api/upload's returned Cloudinary secure_url, never
+  // uploaded directly here — '' clears the photo back to the
+  // initial-letter fallback.
+  avatarUrl: z.union([z.string().trim().url().max(500), z.literal('')]).optional(),
 });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -63,6 +67,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         name: true,
         phone: true,
         address: true,
+        avatarUrl: true,
         role: true,
         oauthAccounts: { select: { provider: true } },
       },
@@ -95,6 +100,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       name: dbUser?.name ?? null,
       phone: dbUser?.phone ?? null,
       address: dbUser?.address ?? null,
+      avatarUrl: dbUser?.avatarUrl ?? null,
       role: dbUser?.role ?? 'USER',
     };
 
@@ -130,6 +136,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
     if (parsed.data.name !== undefined) data.name = parsed.data.name;
     if (parsed.data.shopName !== undefined) data.shopName = parsed.data.shopName;
     if (parsed.data.address !== undefined) data.address = parsed.data.address || null;
+    if (parsed.data.avatarUrl !== undefined) data.avatarUrl = parsed.data.avatarUrl || null;
 
     if (parsed.data.phone !== undefined) {
       const nextPhone = parsed.data.phone || null;
@@ -184,7 +191,7 @@ export async function PATCH(req: NextRequest): Promise<NextResponse> {
       updated = await prisma.user.update({
         where: { id: auth.user.sub },
         data,
-        select: { name: true, shopName: true, phone: true, address: true },
+        select: { name: true, shopName: true, phone: true, address: true, avatarUrl: true },
       });
     } catch (err) {
       // TOCTOU: two concurrent PATCHes to the same new phone can both pass

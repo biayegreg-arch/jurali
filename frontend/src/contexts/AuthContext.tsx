@@ -24,6 +24,10 @@ export interface User {
   phone: string | null;
   /** Shop address — Phase 9 desktop /settings, editable via PATCH /api/auth/me. */
   address: string | null;
+  /** Profile/shop photo — OAuth-provided initially, replaceable via
+   * POST /api/upload + PATCH /api/auth/me. Falls back to an initial-letter
+   * avatar everywhere it's rendered when null. */
+  avatarUrl: string | null;
   /** App-wide role: USER | ADMIN | SUPERADMIN — gates the /admin back-office. */
   role: 'USER' | 'ADMIN' | 'SUPERADMIN';
 }
