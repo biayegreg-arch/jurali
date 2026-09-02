@@ -39,6 +39,11 @@ vi.mock('@/lib/server/auth', () => ({
   verifyCsrf: vi.fn(() => null),
 }));
 
+const { mockLogError } = vi.hoisted(() => ({ mockLogError: vi.fn() }));
+vi.mock('@/lib/server/logger', () => ({
+  createLogger: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: mockLogError }),
+}));
+
 const prismaCreate = vi.fn(async (args: unknown) => ({
   id: 'fu-1',
   key: (args as { data: { key: string } }).data.key,
@@ -157,6 +162,24 @@ describe('POST /api/upload (Cloudinary)', () => {
     expect(res.status).toBe(502);
     const body = await res.json();
     expect(body.code).toBe('UPLOAD_FAILED');
+  });
+
+  it('logs the real Cloudinary message when the SDK throws a plain error object (not an Error instance)', async () => {
+    const { uploadBuffer } = await import('@/lib/server/upload/cloudinary-client');
+    (uploadBuffer as unknown as Mock).mockImplementationOnce(async () => {
+      // Matches the real Cloudinary Node SDK's upload_stream callback error
+      // shape — a plain object, not `new Error(...)` — which is exactly
+      // what broke the naive `e instanceof Error` extraction.
+      throw { message: 'Invalid Signature', http_code: 401, name: 'Error' };
+    });
+    const { POST } = await import('./route');
+    const f = new File([new Uint8Array([0xff, 0xd8, 0xff])], 'a.jpg', { type: 'image/jpeg' });
+    const res = await POST(makeReq(f) as never);
+    expect(res.status).toBe(502);
+    expect(mockLogError).toHaveBeenCalledWith(
+      'upload: Cloudinary write failed',
+      expect.objectContaining({ cloudinaryMessage: 'Invalid Signature', cloudinaryHttpCode: 401 }),
+    );
   });
 
   it('csrf missing returns 403', async () => {

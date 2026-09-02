@@ -156,11 +156,19 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           { status: 503, headers: { 'x-request-id': ctx.requestId } },
         );
       }
-      // Cloudinary SDK errors carry { message, http_code } — logged here
-      // (never echoed to the client) so a misconfigured account (bad
-      // key/secret, disabled uploads, quota) is diagnosable from Vercel
-      // logs instead of a generic 502. Never logs the request buffer/creds.
-      const cloudinaryMessage = e instanceof Error ? e.message : String(e);
+      // Cloudinary SDK errors are often a PLAIN OBJECT `{ message, http_code,
+      // name }`, not a real Error instance — `e instanceof Error` is false,
+      // so pulling `.message` must be shape-checked separately rather than
+      // falling back to String(e) (which stringifies a plain object to the
+      // useless literal "[object Object]"). Logged here (never echoed to the
+      // client) so a misconfigured account is diagnosable from Vercel logs
+      // instead of a generic 502. Never logs the request buffer/creds.
+      const hasMessage =
+        typeof e === 'object' &&
+        e !== null &&
+        'message' in e &&
+        typeof (e as { message: unknown }).message === 'string';
+      const cloudinaryMessage = hasMessage ? (e as { message: string }).message : String(e);
       const cloudinaryHttpCode =
         typeof e === 'object' && e !== null && 'http_code' in e
           ? (e as { http_code: unknown }).http_code
