@@ -22,6 +22,8 @@ export interface BictorysFixtureOpts {
   webhookSecret?: string;
   /** Override the timestamp — useful for replay-window tests. */
   timestamp?: number;
+  /** Bictorys' merchant-supplied reference, e.g. "sub_<id>_<rand>". */
+  paymentReference?: string;
 }
 
 export function bictorysFixture(opts: BictorysFixtureOpts = {}): {
@@ -36,6 +38,7 @@ export function bictorysFixture(opts: BictorysFixtureOpts = {}): {
     status,
     event_type: status,
     payment_method: opts.paymentMethod ?? 'wave_money',
+    ...(opts.paymentReference !== undefined ? { paymentReference: opts.paymentReference } : {}),
   };
   const rawBody = Buffer.from(JSON.stringify(payload));
   const ts = String(opts.timestamp ?? Date.now());

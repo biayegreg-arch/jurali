@@ -54,15 +54,36 @@ export const POST = createWebhookHandler({
     });
     if (!order) {
       // Phase 7 — not an Order charge; try Subscription (Premium checkout).
-      const subscription = await tx.subscription.findFirst({
+      let subscription = await tx.subscription.findFirst({
         where: { providerChargeId: externalRef },
       });
+      if (!subscription) {
+        // Fallback correlation via paymentReference ("sub_<id>_<rand>") —
+        // a success can legitimately arrive for an OLDER checkout attempt
+        // after the user started a newer one (e.g. a stale link retried
+        // past the PENDING-replay TTL), by which point providerChargeId
+        // already points at the newer, uncompleted attempt. Real captured
+        // money must never be silently dropped just because it's no longer
+        // the "current" attempt (live incident 2026-09-02: a confirmed
+        // succeeded webhook had no matching providerChargeId and the
+        // subscription stayed on the free plan despite a real charge).
+        const paymentReference =
+          typeof payload.paymentReference === 'string' ? payload.paymentReference : '';
+        const refMatch = /^sub_([^_]+)_/.exec(paymentReference);
+        if (refMatch?.[1]) {
+          subscription = await tx.subscription.findUnique({ where: { id: refMatch[1] } });
+        }
+      }
       if (!subscription) return {}; // unknown charge — log + drop
       await tx.subscription.update({
         where: { id: subscription.id },
         data: {
           status: 'ACTIVE',
           renewsAt: new Date(Date.now() + SUBSCRIPTION_PERIOD_DAYS * 24 * 60 * 60 * 1000),
+          // Keep providerChargeId in sync with whichever charge actually
+          // succeeded, so a later refund/failed webhook for this same
+          // charge still correlates via the normal exact-match path.
+          providerChargeId: externalRef,
         },
       });
       // Coupon.redemptionCount is informational only (no cap enforced) but

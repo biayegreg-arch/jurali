@@ -8,6 +8,7 @@ const orderFindFirst = vi.fn();
 const orderUpdate = vi.fn();
 const outboxCreate = vi.fn();
 const subscriptionFindFirst = vi.fn();
+const subscriptionFindUnique = vi.fn();
 const subscriptionUpdate = vi.fn();
 const couponUpdate = vi.fn();
 
@@ -16,7 +17,11 @@ const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?:
     webhookLog: { findUnique, create, update },
     order: { findFirst: orderFindFirst, update: orderUpdate },
     outboxEvent: { create: outboxCreate },
-    subscription: { findFirst: subscriptionFindFirst, update: subscriptionUpdate },
+    subscription: {
+      findFirst: subscriptionFindFirst,
+      findUnique: subscriptionFindUnique,
+      update: subscriptionUpdate,
+    },
     coupon: { update: couponUpdate },
   }),
 );
@@ -37,6 +42,7 @@ beforeEach(() => {
   orderUpdate.mockReset();
   outboxCreate.mockReset();
   subscriptionFindFirst.mockReset();
+  subscriptionFindUnique.mockReset();
   subscriptionUpdate.mockReset();
   couponUpdate.mockReset();
 });
@@ -158,6 +164,34 @@ describe('POST /api/webhooks/bictorys', () => {
         where: { id: 'coupon_1' },
         data: { redemptionCount: { increment: 1 } },
       });
+    });
+
+    it('onPaid falls back to paymentReference when providerChargeId no longer matches (stale attempt superseded)', async () => {
+      findUnique.mockResolvedValueOnce(null);
+      orderFindFirst.mockResolvedValueOnce(null);
+      // Exact providerChargeId match misses — a newer checkout attempt has
+      // since overwritten it — but the paymentReference embeds the stable
+      // subscription id, so the late success must still land.
+      subscriptionFindFirst.mockResolvedValueOnce(null);
+      subscriptionFindUnique.mockResolvedValueOnce({ id: 'clstalecuid1', couponId: null });
+      const { POST } = await import('./route');
+      const { req } = bictorysFixtureRequest({
+        status: 'succeeded',
+        chargeId: 'charge_old_and_superseded',
+        paymentReference: 'sub_clstalecuid1_deadbeef1234',
+      });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(subscriptionFindUnique).toHaveBeenCalledWith({ where: { id: 'clstalecuid1' } });
+      expect(subscriptionUpdate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'clstalecuid1' },
+          data: expect.objectContaining({
+            status: 'ACTIVE',
+            providerChargeId: 'charge_old_and_superseded',
+          }),
+        }),
+      );
     });
 
     it('onFailed marks a Subscription FAILED found by providerChargeId', async () => {
