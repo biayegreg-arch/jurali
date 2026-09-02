@@ -39,6 +39,7 @@ import heicConvert from 'heic-convert';
 import { NextResponse, type NextRequest } from 'next/server';
 
 import { verifyCsrf } from '@/lib/server/auth';
+import { createLogger } from '@/lib/server/logger';
 import { requireAuth } from '@/lib/server/middleware';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { prisma } from '@/lib/server/prisma';
@@ -46,6 +47,7 @@ import { StorageNotConfiguredError, uploadBuffer } from '@/lib/server/upload/clo
 import { sanitizeFilename } from '@/lib/server/upload/sanitize-filename';
 import { verifyMagicBytes } from '@/lib/server/upload/sniff';
 
+const log = createLogger();
 const HEIC_MIMES = new Set(['image/heic', 'image/heif']);
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
@@ -154,6 +156,20 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           { status: 503, headers: { 'x-request-id': ctx.requestId } },
         );
       }
+      // Cloudinary SDK errors carry { message, http_code } — logged here
+      // (never echoed to the client) so a misconfigured account (bad
+      // key/secret, disabled uploads, quota) is diagnosable from Vercel
+      // logs instead of a generic 502. Never logs the request buffer/creds.
+      const cloudinaryMessage = e instanceof Error ? e.message : String(e);
+      const cloudinaryHttpCode =
+        typeof e === 'object' && e !== null && 'http_code' in e
+          ? (e as { http_code: unknown }).http_code
+          : undefined;
+      log.error('upload: Cloudinary write failed', {
+        requestId: ctx.requestId,
+        cloudinaryMessage,
+        cloudinaryHttpCode,
+      });
       return NextResponse.json(
         { code: 'UPLOAD_FAILED', message: 'Storage write failed' },
         { status: 502, headers: { 'x-request-id': ctx.requestId } },
