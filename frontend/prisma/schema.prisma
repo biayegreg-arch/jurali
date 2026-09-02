@@ -393,6 +393,16 @@ model Client {
   email              String?
   address            String?
   lastReminderSentAt DateTime?
+  // Per-client overrides of the account-wide reminder settings
+  // (User.autoReminderEnabled/overdueAlertsEnabled — still the master
+  // Premium-gated switches). `autoReminderEnabled` defaults true so every
+  // existing client keeps today's behavior; the two threshold columns are
+  // nullable — null means "use the global constant"
+  // (AUTO_REMINDER_THRESHOLD_DAYS / OVERDUE_ALERT_THRESHOLD_DAYS) — see
+  // lib/server/jurali/auto-reminder.ts and overdue-alert.ts (2026-09-02).
+  autoReminderEnabled       Boolean   @default(true)
+  autoReminderThresholdDays Int?
+  overdueAlertThresholdDays Int?
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @updatedAt
   transactions       Transaction[]

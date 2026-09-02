@@ -264,6 +264,43 @@ describe('PATCH /api/clients/[id]', () => {
       }),
     );
   });
+
+  it('updates the per-client reminder overrides', async () => {
+    const { req, routeCtx } = makePatch('client-1', {
+      autoReminderEnabled: false,
+      autoReminderThresholdDays: 3,
+      overdueAlertThresholdDays: 21,
+    });
+    await PATCH(req, routeCtx);
+    expect(prismaMock.client.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: {
+          autoReminderEnabled: false,
+          autoReminderThresholdDays: 3,
+          overdueAlertThresholdDays: 21,
+        },
+      }),
+    );
+  });
+
+  it('accepts null thresholds to fall back to the account-wide default', async () => {
+    const { req, routeCtx } = makePatch('client-1', {
+      autoReminderThresholdDays: null,
+      overdueAlertThresholdDays: null,
+    });
+    await PATCH(req, routeCtx);
+    expect(prismaMock.client.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: { autoReminderThresholdDays: null, overdueAlertThresholdDays: null },
+      }),
+    );
+  });
+
+  it('returns 400 VALIDATION_FAILED when a threshold is out of the 1-90 range', async () => {
+    const { req, routeCtx } = makePatch('client-1', { autoReminderThresholdDays: 91 });
+    const res = await PATCH(req, routeCtx);
+    expect(res.status).toBe(400);
+  });
 });
 
 describe('DELETE /api/clients/[id]', () => {

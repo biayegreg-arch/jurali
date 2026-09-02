@@ -182,6 +182,45 @@ describe('POST /api/cron/auto-reminders', () => {
     expect((await res.json()).notified).toBe(0);
   });
 
+  it('skips a client with autoReminderEnabled explicitly set to false', async () => {
+    findMany.mockResolvedValueOnce(
+      userWith([
+        {
+          id: 'client-1',
+          firstName: 'Awa',
+          phone: '+221771234567',
+          lastReminderSentAt: null,
+          autoReminderEnabled: false,
+          transactions: [{ type: 'DEBT', amountFcfa: 12_500, createdAt: day(10) }],
+        },
+      ]),
+    );
+    const { POST } = await import('./route');
+    const res = await POST(makeReq());
+    expect((await res.json()).notified).toBe(0);
+    expect(notificationCreate).not.toHaveBeenCalled();
+  });
+
+  it('uses a client-specific autoReminderThresholdDays override instead of the 7-day default', async () => {
+    findMany.mockResolvedValueOnce(
+      userWith([
+        {
+          id: 'client-1',
+          firstName: 'Awa',
+          phone: '+221771234567',
+          lastReminderSentAt: null,
+          autoReminderThresholdDays: 3,
+          transactions: [{ type: 'DEBT', amountFcfa: 12_500, createdAt: day(4) }],
+        },
+      ]),
+    );
+    const { POST } = await import('./route');
+    const res = await POST(makeReq());
+    expect((await res.json()).notified).toBe(1);
+    const created = notificationCreate.mock.calls[0]![0].data;
+    expect(created.body).toContain('3 jours');
+  });
+
   it('handles multiple clients across the count correctly', async () => {
     findMany.mockResolvedValueOnce(
       userWith([

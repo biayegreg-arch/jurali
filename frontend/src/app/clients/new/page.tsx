@@ -72,6 +72,9 @@ function CreateClientPageContent() {
     phone: '',
     email: '',
     address: '',
+    autoReminderEnabled: true,
+    autoReminderThresholdDays: '',
+    overdueAlertThresholdDays: '',
   });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);

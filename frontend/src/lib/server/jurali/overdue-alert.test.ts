@@ -39,4 +39,17 @@ describe('countClientsOverdue', () => {
     ];
     expect(countClientsOverdue(clients)).toBe(2);
   });
+
+  it('respects a per-client custom threshold instead of the 14-day default', () => {
+    expect(countClientsOverdue([{ oldestUnpaidDebtDate: day(5), thresholdDays: 3 }])).toBe(1);
+    expect(countClientsOverdue([{ oldestUnpaidDebtDate: day(5), thresholdDays: 10 }])).toBe(0);
+  });
+
+  it('mixes per-client overrides and the shared default within the same call', () => {
+    const clients = [
+      { oldestUnpaidDebtDate: day(5), thresholdDays: 3 }, // custom, qualifies
+      { oldestUnpaidDebtDate: day(5) }, // default 14, does not qualify
+    ];
+    expect(countClientsOverdue(clients)).toBe(1);
+  });
 });

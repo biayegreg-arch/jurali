@@ -9,16 +9,17 @@ export const OVERDUE_ALERT_THRESHOLD_DAYS = 14;
 
 export interface OverdueAlertCandidate {
   oldestUnpaidDebtDate: Date | null;
+  /** Per-client override; falls back to OVERDUE_ALERT_THRESHOLD_DAYS. */
+  thresholdDays?: number;
 }
 
 export function countClientsOverdue(
   clients: OverdueAlertCandidate[],
-  thresholdDays: number = OVERDUE_ALERT_THRESHOLD_DAYS,
   now: Date = new Date(),
 ): number {
-  const thresholdMs = thresholdDays * DAY_MS;
   return clients.filter((c) => {
     if (!c.oldestUnpaidDebtDate) return false;
+    const thresholdMs = (c.thresholdDays ?? OVERDUE_ALERT_THRESHOLD_DAYS) * DAY_MS;
     return now.getTime() - c.oldestUnpaidDebtDate.getTime() >= thresholdMs;
   }).length;
 }

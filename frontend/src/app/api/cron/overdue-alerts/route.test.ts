@@ -114,6 +114,22 @@ describe('POST /api/cron/overdue-alerts', () => {
     expect(notificationCreate).not.toHaveBeenCalled();
   });
 
+  it('uses a client-specific overdueAlertThresholdDays override instead of the 14-day default', async () => {
+    findMany.mockResolvedValueOnce(
+      userWith([
+        {
+          id: 'client-1',
+          overdueAlertThresholdDays: 3,
+          transactions: [{ type: 'DEBT', amountFcfa: 5_000, createdAt: day(5) }],
+        },
+      ]),
+    );
+    const { POST } = await import('./route');
+    const res = await POST(makeReq());
+    expect((await res.json()).usersNotified).toBe(1);
+    expect(notificationCreate).toHaveBeenCalledTimes(1);
+  });
+
   it('does not notify a user whose overdue debt is fully paid off', async () => {
     findMany.mockResolvedValueOnce(
       userWith([

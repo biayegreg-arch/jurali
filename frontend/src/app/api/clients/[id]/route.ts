@@ -27,6 +27,12 @@ const PatchBody = z.object({
   phone: z.union([zPhone, z.literal('')]).optional(),
   email: z.union([zEmail, z.literal('')]).optional(),
   address: z.union([z.string().trim().min(1).max(200), z.literal('')]).optional(),
+  // Per-client reminder overrides (Premium-gated in the UI) — null means
+  // "use the account-wide default" (AUTO_REMINDER_THRESHOLD_DAYS /
+  // OVERDUE_ALERT_THRESHOLD_DAYS).
+  autoReminderEnabled: z.boolean().optional(),
+  autoReminderThresholdDays: z.number().int().min(1).max(90).nullable().optional(),
+  overdueAlertThresholdDays: z.number().int().min(1).max(90).nullable().optional(),
 });
 
 export async function GET(
@@ -50,6 +56,9 @@ export async function GET(
         address: true,
         createdAt: true,
         lastReminderSentAt: true,
+        autoReminderEnabled: true,
+        autoReminderThresholdDays: true,
+        overdueAlertThresholdDays: true,
         transactions: {
           select: { id: true, type: true, amountFcfa: true, note: true, createdAt: true },
           orderBy: { createdAt: 'desc' },
@@ -77,6 +86,9 @@ export async function GET(
         address: client.address,
         createdAt: client.createdAt,
         lastReminderSentAt: client.lastReminderSentAt,
+        autoReminderEnabled: client.autoReminderEnabled,
+        autoReminderThresholdDays: client.autoReminderThresholdDays,
+        overdueAlertThresholdDays: client.overdueAlertThresholdDays,
         balanceFcfa,
         isOverdue: overdue,
         transactions: client.transactions,
@@ -118,16 +130,34 @@ export async function PATCH(
       );
     }
 
-    const data: Record<string, string | null> = {};
+    const data: Record<string, string | number | boolean | null> = {};
     if (parsed.data.firstName !== undefined) data.firstName = parsed.data.firstName;
     if (parsed.data.phone !== undefined) data.phone = parsed.data.phone || null;
     if (parsed.data.email !== undefined) data.email = parsed.data.email || null;
     if (parsed.data.address !== undefined) data.address = parsed.data.address || null;
+    if (parsed.data.autoReminderEnabled !== undefined) {
+      data.autoReminderEnabled = parsed.data.autoReminderEnabled;
+    }
+    if (parsed.data.autoReminderThresholdDays !== undefined) {
+      data.autoReminderThresholdDays = parsed.data.autoReminderThresholdDays;
+    }
+    if (parsed.data.overdueAlertThresholdDays !== undefined) {
+      data.overdueAlertThresholdDays = parsed.data.overdueAlertThresholdDays;
+    }
 
     const updated = await prisma.client.update({
       where: { id },
       data,
-      select: { id: true, firstName: true, phone: true, email: true, address: true },
+      select: {
+        id: true,
+        firstName: true,
+        phone: true,
+        email: true,
+        address: true,
+        autoReminderEnabled: true,
+        autoReminderThresholdDays: true,
+        overdueAlertThresholdDays: true,
+      },
     });
 
     return NextResponse.json(updated, { headers: { 'x-request-id': ctx.requestId } });

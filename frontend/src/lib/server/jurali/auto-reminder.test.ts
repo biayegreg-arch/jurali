@@ -55,4 +55,13 @@ describe('isDueForAutoReminder', () => {
       ),
     ).toBe(true);
   });
+
+  it('respects a per-client custom threshold instead of the 7-day default', () => {
+    expect(isDueForAutoReminder(candidate({ oldestUnpaidDebtDate: day(2) }), new Date(), 3)).toBe(
+      false,
+    );
+    expect(isDueForAutoReminder(candidate({ oldestUnpaidDebtDate: day(3) }), new Date(), 3)).toBe(
+      true,
+    );
+  });
 });

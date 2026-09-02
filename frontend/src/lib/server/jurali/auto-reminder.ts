@@ -18,12 +18,13 @@ export interface AutoReminderCandidate {
 export function isDueForAutoReminder(
   candidate: AutoReminderCandidate,
   now: Date = new Date(),
+  thresholdDays: number = AUTO_REMINDER_THRESHOLD_DAYS,
 ): boolean {
   if (!candidate.phone) return false;
   if (candidate.balanceFcfa <= 0) return false;
   if (!candidate.oldestUnpaidDebtDate) return false;
 
-  const thresholdMs = AUTO_REMINDER_THRESHOLD_DAYS * DAY_MS;
+  const thresholdMs = thresholdDays * DAY_MS;
   const ageMs = now.getTime() - candidate.oldestUnpaidDebtDate.getTime();
   if (ageMs < thresholdMs) return false;
 

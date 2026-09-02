@@ -8,12 +8,19 @@
 // `lg:` adds the sidebar + 2-column info panel.
 import { Icon } from './Icon';
 import { PhoneField } from './PhoneField';
+import { AUTO_REMINDER_THRESHOLD_DAYS } from '@/lib/server/jurali/auto-reminder';
+import { OVERDUE_ALERT_THRESHOLD_DAYS } from '@/lib/server/jurali/overdue-alert';
 
 export interface ClientFormValues {
   firstName: string;
   phone: string;
   email: string;
   address: string;
+  autoReminderEnabled: boolean;
+  /** Empty string = use the account-wide default (AUTO_REMINDER_THRESHOLD_DAYS). */
+  autoReminderThresholdDays: string;
+  /** Empty string = use the account-wide default (OVERDUE_ALERT_THRESHOLD_DAYS). */
+  overdueAlertThresholdDays: string;
 }
 
 export interface ClientFormProps {
@@ -24,6 +31,11 @@ export interface ClientFormProps {
   submitting: boolean;
   error: string | null;
   cancelHref: string;
+  /** Per-client reminder overrides are Premium-gated, same as the
+   * account-wide toggles in Réglages — only shown once editing an
+   * existing client (mode === 'edit'), per the confirmed 2026-09-02
+   * decision. */
+  isPremium?: boolean;
 }
 
 export function ClientForm({
@@ -34,6 +46,7 @@ export function ClientForm({
   submitting,
   error,
   cancelHref,
+  isPremium = false,
 }: ClientFormProps) {
   function set<K extends keyof ClientFormValues>(key: K, value: ClientFormValues[K]) {
     onChange({ ...values, [key]: value });
@@ -72,6 +85,51 @@ export function ClientForm({
         placeholder="Dakar, Sénégal"
         helper="Optionnel — pour tes notes"
       />
+
+      {mode === 'edit' && (
+        <div>
+          <div className="text-xs font-headings font-bold uppercase tracking-wide text-foreground mb-2">
+            Rappels pour ce client
+          </div>
+          {!isPremium ? (
+            <a
+              href="/premium"
+              className="flex items-center gap-3 bg-secondary border border-border rounded-xl px-4 py-3.5"
+            >
+              <Icon i="crown" size={18} className="text-primary flex-shrink-0" />
+              <div className="text-sm text-muted-foreground">
+                Personnalise les rappels de ce client — réservé à Premium.
+              </div>
+            </a>
+          ) : (
+            <div className="flex flex-col gap-4 bg-input border border-border rounded-xl px-4 py-3.5">
+              <label className="flex items-center justify-between gap-3">
+                <span className="text-sm text-foreground">Rappel WhatsApp automatique</span>
+                <input
+                  type="checkbox"
+                  checked={values.autoReminderEnabled}
+                  onChange={(e) => set('autoReminderEnabled', e.target.checked)}
+                  className="w-5 h-5 accent-primary"
+                />
+              </label>
+              {values.autoReminderEnabled && (
+                <DaysField
+                  label="Envoyer le rappel après"
+                  value={values.autoReminderThresholdDays}
+                  onChange={(v) => set('autoReminderThresholdDays', v)}
+                  placeholder={String(AUTO_REMINDER_THRESHOLD_DAYS)}
+                />
+              )}
+              <DaysField
+                label="Alerter dette en retard après"
+                value={values.overdueAlertThresholdDays}
+                onChange={(v) => set('overdueAlertThresholdDays', v)}
+                placeholder={String(OVERDUE_ALERT_THRESHOLD_DAYS)}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {error && <div className="text-sm text-danger">{error}</div>}
 
@@ -137,6 +195,37 @@ function Field({
         />
       </div>
       <div className="text-xs text-muted-foreground mt-2">{helper}</div>
+    </div>
+  );
+}
+
+function DaysField({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <span className="text-sm text-foreground">{label}</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={1}
+          max={90}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className="w-16 bg-background border border-border rounded-lg px-2.5 py-1.5 text-sm text-foreground text-center outline-none"
+        />
+        <span className="text-sm text-muted-foreground">jours</span>
+      </div>
     </div>
   );
 }

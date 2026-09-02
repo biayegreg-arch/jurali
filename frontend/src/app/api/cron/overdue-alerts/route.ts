@@ -45,6 +45,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           clients: {
             select: {
               id: true,
+              overdueAlertThresholdDays: true,
               transactions: { select: { type: true, amountFcfa: true, createdAt: true } },
             },
           },
@@ -62,8 +63,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           oldestUnpaidDebtDate: oldestUnpaidDebtDate(
             client.transactions.map((t) => ({ ...t, type: t.type as 'DEBT' | 'PAYMENT' })),
           ),
+          ...(client.overdueAlertThresholdDays !== null
+            ? { thresholdDays: client.overdueAlertThresholdDays }
+            : {}),
         }));
-        const overdueCount = countClientsOverdue(candidates, undefined, now);
+        const overdueCount = countClientsOverdue(candidates, now);
         if (overdueCount === 0) continue;
 
         notifications.push(createNotification(prisma, overdueAlertDue(user.id, overdueCount, now)));

@@ -64,30 +64,32 @@ export function autoReminderDue(
   clientId: string,
   clientFirstName: string,
   oldestUnpaidDebtDate: Date,
+  thresholdDays: number,
 ): CreateNotificationInput {
   return {
     userId,
     type: 'AUTO_REMINDER_DUE',
     title: 'Rappel à envoyer',
-    body: `${clientFirstName} a une dette de plus de 7 jours sans rappel. Envoie-lui un message WhatsApp.`,
+    body: `${clientFirstName} a une dette de plus de ${thresholdDays} jours sans rappel. Envoie-lui un message WhatsApp.`,
     data: { clientId },
     dedupeKey: `auto-reminder:${clientId}:${oldestUnpaidDebtDate.toISOString().slice(0, 10)}`,
   };
 }
 
 /**
- * Jurali Phase 9 — daily digest cron (`overdue-alert.ts`, 14-day threshold,
- * distinct from the 7-day per-client `autoReminderDue`). One notification
- * per user per day summarizing how many clients have debts overdue 14+
- * days — `dedupeKey` is keyed off today's date so a second cron tick the
- * same day (e.g. a retry) can't double-notify.
+ * Jurali Phase 9 — daily digest cron (`overdue-alert.ts`, 14-day default
+ * threshold, distinct from the 7-day per-client `autoReminderDue`). One
+ * notification per user per day summarizing how many clients have overdue
+ * debts (each client's own threshold may differ, so the copy stays generic)
+ * — `dedupeKey` is keyed off today's date so a second cron tick the same
+ * day (e.g. a retry) can't double-notify.
  */
 export function overdueAlertDue(userId: string, overdueCount: number, now: Date = new Date()) {
   return {
     userId,
     type: 'OVERDUE_ALERT',
     title: 'Dettes en retard',
-    body: `${overdueCount} client${overdueCount === 1 ? ' a' : 's ont'} une dette en retard de plus de 14 jours.`,
+    body: `${overdueCount} client${overdueCount === 1 ? ' a une dette en retard' : 's ont des dettes en retard'}.`,
     data: { overdueCount },
     dedupeKey: `overdue-alert:${userId}:${now.toISOString().slice(0, 10)}`,
   } satisfies CreateNotificationInput;

@@ -42,9 +42,20 @@ interface ClientDetail {
   phone: string | null;
   email: string | null;
   address: string | null;
+  autoReminderEnabled: boolean;
+  autoReminderThresholdDays: number | null;
+  overdueAlertThresholdDays: number | null;
 }
 
-const EMPTY: ClientFormValues = { firstName: '', phone: '', email: '', address: '' };
+const EMPTY: ClientFormValues = {
+  firstName: '',
+  phone: '',
+  email: '',
+  address: '',
+  autoReminderEnabled: true,
+  autoReminderThresholdDays: '',
+  overdueAlertThresholdDays: '',
+};
 
 export default function EditClientPage() {
   const user = useUser();
@@ -77,6 +88,9 @@ export default function EditClientPage() {
         phone: client.phone ?? '',
         email: client.email ?? '',
         address: client.address ?? '',
+        autoReminderEnabled: client.autoReminderEnabled,
+        autoReminderThresholdDays: client.autoReminderThresholdDays?.toString() ?? '',
+        overdueAlertThresholdDays: client.overdueAlertThresholdDays?.toString() ?? '',
       });
     }
   }, [client]);
@@ -88,6 +102,12 @@ export default function EditClientPage() {
     setSubmitting(true);
     setError(null);
     try {
+      const autoReminderThresholdDays = values.autoReminderThresholdDays.trim()
+        ? Number.parseInt(values.autoReminderThresholdDays, 10)
+        : null;
+      const overdueAlertThresholdDays = values.overdueAlertThresholdDays.trim()
+        ? Number.parseInt(values.overdueAlertThresholdDays, 10)
+        : null;
       await api(`/api/clients/${params.id}`, {
         method: 'PATCH',
         body: {
@@ -95,6 +115,9 @@ export default function EditClientPage() {
           phone: values.phone.trim(),
           email: values.email.trim(),
           address: values.address.trim(),
+          autoReminderEnabled: values.autoReminderEnabled,
+          autoReminderThresholdDays,
+          overdueAlertThresholdDays,
         },
       });
       invalidateAllCache();
@@ -191,6 +214,7 @@ export default function EditClientPage() {
               submitting={submitting}
               error={error}
               cancelHref={cancelHref}
+              isPremium={subscription?.isActive ?? false}
             />
             <ClientFormInfoPanel />
           </div>

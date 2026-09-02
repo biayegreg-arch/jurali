@@ -21,7 +21,10 @@ import { redis } from '@/lib/server/redis';
 import { createLogger } from '@/lib/server/logger';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeClientBalance, oldestUnpaidDebtDate } from '@/lib/server/jurali/balance';
-import { isDueForAutoReminder } from '@/lib/server/jurali/auto-reminder';
+import {
+  isDueForAutoReminder,
+  AUTO_REMINDER_THRESHOLD_DAYS,
+} from '@/lib/server/jurali/auto-reminder';
 import { isSubscriptionActive } from '@/lib/server/subscriptions/guards';
 import { createNotification } from '@/lib/server/notifications';
 import { autoReminderDue } from '@/lib/server/notifications/templates';
@@ -52,6 +55,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               firstName: true,
               phone: true,
               lastReminderSentAt: true,
+              autoReminderEnabled: true,
+              autoReminderThresholdDays: true,
               transactions: { select: { type: true, amountFcfa: true, createdAt: true } },
             },
           },
@@ -67,11 +72,16 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       for (const user of activeUsers) {
         for (const client of user.clients) {
           clientsScanned += 1;
+          // Only an explicit `false` opts a client out — `undefined` (older
+          // rows / test mocks predating this column) defaults to enabled,
+          // matching the schema's `@default(true)`.
+          if (client.autoReminderEnabled === false) continue;
           const transactions = client.transactions.map((t) => ({
             ...t,
             type: t.type as 'DEBT' | 'PAYMENT',
           }));
           const debtDate = oldestUnpaidDebtDate(transactions);
+          const thresholdDays = client.autoReminderThresholdDays ?? AUTO_REMINDER_THRESHOLD_DAYS;
           const due = isDueForAutoReminder(
             {
               phone: client.phone,
@@ -80,13 +90,14 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
               lastReminderSentAt: client.lastReminderSentAt,
             },
             now,
+            thresholdDays,
           );
           if (!due || !debtDate) continue; // debtDate null-check narrows for TS; `due` already guarantees it
 
           notifications.push(
             createNotification(
               prisma,
-              autoReminderDue(user.id, client.id, client.firstName, debtDate),
+              autoReminderDue(user.id, client.id, client.firstName, debtDate, thresholdDays),
             ),
           );
           notified += 1;
