@@ -17,9 +17,10 @@
 // silently no-op'd the animation anyway (contents elements can't paint
 // their own opacity), for no benefit over removing it outright. Other
 // pages (auth, marketing) keep <PageTransition> untouched.
-import { useUser } from '@/contexts/AuthContext';
+import { useAuth, useUser } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
 import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
+import { PendingEmailModal } from '@/components/jurali/PendingEmailModal';
 
 interface DashboardData {
   totalDueFcfa: number;
@@ -35,6 +36,7 @@ interface SubscriptionData {
 
 export default function ShellLayout({ children }: { children: React.ReactNode }) {
   const user = useUser();
+  const { refresh } = useAuth();
   const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
@@ -58,6 +60,7 @@ export default function ShellLayout({ children }: { children: React.ReactNode })
         isPremium={subscription?.isActive ?? false}
       />
       {children}
+      {user.pendingEmail && <PendingEmailModal email={user.pendingEmail} onVerified={refresh} />}
     </div>
   );
 }
