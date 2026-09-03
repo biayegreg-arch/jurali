@@ -102,20 +102,37 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
           work.push(
             (async () => {
               try {
-                await queue.enqueue({
-                  to: sub.owner.email,
-                  subject: tpl.subject,
-                  html: tpl.html,
-                  text: tpl.text,
+                // The EmailJob row and the reminderStage advance must commit
+                // together: if the stage update failed after a bare
+                // `queue.enqueue()` (Postgres write + Redis push) had
+                // already succeeded, the next tick would see the same stage
+                // still due and enqueue a SECOND job for the same reminder —
+                // a duplicate email to the customer. Creating the EmailJob
+                // row in the same transaction as the Subscription update
+                // means a failure rolls back BOTH (clean retry next tick,
+                // no partial state); only once that's committed do we push
+                // the work pointer onto the Redis queue for the drain cron.
+                const emailJob = await prisma.$transaction(async (tx) => {
+                  const job = await tx.emailJob.create({
+                    data: {
+                      to: sub.owner.email,
+                      subject: tpl.subject,
+                      html: tpl.html,
+                      ...(tpl.text !== undefined ? { text: tpl.text } : {}),
+                      status: 'PENDING',
+                    },
+                  });
+                  await tx.subscription.update({
+                    where: { id: sub.id },
+                    data: {
+                      reminderStage: stage,
+                      reminderStageRenewsAt: sub.renewsAt,
+                      ...(stage === 'expired' ? { status: 'EXPIRED' } : {}),
+                    },
+                  });
+                  return job;
                 });
-                await prisma.subscription.update({
-                  where: { id: sub.id },
-                  data: {
-                    reminderStage: stage,
-                    reminderStageRenewsAt: sub.renewsAt,
-                    ...(stage === 'expired' ? { status: 'EXPIRED' } : {}),
-                  },
-                });
+                await queue.push({ emailJobId: emailJob.id });
                 sent += 1;
               } catch (err) {
                 // One subscription's failure (transient DB error, queue

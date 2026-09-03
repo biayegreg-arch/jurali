@@ -8,14 +8,23 @@ vi.mock('@/lib/server/leader-lease', () => ({
 vi.mock('@/lib/server/redis', () => ({ redis: null }));
 
 const findMany = vi.fn();
-const update = vi.fn();
+const emailJobCreate = vi.fn();
+const subscriptionUpdate = vi.fn();
+const $transaction = vi.fn(
+  async (
+    cb: (tx: {
+      emailJob: { create: typeof emailJobCreate };
+      subscription: { update: typeof subscriptionUpdate };
+    }) => unknown,
+  ) => cb({ emailJob: { create: emailJobCreate }, subscription: { update: subscriptionUpdate } }),
+);
 vi.mock('@/lib/server/prisma', () => ({
-  prisma: { subscription: { findMany, update } },
+  prisma: { subscription: { findMany }, $transaction },
 }));
 
-const enqueue = vi.fn();
-const queueMock = { enqueue };
-const getEmailQueueMock = vi.fn(() => queueMock as { enqueue: typeof enqueue } | null);
+const push = vi.fn();
+const queueMock = { push };
+const getEmailQueueMock = vi.fn(() => queueMock as { push: typeof push } | null);
 vi.mock('@/lib/server/queues/email-queue-singleton', () => ({
   getEmailQueue: getEmailQueueMock,
 }));
@@ -24,10 +33,16 @@ beforeEach(() => {
   vi.stubEnv('CRON_SECRET', 'test-secret');
   vi.stubEnv('PUBLIC_URL', 'https://jurali.example.com');
   findMany.mockReset();
-  update.mockReset();
-  update.mockResolvedValue({});
-  enqueue.mockReset();
-  enqueue.mockResolvedValue('job-1');
+  $transaction.mockReset();
+  $transaction.mockImplementation(async (cb) =>
+    cb({ emailJob: { create: emailJobCreate }, subscription: { update: subscriptionUpdate } }),
+  );
+  emailJobCreate.mockReset();
+  emailJobCreate.mockResolvedValue({ id: 'job-1' });
+  subscriptionUpdate.mockReset();
+  subscriptionUpdate.mockResolvedValue({});
+  push.mockReset();
+  push.mockResolvedValue(undefined);
   getEmailQueueMock.mockReturnValue(queueMock);
 });
 
@@ -89,20 +104,22 @@ describe('POST /api/cron/subscription-renewal-reminders', () => {
     expect(findMany).not.toHaveBeenCalled();
   });
 
-  it('sends the 3-day email and stamps the stage', async () => {
+  it('sends the 3-day email and stamps the stage atomically, then pushes the work pointer', async () => {
     findMany.mockResolvedValueOnce(subWith({ renewsAt: day(3) }));
     const { POST } = await import('./route');
     const res = await POST(makeReq());
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ scanned: 1, sent: 1, skippedSyntheticEmail: 0 });
-    expect(enqueue).toHaveBeenCalledTimes(1);
-    const sentTo = enqueue.mock.calls[0]![0];
-    expect(sentTo.to).toBe('shop@example.com');
-    expect(sentTo.subject).toContain('3 jours');
-    expect(update).toHaveBeenCalledWith({
+    expect(emailJobCreate).toHaveBeenCalledTimes(1);
+    const jobData = emailJobCreate.mock.calls[0]![0].data;
+    expect(jobData.to).toBe('shop@example.com');
+    expect(jobData.subject).toContain('3 jours');
+    expect(subscriptionUpdate).toHaveBeenCalledWith({
       where: { id: 'sub-1' },
       data: { reminderStage: '3d', reminderStageRenewsAt: expect.any(Date) },
     });
+    // Redis push only happens after the DB transaction (job + stage) commits.
+    expect(push).toHaveBeenCalledWith({ emailJobId: 'job-1' });
   });
 
   it('sends the 1-day email when already stamped "3d" for this cycle', async () => {
@@ -113,9 +130,9 @@ describe('POST /api/cron/subscription-renewal-reminders', () => {
     const { POST } = await import('./route');
     const res = await POST(makeReq());
     expect((await res.json()).sent).toBe(1);
-    const sentTo = enqueue.mock.calls[0]![0];
-    expect(sentTo.subject).toContain('demain');
-    expect(update).toHaveBeenCalledWith({
+    const jobData = emailJobCreate.mock.calls[0]![0].data;
+    expect(jobData.subject).toContain('demain');
+    expect(subscriptionUpdate).toHaveBeenCalledWith({
       where: { id: 'sub-1' },
       data: { reminderStage: '1d', reminderStageRenewsAt: renewsAt },
     });
@@ -129,9 +146,9 @@ describe('POST /api/cron/subscription-renewal-reminders', () => {
     const { POST } = await import('./route');
     const res = await POST(makeReq());
     expect((await res.json()).sent).toBe(1);
-    const sentTo = enqueue.mock.calls[0]![0];
-    expect(sentTo.subject).toContain('expiré');
-    expect(update).toHaveBeenCalledWith({
+    const jobData = emailJobCreate.mock.calls[0]![0].data;
+    expect(jobData.subject).toContain('expiré');
+    expect(subscriptionUpdate).toHaveBeenCalledWith({
       where: { id: 'sub-1' },
       data: { reminderStage: 'expired', reminderStageRenewsAt: renewsAt, status: 'EXPIRED' },
     });
@@ -145,8 +162,8 @@ describe('POST /api/cron/subscription-renewal-reminders', () => {
     const { POST } = await import('./route');
     const res = await POST(makeReq());
     expect((await res.json()).sent).toBe(0);
-    expect(enqueue).not.toHaveBeenCalled();
-    expect(update).not.toHaveBeenCalled();
+    expect($transaction).not.toHaveBeenCalled();
+    expect(push).not.toHaveBeenCalled();
   });
 
   it('skips a phone-signup owner with a synthetic, non-deliverable email', async () => {
@@ -156,8 +173,7 @@ describe('POST /api/cron/subscription-renewal-reminders', () => {
     const { POST } = await import('./route');
     const res = await POST(makeReq());
     expect(await res.json()).toMatchObject({ scanned: 1, sent: 0, skippedSyntheticEmail: 1 });
-    expect(enqueue).not.toHaveBeenCalled();
-    expect(update).not.toHaveBeenCalled();
+    expect($transaction).not.toHaveBeenCalled();
   });
 
   it('skips a subscription outside every reminder window', async () => {
@@ -165,21 +181,23 @@ describe('POST /api/cron/subscription-renewal-reminders', () => {
     const { POST } = await import('./route');
     const res = await POST(makeReq());
     expect((await res.json()).sent).toBe(0);
-    expect(enqueue).not.toHaveBeenCalled();
+    expect($transaction).not.toHaveBeenCalled();
   });
 
-  it('one subscription failing does not abort the tick or count it as sent', async () => {
+  it('one subscription failing does not abort the tick, does not count it as sent, and never pushes a work pointer for it', async () => {
     findMany.mockResolvedValueOnce([
       ...subWith({ id: 'sub-fail', renewsAt: day(3), owner: { email: 'fails@example.com' } }),
       ...subWith({ id: 'sub-ok', renewsAt: day(3), owner: { email: 'ok@example.com' } }),
     ]);
-    update.mockImplementationOnce(() => Promise.reject(new Error('db blip')));
-    update.mockResolvedValueOnce({});
+    // Simulates the whole job-create + stage-update transaction aborting
+    // (e.g. a transient DB error) for the first subscription — both writes
+    // roll back together, so no orphan EmailJob and no stuck stage.
+    $transaction.mockImplementationOnce(() => Promise.reject(new Error('db blip')));
     const { POST } = await import('./route');
     const res = await POST(makeReq());
     expect(res.status).toBe(200);
-    // Only the subscription whose enqueue+update both succeeded counts.
     expect((await res.json()).sent).toBe(1);
-    expect(enqueue).toHaveBeenCalledTimes(2);
+    expect($transaction).toHaveBeenCalledTimes(2);
+    expect(push).toHaveBeenCalledTimes(1);
   });
 });
