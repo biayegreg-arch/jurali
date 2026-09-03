@@ -1,7 +1,7 @@
 // OAUTH-01 — GET /api/auth/oauth/google/start
 //
 // Issues state + PKCE-verifier cookies (httpOnly, path /api/auth/oauth,
-// maxAge 300) and 302 redirects to Google's authorization URL. Inert
+// maxAge 900) and 302 redirects to Google's authorization URL. Inert
 // (404) when GOOGLE_CLIENT_ID/SECRET/REDIRECT_URI is missing — same
 // env-gating pattern as Bictorys / R2 / Resend.
 //
@@ -33,7 +33,14 @@ const OAUTH_NEXT_COOKIE = `${COOKIE_PREFIX}-oauth-next`;
 // Google email doesn't already match (always true for phone-signup
 // accounts — see lib/server/auth/synthetic-email.ts). Fixed 2026-09-03.
 const OAUTH_LINK_UID_COOKIE = `${COOKIE_PREFIX}-oauth-link-uid`;
-const OAUTH_COOKIE_MAX_AGE = 5 * 60; // 5 min, per OAUTH-01
+// Was 5 min — real shopkeepers on a slow connection or a first-time Google
+// signup (choosing an account, 2FA, reading the consent screen) routinely
+// took longer than that, so the cookie expired before Google redirected
+// back and the callback saw no state/pkce cookie → OAUTH_STATE_MISMATCH,
+// a false "échec de connexion" for someone who did nothing wrong. Bumped
+// 2026-09-03; still short-lived, single-use, httpOnly, and scoped to
+// /api/auth/oauth.
+const OAUTH_COOKIE_MAX_AGE = 15 * 60;
 
 function isProd(): boolean {
   return process.env.NODE_ENV === 'production';

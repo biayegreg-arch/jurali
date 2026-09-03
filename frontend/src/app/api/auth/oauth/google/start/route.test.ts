@@ -1,6 +1,6 @@
 // OAUTH-01 — GET /api/auth/oauth/google/start tests.
 //
-// Covers env-gated 404, state+PKCE cookie shape (path /api/auth/oauth, maxAge 300,
+// Covers env-gated 404, state+PKCE cookie shape (path /api/auth/oauth, maxAge 900,
 // httpOnly, SameSite=Lax), 302 to Google, ?next= echo (same-origin only), and
 // silent rejection of cross-origin / protocol-relative ?next= values (Pitfall 10).
 import { mockNextCookies, __cookieStore } from '@/test-utils/mock-cookies';
@@ -58,7 +58,7 @@ describe('GET /api/auth/oauth/google/start', () => {
     expect(__cookieStore.has('app-oauth-pkce')).toBe(false);
   });
 
-  it('issues state + PKCE cookies with path=/api/auth/oauth maxAge=300 and 302s to Google', async () => {
+  it('issues state + PKCE cookies with path=/api/auth/oauth maxAge=900 and 302s to Google', async () => {
     mockTryCreate.mockReturnValue({
       client: {
         createAuthorizationURL: (state: string, codeVerifier: string, scopes: string[]) => {
@@ -98,7 +98,7 @@ describe('GET /api/auth/oauth/google/start', () => {
     expect(stateCookie!.options).toEqual(
       expect.objectContaining({
         path: '/api/auth/oauth',
-        maxAge: 300,
+        maxAge: 900,
         httpOnly: true,
         sameSite: 'lax',
       }),
@@ -106,7 +106,7 @@ describe('GET /api/auth/oauth/google/start', () => {
     expect(pkceCookie!.options).toEqual(
       expect.objectContaining({
         path: '/api/auth/oauth',
-        maxAge: 300,
+        maxAge: 900,
         httpOnly: true,
         sameSite: 'lax',
       }),
@@ -134,7 +134,7 @@ describe('GET /api/auth/oauth/google/start', () => {
     expect(nextCookie!.options).toEqual(
       expect.objectContaining({
         path: '/api/auth/oauth',
-        maxAge: 300,
+        maxAge: 900,
         httpOnly: true,
         sameSite: 'lax',
       }),
@@ -187,7 +187,7 @@ describe('GET /api/auth/oauth/google/start', () => {
     expect(linkCookie!.options).toEqual(
       expect.objectContaining({
         path: '/api/auth/oauth',
-        maxAge: 300,
+        maxAge: 900,
         httpOnly: true,
         sameSite: 'lax',
       }),
