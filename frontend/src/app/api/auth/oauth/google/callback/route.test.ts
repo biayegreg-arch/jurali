@@ -362,6 +362,101 @@ describe('GET /api/auth/oauth/google/callback', () => {
     }
   });
 
+  describe('Settings account-linking (app-oauth-link-uid cookie present)', () => {
+    it('attaches the Google identity to the already-authenticated user; no new user, no welcome notif', async () => {
+      await seedCookie('app-oauth-state', STATE);
+      await seedCookie('app-oauth-pkce', PKCE);
+      await seedCookie('app-oauth-link-uid', 'u-shop');
+
+      prismaMock.user.findUnique
+        .mockResolvedValueOnce({ id: 'u-shop' } as never) // linkingUser lookup
+        .mockResolvedValueOnce(null) // existingByEmail — no conflict
+        .mockResolvedValueOnce({ id: 'u-shop', email: 'shop@x', tokenVersion: 0 } as never); // token issuance
+      prismaMock.oAuthAccount.findUnique.mockResolvedValue(null); // existingByProvider — first time linking
+      prismaMock.oAuthAccount.create.mockResolvedValue({ id: 'oa-3' } as never);
+
+      const res = await GET(makeReq({ code: 'c', state: STATE }));
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).not.toContain('/auth/error');
+      expect(res.headers.get('location')).not.toContain('linkError');
+
+      expect(prismaMock.oAuthAccount.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: { userId: 'u-shop', provider: 'google', providerAccountId: VALID_CLAIMS.sub },
+        }),
+      );
+      expect(prismaMock.user.create).not.toHaveBeenCalled();
+      expect(mockSetAuthCookies).toHaveBeenCalledWith('access-jwt', 'refresh-jwt');
+      expect(mockCreateNotification).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent when the Google account is already linked to the same session user', async () => {
+      await seedCookie('app-oauth-state', STATE);
+      await seedCookie('app-oauth-pkce', PKCE);
+      await seedCookie('app-oauth-link-uid', 'u-shop');
+
+      prismaMock.user.findUnique
+        .mockResolvedValueOnce({ id: 'u-shop' } as never) // linkingUser lookup
+        .mockResolvedValueOnce({ id: 'u-shop', email: 'shop@x', tokenVersion: 0 } as never); // token issuance
+      prismaMock.oAuthAccount.findUnique.mockResolvedValue({ userId: 'u-shop' } as never);
+
+      const res = await GET(makeReq({ code: 'c', state: STATE }));
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).not.toContain('/auth/error');
+      expect(prismaMock.oAuthAccount.create).not.toHaveBeenCalled();
+      expect(mockSetAuthCookies).toHaveBeenCalledWith('access-jwt', 'refresh-jwt');
+    });
+
+    it('refuses to hijack the session when the Google identity already belongs to a DIFFERENT Jurali user (the exact bug this fixes)', async () => {
+      await seedCookie('app-oauth-state', STATE);
+      await seedCookie('app-oauth-pkce', PKCE);
+      await seedCookie('app-oauth-link-uid', 'u-shop');
+
+      prismaMock.user.findUnique.mockResolvedValueOnce({ id: 'u-shop' } as never); // linkingUser
+      prismaMock.oAuthAccount.findUnique.mockResolvedValue({ userId: 'u-other' } as never);
+
+      const res = await GET(makeReq({ code: 'c', state: STATE }));
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).toBe(
+        'https://app.example.test/settings?linkError=GOOGLE_ALREADY_LINKED_ELSEWHERE',
+      );
+      expect(prismaMock.oAuthAccount.create).not.toHaveBeenCalled();
+      expect(mockSetAuthCookies).not.toHaveBeenCalled();
+    });
+
+    it('refuses to hijack the session when the Google email already belongs to a DIFFERENT Jurali user', async () => {
+      await seedCookie('app-oauth-state', STATE);
+      await seedCookie('app-oauth-pkce', PKCE);
+      await seedCookie('app-oauth-link-uid', 'u-shop');
+
+      prismaMock.user.findUnique
+        .mockResolvedValueOnce({ id: 'u-shop' } as never) // linkingUser
+        .mockResolvedValueOnce({ id: 'u-other' } as never); // existingByEmail — conflict
+      prismaMock.oAuthAccount.findUnique.mockResolvedValue(null);
+
+      const res = await GET(makeReq({ code: 'c', state: STATE }));
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).toBe(
+        'https://app.example.test/settings?linkError=GOOGLE_EMAIL_ALREADY_REGISTERED',
+      );
+      expect(prismaMock.oAuthAccount.create).not.toHaveBeenCalled();
+      expect(mockSetAuthCookies).not.toHaveBeenCalled();
+    });
+
+    it('falls back to OAUTH_GENERIC when the linking session user no longer exists', async () => {
+      await seedCookie('app-oauth-state', STATE);
+      await seedCookie('app-oauth-pkce', PKCE);
+      await seedCookie('app-oauth-link-uid', 'u-ghost');
+
+      prismaMock.user.findUnique.mockResolvedValueOnce(null); // linkingUser lookup misses
+
+      const res = await GET(makeReq({ code: 'c', state: STATE }));
+      expect(res.status).toBe(302);
+      expect(res.headers.get('location')).toContain('/auth/error?code=OAUTH_GENERIC');
+      expect(mockSetAuthCookies).not.toHaveBeenCalled();
+    });
+  });
+
   it('NOTIF-05 source check: callback uses createNotification(, never prisma.notification.create(', () => {
     const src = fs.readFileSync(path.join(__dirname, 'route.ts'), 'utf8');
     expect(src).toContain('createNotification(');

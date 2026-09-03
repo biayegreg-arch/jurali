@@ -41,6 +41,10 @@ const COOKIE_PREFIX = process.env.COOKIE_PREFIX || 'app';
 const OAUTH_STATE_COOKIE = `${COOKIE_PREFIX}-oauth-state`;
 const OAUTH_PKCE_COOKIE = `${COOKIE_PREFIX}-oauth-pkce`;
 const OAUTH_NEXT_COOKIE = `${COOKIE_PREFIX}-oauth-next`;
+// Set by /start only when the request was already authenticated (Settings'
+// "Lier mon compte Google") — see that route for why this exists. Its
+// presence here means "attach to this exact user", never "sign in".
+const OAUTH_LINK_UID_COOKIE = `${COOKIE_PREFIX}-oauth-link-uid`;
 
 function isProd(): boolean {
   return process.env.NODE_ENV === 'production';
@@ -58,6 +62,19 @@ async function clearEphemeralCookies(): Promise<void> {
   store.set(OAUTH_STATE_COOKIE, '', expireOpts);
   store.set(OAUTH_PKCE_COOKIE, '', expireOpts);
   store.set(OAUTH_NEXT_COOKIE, '', expireOpts);
+  store.set(OAUTH_LINK_UID_COOKIE, '', expireOpts);
+}
+
+/** Link-flow failures redirect back to Settings (not /auth/error, which is
+ * the anonymous sign-in error page) so the shopkeeper's session — and all
+ * their existing data — is left completely untouched. */
+function redirectToSettingsLinkError(
+  code: 'GOOGLE_ALREADY_LINKED_ELSEWHERE' | 'GOOGLE_EMAIL_ALREADY_REGISTERED',
+  appUrl: string,
+): NextResponse {
+  const path = `/settings?linkError=${encodeURIComponent(code)}`;
+  const base = appUrl || process.env.APP_URL || 'http://localhost';
+  return NextResponse.redirect(new URL(path, base).toString(), 302);
 }
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
@@ -79,6 +96,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const stateCookie = store.get(OAUTH_STATE_COOKIE)?.value;
     const pkceCookie = store.get(OAUTH_PKCE_COOKIE)?.value;
     const nextCookie = store.get(OAUTH_NEXT_COOKIE)?.value;
+    const linkUidCookie = store.get(OAUTH_LINK_UID_COOKIE)?.value;
 
     if (!code || !state || !stateCookie || !pkceCookie || state !== stateCookie) {
       await clearEphemeralCookies();
@@ -113,58 +131,105 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       return redirectToAuthError('GOOGLE_EMAIL_NOT_VERIFIED', redirectOpts);
     }
 
-    // ───── Find-or-create ─────────────────────────────────────────────────
+    // ───── Find-or-create, OR link to the already-authenticated session ───
     let userId: string;
     let isNewUser = false;
-    const existingByProvider = await prisma.oAuthAccount.findUnique({
-      where: {
-        provider_providerAccountId: { provider: 'google', providerAccountId: claims.sub },
-      },
-      select: { userId: true },
-    });
-    if (existingByProvider) {
-      userId = existingByProvider.userId;
-    } else {
-      const normalizedEmail = claims.email.toLowerCase();
-      const existingByEmail = await prisma.user.findUnique({
-        where: { email: normalizedEmail },
+
+    if (linkUidCookie) {
+      // Settings' "Lier mon compte Google" — never sign-in, never create a
+      // second account. Must attach to linkUidCookie's user or fail clean.
+      const linkingUser = await prisma.user.findUnique({
+        where: { id: linkUidCookie },
         select: { id: true },
       });
-      if (existingByEmail) {
-        // D-01 silent linking — leave User.name/avatarUrl untouched
-        // (T-02-OAUTH-NAME-OVERWRITE mitigation).
+      if (!linkingUser) {
+        await clearEphemeralCookies();
+        log.warn('oauth.callback: link flow — session user vanished', { linkUidCookie });
+        return redirectToAuthError('OAUTH_GENERIC', redirectOpts);
+      }
+
+      const existingByProvider = await prisma.oAuthAccount.findUnique({
+        where: {
+          provider_providerAccountId: { provider: 'google', providerAccountId: claims.sub },
+        },
+        select: { userId: true },
+      });
+      if (existingByProvider) {
+        if (existingByProvider.userId !== linkingUser.id) {
+          await clearEphemeralCookies();
+          return redirectToSettingsLinkError('GOOGLE_ALREADY_LINKED_ELSEWHERE', appUrl);
+        }
+        // Already linked to this same user — idempotent no-op.
+      } else {
+        const normalizedEmail = claims.email.toLowerCase();
+        const existingByEmail = await prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true },
+        });
+        if (existingByEmail && existingByEmail.id !== linkingUser.id) {
+          await clearEphemeralCookies();
+          return redirectToSettingsLinkError('GOOGLE_EMAIL_ALREADY_REGISTERED', appUrl);
+        }
         await prisma.oAuthAccount.create({
           data: {
-            userId: existingByEmail.id,
+            userId: linkingUser.id,
             provider: 'google',
             providerAccountId: claims.sub,
           },
         });
-        userId = existingByEmail.id;
+      }
+      userId = linkingUser.id;
+    } else {
+      const existingByProvider = await prisma.oAuthAccount.findUnique({
+        where: {
+          provider_providerAccountId: { provider: 'google', providerAccountId: claims.sub },
+        },
+        select: { userId: true },
+      });
+      if (existingByProvider) {
+        userId = existingByProvider.userId;
       } else {
-        // D-02 create path — User + OAuthAccount in a single $transaction
-        const created = await prisma.$transaction(async (tx) => {
-          const newUser = await tx.user.create({
+        const normalizedEmail = claims.email.toLowerCase();
+        const existingByEmail = await prisma.user.findUnique({
+          where: { email: normalizedEmail },
+          select: { id: true },
+        });
+        if (existingByEmail) {
+          // D-01 silent linking — leave User.name/avatarUrl untouched
+          // (T-02-OAUTH-NAME-OVERWRITE mitigation).
+          await prisma.oAuthAccount.create({
             data: {
-              email: normalizedEmail,
-              emailVerifiedAt: new Date(),
-              name: claims.name ?? null,
-              avatarUrl: claims.picture ?? null,
-              passwordHash: null,
-            },
-            select: { id: true },
-          });
-          await tx.oAuthAccount.create({
-            data: {
-              userId: newUser.id,
+              userId: existingByEmail.id,
               provider: 'google',
               providerAccountId: claims.sub,
             },
           });
-          return newUser;
-        });
-        userId = created.id;
-        isNewUser = true;
+          userId = existingByEmail.id;
+        } else {
+          // D-02 create path — User + OAuthAccount in a single $transaction
+          const created = await prisma.$transaction(async (tx) => {
+            const newUser = await tx.user.create({
+              data: {
+                email: normalizedEmail,
+                emailVerifiedAt: new Date(),
+                name: claims.name ?? null,
+                avatarUrl: claims.picture ?? null,
+                passwordHash: null,
+              },
+              select: { id: true },
+            });
+            await tx.oAuthAccount.create({
+              data: {
+                userId: newUser.id,
+                provider: 'google',
+                providerAccountId: claims.sub,
+              },
+            });
+            return newUser;
+          });
+          userId = created.id;
+          isNewUser = true;
+        }
       }
     }
 

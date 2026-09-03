@@ -17,6 +17,7 @@ import { generateState, generateCodeVerifier } from 'arctic';
 import { cookies } from 'next/headers';
 import { tryCreateGoogleProvider } from '@/lib/server/oauth/google';
 import { isSameOriginNext } from '@/lib/server/oauth/error-redirect';
+import { optionalAuth } from '@/lib/server/middleware';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { log } from '@/lib/server/observability/log';
 
@@ -24,6 +25,14 @@ const COOKIE_PREFIX = process.env.COOKIE_PREFIX || 'app';
 const OAUTH_STATE_COOKIE = `${COOKIE_PREFIX}-oauth-state`;
 const OAUTH_PKCE_COOKIE = `${COOKIE_PREFIX}-oauth-pkce`;
 const OAUTH_NEXT_COOKIE = `${COOKIE_PREFIX}-oauth-next`;
+// Settings' "Lier mon compte Google" hits this same /start endpoint while
+// already authenticated. Carrying the current user's id across the Google
+// redirect lets the callback attach the Google identity to THIS user
+// instead of falling through to the anonymous sign-in find-or-create,
+// which would create a brand-new account and hijack the session if the
+// Google email doesn't already match (always true for phone-signup
+// accounts — see lib/server/auth/synthetic-email.ts). Fixed 2026-09-03.
+const OAUTH_LINK_UID_COOKIE = `${COOKIE_PREFIX}-oauth-link-uid`;
 const OAUTH_COOKIE_MAX_AGE = 5 * 60; // 5 min, per OAUTH-01
 
 function isProd(): boolean {
@@ -56,6 +65,11 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     };
     store.set(OAUTH_STATE_COOKIE, state, cookieOpts);
     store.set(OAUTH_PKCE_COOKIE, codeVerifier, cookieOpts);
+
+    const auth = await optionalAuth();
+    if (auth) {
+      store.set(OAUTH_LINK_UID_COOKIE, auth.user.sub, cookieOpts);
+    }
 
     const nextParam = req.nextUrl.searchParams.get('next');
     const appUrl = process.env.APP_URL ?? '';

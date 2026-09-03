@@ -16,11 +16,19 @@ mockNextCookies();
 vi.mock('@/lib/server/oauth/google', () => ({
   tryCreateGoogleProvider: vi.fn(),
 }));
+// Settings' "Lier mon compte Google" link flow depends on whether the
+// request is already authenticated — mock optionalAuth directly rather
+// than wiring a real JWT + prisma round-trip through it.
+vi.mock('@/lib/server/middleware', () => ({
+  optionalAuth: vi.fn(),
+}));
 
 import { tryCreateGoogleProvider, type GoogleProviderHandle } from '@/lib/server/oauth/google';
+import { optionalAuth } from '@/lib/server/middleware';
 import { GET } from './route';
 
 const mockTryCreate = vi.mocked(tryCreateGoogleProvider);
+const mockOptionalAuth = vi.mocked(optionalAuth);
 
 // Help TypeScript: tryCreateGoogleProvider returns `GoogleProviderHandle | undefined`,
 // so a bare `ReturnType<typeof …>['client']` doesn't narrow. Use the explicit
@@ -35,6 +43,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   __cookieStore.clear();
   process.env.APP_URL = 'https://app.example.test';
+  mockOptionalAuth.mockResolvedValue(null);
 });
 
 describe('GET /api/auth/oauth/google/start', () => {
@@ -158,6 +167,45 @@ describe('GET /api/auth/oauth/google/start', () => {
       makeReq('https://app.example.test/api/auth/oauth/google/start?next=https://evil.com/x'),
     );
     expect(__cookieStore.has('app-oauth-next')).toBe(false);
+  });
+
+  it('sets app-oauth-link-uid when the request is already authenticated (Settings\' "Lier mon compte Google")', async () => {
+    mockTryCreate.mockReturnValue({
+      client: {
+        createAuthorizationURL: () => new URL('https://accounts.google.com/?state=x'),
+      } as unknown as ProviderClient,
+      scopes: ['openid', 'email', 'profile'] as const,
+      redirectUri: '',
+    });
+    mockOptionalAuth.mockResolvedValue({ user: { sub: 'u-shop', email: 'shop@x' } });
+
+    await GET(makeReq('https://app.example.test/api/auth/oauth/google/start?next=/settings'));
+
+    const linkCookie = __cookieStore.get('app-oauth-link-uid');
+    expect(linkCookie).toBeDefined();
+    expect(linkCookie!.value).toBe('u-shop');
+    expect(linkCookie!.options).toEqual(
+      expect.objectContaining({
+        path: '/api/auth/oauth',
+        maxAge: 300,
+        httpOnly: true,
+        sameSite: 'lax',
+      }),
+    );
+  });
+
+  it('does not set app-oauth-link-uid for an anonymous (unauthenticated) request', async () => {
+    mockTryCreate.mockReturnValue({
+      client: {
+        createAuthorizationURL: () => new URL('https://accounts.google.com/?state=x'),
+      } as unknown as ProviderClient,
+      scopes: ['openid', 'email', 'profile'] as const,
+      redirectUri: '',
+    });
+    mockOptionalAuth.mockResolvedValue(null);
+
+    await GET(makeReq());
+    expect(__cookieStore.has('app-oauth-link-uid')).toBe(false);
   });
 
   it("source contains runtime='nodejs' (Phase 0 invariant)", () => {

@@ -5,8 +5,9 @@
 // and a Premium CSV export. See .planning/banani/parametres.md.
 'use client';
 
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { Suspense, useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import Link from 'next/link';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { api, ApiError } from '@/lib/api';
 import { uploadFile } from '@/lib/uploadFile';
 import { useAuth, useUser } from '@/contexts/AuthContext';
@@ -64,6 +65,14 @@ function usePremiumToggle(endpoint: string, skip: boolean) {
 }
 
 export default function SettingsPage() {
+  return (
+    <Suspense fallback={null}>
+      <SettingsPageContent />
+    </Suspense>
+  );
+}
+
+function SettingsPageContent() {
   const user = useUser();
   const { refresh, logout } = useAuth();
   const { data: subscription, loading: subLoading } = useApi<SubscriptionData>(
@@ -372,6 +381,8 @@ function SecuritySection({
   refresh: () => Promise<void>;
 }) {
   const { toast } = useToast();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -383,6 +394,22 @@ function SecuritySection({
 
   const hasPassword = user.hasPassword;
   const googleLinked = user.linkedProviders.includes('google');
+
+  // The Google-linking callback (api/auth/oauth/google/callback) redirects
+  // back here with ?linkError=... when the Google identity is already used
+  // by a different Jurali account — this session/data is left untouched,
+  // we just need to surface why the link didn't happen.
+  useEffect(() => {
+    const linkError = searchParams.get('linkError');
+    if (!linkError) return;
+    const messages: Record<string, string> = {
+      GOOGLE_ALREADY_LINKED_ELSEWHERE: 'Ce compte Google est déjà lié à un autre compte Jurali.',
+      GOOGLE_EMAIL_ALREADY_REGISTERED:
+        'Cet email Google est déjà utilisé par un autre compte Jurali.',
+    };
+    toast(messages[linkError] ?? 'Impossible de lier ce compte Google.', 'error');
+    router.replace('/settings', { scroll: false });
+  }, [searchParams, router, toast]);
 
   async function onSubmitPassword(e: FormEvent) {
     e.preventDefault();
