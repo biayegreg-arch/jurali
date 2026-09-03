@@ -46,6 +46,25 @@ function isProd(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
+/**
+ * GOOGLE_REDIRECT_URI is one fixed host (e.g. https://jurali.app/...), but
+ * Vercel serves both the apex and `www.` with no redirect between them —
+ * a shopkeeper who starts the flow on www never gets their state/PKCE
+ * cookies back at the callback, since Google always lands on the apex.
+ * A leading-dot Domain shares the cookie across every subdomain of
+ * APP_URL's host so the callback finds it regardless of which one the
+ * user started from. Fixed 2026-09-03.
+ */
+function cookieDomain(): string | undefined {
+  if (!isProd()) return undefined;
+  try {
+    const host = new URL(process.env.APP_URL ?? '').hostname;
+    return host ? `.${host}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
   return withRequestContext(ctx, async () => {
@@ -63,12 +82,14 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
     const url = provider.client.createAuthorizationURL(state, codeVerifier, [...provider.scopes]);
 
     const store = await cookies();
+    const domain = cookieDomain();
     const cookieOpts = {
       httpOnly: true,
       secure: isProd(),
       sameSite: 'lax' as const,
       path: '/api/auth/oauth',
       maxAge: OAUTH_COOKIE_MAX_AGE,
+      ...(domain ? { domain } : {}),
     };
     store.set(OAUTH_STATE_COOKIE, state, cookieOpts);
     store.set(OAUTH_PKCE_COOKIE, codeVerifier, cookieOpts);

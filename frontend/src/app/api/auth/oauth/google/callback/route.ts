@@ -50,14 +50,30 @@ function isProd(): boolean {
   return process.env.NODE_ENV === 'production';
 }
 
+// Mirrors /start's cookieDomain() — must match exactly, or a Domain-scoped
+// cookie set there won't be recognized/cleared here. See /start's comment
+// for why this exists (www vs. apex both serve the site with no redirect,
+// so the state/PKCE cookies need to be shared across every subdomain).
+function cookieDomain(): string | undefined {
+  if (!isProd()) return undefined;
+  try {
+    const host = new URL(process.env.APP_URL ?? '').hostname;
+    return host ? `.${host}` : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function clearEphemeralCookies(): Promise<void> {
   const store = await cookies();
+  const domain = cookieDomain();
   const expireOpts = {
     httpOnly: true,
     secure: isProd(),
     sameSite: 'lax' as const,
     path: '/api/auth/oauth',
     maxAge: 0,
+    ...(domain ? { domain } : {}),
   };
   store.set(OAUTH_STATE_COOKIE, '', expireOpts);
   store.set(OAUTH_PKCE_COOKIE, '', expireOpts);

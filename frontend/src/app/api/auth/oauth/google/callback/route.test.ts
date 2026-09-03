@@ -362,6 +362,33 @@ describe('GET /api/auth/oauth/google/callback', () => {
     }
   });
 
+  it('scopes cookies to every subdomain of APP_URL in production, matching /start (www and the apex share one cookie jar)', async () => {
+    await seedCookie('app-oauth-state', STATE);
+    await seedCookie('app-oauth-pkce', PKCE);
+
+    prismaMock.oAuthAccount.findUnique.mockResolvedValue({ userId: 'u1' } as never);
+    prismaMock.user.findUnique.mockResolvedValueOnce({
+      id: 'u1',
+      email: 'a@b.com',
+      tokenVersion: 0,
+    } as never);
+
+    const prevNodeEnv = process.env.NODE_ENV;
+    (process.env as Record<string, string>).NODE_ENV = 'production';
+
+    try {
+      await GET(makeReq({ code: 'c', state: STATE }));
+      const entry = __cookieStore.get('app-oauth-state');
+      expect((entry!.options as { domain?: string }).domain).toBe('.app.example.test');
+    } finally {
+      if (prevNodeEnv !== undefined) {
+        (process.env as Record<string, string>).NODE_ENV = prevNodeEnv;
+      } else {
+        delete (process.env as Record<string, string>).NODE_ENV;
+      }
+    }
+  });
+
   describe('Settings account-linking (app-oauth-link-uid cookie present)', () => {
     it('attaches the Google identity to the already-authenticated user; no new user, no welcome notif', async () => {
       await seedCookie('app-oauth-state', STATE);

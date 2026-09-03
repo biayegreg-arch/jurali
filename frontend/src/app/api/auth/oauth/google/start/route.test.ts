@@ -208,6 +208,44 @@ describe('GET /api/auth/oauth/google/start', () => {
     expect(__cookieStore.has('app-oauth-link-uid')).toBe(false);
   });
 
+  it('scopes cookies to every subdomain of APP_URL (leading-dot Domain) in production, so www and the apex share the same state/PKCE cookie', async () => {
+    mockTryCreate.mockReturnValue({
+      client: {
+        createAuthorizationURL: () => new URL('https://accounts.google.com/?state=x'),
+      } as unknown as ProviderClient,
+      scopes: ['openid', 'email', 'profile'] as const,
+      redirectUri: '',
+    });
+    const prevNodeEnv = process.env.NODE_ENV;
+    (process.env as Record<string, string>).NODE_ENV = 'production';
+
+    try {
+      await GET(makeReq());
+      const stateCookie = __cookieStore.get('app-oauth-state');
+      expect((stateCookie!.options as { domain?: string }).domain).toBe('.app.example.test');
+    } finally {
+      if (prevNodeEnv !== undefined) {
+        (process.env as Record<string, string>).NODE_ENV = prevNodeEnv;
+      } else {
+        delete (process.env as Record<string, string>).NODE_ENV;
+      }
+    }
+  });
+
+  it('does not set a cookie Domain outside production (dev/test)', async () => {
+    mockTryCreate.mockReturnValue({
+      client: {
+        createAuthorizationURL: () => new URL('https://accounts.google.com/?state=x'),
+      } as unknown as ProviderClient,
+      scopes: ['openid', 'email', 'profile'] as const,
+      redirectUri: '',
+    });
+
+    await GET(makeReq());
+    const stateCookie = __cookieStore.get('app-oauth-state');
+    expect((stateCookie!.options as { domain?: string }).domain).toBeUndefined();
+  });
+
   it("source contains runtime='nodejs' (Phase 0 invariant)", () => {
     const src = fs.readFileSync(path.join(__dirname, 'route.ts'), 'utf8');
     expect(src).toMatch(/export\s+const\s+runtime\s*=\s*['"]nodejs['"]/);
