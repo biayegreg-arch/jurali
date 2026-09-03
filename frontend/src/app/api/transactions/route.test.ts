@@ -3,10 +3,13 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
 
 vi.mock('@/lib/server/middleware', () => ({ requireAuth: vi.fn() }));
+vi.mock('@/lib/server/withdrawals/lock', () => ({ lockUserTx: vi.fn() }));
 
 import { requireAuth } from '@/lib/server/middleware';
+import { lockUserTx } from '@/lib/server/withdrawals/lock';
 import { POST } from './route';
 
+const mockLockUserTx = vi.mocked(lockUserTx);
 const mockRequireAuth = vi.mocked(requireAuth);
 const authedCtx = { user: { sub: 'user-1', email: 'me@example.com' } };
 
@@ -26,6 +29,14 @@ function makePost(body: unknown, opts: { csrf?: 'match' | 'missing' } = {}): Nex
 beforeEach(() => {
   vi.clearAllMocks();
   mockRequireAuth.mockResolvedValue(authedCtx);
+  // Default $transaction passes the prismaMock as `tx` so writes within the
+  // callback hit the same mocks as the outer client (mockDeep proxies them).
+  prismaMock.$transaction.mockImplementation((cb: unknown) => {
+    if (typeof cb === 'function') {
+      return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+    }
+    return Promise.resolve(cb);
+  });
 });
 
 describe('POST /api/transactions', () => {
@@ -168,5 +179,39 @@ describe('POST /api/transactions', () => {
       expect((await res.json()).error).toBe('NOTHING_OVERDUE');
       expect(prismaMock.transaction.create).not.toHaveBeenCalled();
     });
+  });
+
+  it('guards the balance-check-then-insert race with the per-user advisory lock', async () => {
+    prismaMock.client.findUnique.mockResolvedValue({
+      ownerId: 'user-1',
+      transactions: [],
+    } as never);
+    prismaMock.transaction.create.mockResolvedValue({
+      id: 'tx-1',
+      clientId: 'c-1',
+      type: 'DEBT',
+      amountFcfa: 1_000,
+      note: null,
+      createdAt: new Date(),
+    } as never);
+
+    await POST(makePost({ clientId: 'c-1', type: 'DEBT', amountFcfa: 1_000 }));
+
+    expect(mockLockUserTx).toHaveBeenCalledWith(expect.anything(), 'user-1');
+    expect(prismaMock.$transaction).toHaveBeenCalledWith(
+      expect.any(Function),
+      expect.objectContaining({ isolationLevel: 'Serializable' }),
+    );
+  });
+
+  it('returns 409 TRANSIENT_CONFLICT when the Serializable transaction aborts (P2034)', async () => {
+    prismaMock.$transaction.mockRejectedValue(
+      Object.assign(new Error('conflict'), { code: 'P2034' }),
+    );
+
+    const res = await POST(makePost({ clientId: 'c-1', type: 'DEBT', amountFcfa: 1_000 }));
+
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe('TRANSIENT_CONFLICT');
   });
 });

@@ -9,14 +9,18 @@
 // stable code PAYMENT_EXCEEDS_BALANCE, mirroring the withdrawals module's
 // INSUFFICIENT_BALANCE convention.
 //
-// No advisory lock / Serializable transaction here, unlike withdrawals.ts:
-// Jurali is single-device, single-user-typing-sequentially by design (PRD
-// §8 explicitly excludes offline conflict resolution for V1), so the
-// double-submit race that lock.ts guards against doesn't apply the same
-// way. Revisit if Phase 9's multi-device sync ships.
+// Advisory lock + Serializable tx, same pattern as clients.ts/withdrawals.ts:
+// the read-balance-then-insert cycle was a TOCTOU race — two concurrent
+// PAYMENT POSTs (double-tap, retry-on-timeout) could both read the same
+// balance, both pass the PAYMENT_EXCEEDS_BALANCE check, and push the real
+// balance negative. This isn't the multi-device offline-sync case PRD §8
+// excludes for V1 (that's about reconciling edits made while offline on
+// separate devices) — it's plain concurrent-request serialization, so
+// `lockUserTx` closes it the same way it does for client creation.
 export const runtime = 'nodejs';
 
 import 'server-only';
+import { Prisma } from '@prisma/client';
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
 import { verifyCsrf } from '@/lib/server/auth';
@@ -25,6 +29,8 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeClientBalance, computeOverdueBalance } from '@/lib/server/jurali/balance';
 import { requireOwnedClient } from '@/lib/server/jurali/clients';
+import { lockUserTx } from '@/lib/server/withdrawals/lock';
+import { isTransientConflict } from '@/lib/server/prisma-errors';
 
 const Body = z.object({
   clientId: z.string().min(1),
@@ -63,65 +69,98 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     const { clientId, type, note, markOverdueOnly } = parsed.data;
     let { amountFcfa } = parsed.data;
 
-    const found = await prisma.client.findUnique({
-      where: { id: clientId },
-      select: {
-        ownerId: true,
-        transactions: { select: { type: true, amountFcfa: true, createdAt: true } },
-      },
-    });
-    const client = requireOwnedClient(found, auth.user.sub, ctx.requestId);
-    if (client instanceof NextResponse) return client;
+    try {
+      const result = await prisma.$transaction(
+        async (tx) => {
+          // Lock MUST be the first awaited statement — see header comment.
+          await lockUserTx(tx, auth.user.sub);
 
-    // Prisma's `type` column is a plain String (see schema.prisma comment);
-    // cast since every row was written through this same route's
-    // `z.enum(['DEBT', 'PAYMENT'])` contract.
-    const aging = client.transactions.map((t) => ({ ...t, type: t.type as 'DEBT' | 'PAYMENT' }));
+          const found = await tx.client.findUnique({
+            where: { id: clientId },
+            select: {
+              ownerId: true,
+              transactions: { select: { type: true, amountFcfa: true, createdAt: true } },
+            },
+          });
+          const client = requireOwnedClient(found, auth.user.sub, ctx.requestId);
+          if (client instanceof NextResponse) {
+            return { ok: false as const, response: client };
+          }
 
-    if (type === 'PAYMENT') {
-      if (markOverdueOnly) {
-        amountFcfa = computeOverdueBalance(aging, new Date());
-        if (amountFcfa <= 0) {
-          return NextResponse.json(
-            { error: 'NOTHING_OVERDUE', message: 'No overdue balance left to settle.' },
-            { status: 422, headers: { 'x-request-id': ctx.requestId } },
-          );
-        }
-      }
+          // Prisma's `type` column is a plain String (see schema.prisma
+          // comment); cast since every row was written through this same
+          // route's `z.enum(['DEBT', 'PAYMENT'])` contract.
+          const aging = client.transactions.map((t) => ({
+            ...t,
+            type: t.type as 'DEBT' | 'PAYMENT',
+          }));
 
-      const currentBalance = computeClientBalance(aging);
-      if (amountFcfa > currentBalance) {
+          if (type === 'PAYMENT') {
+            if (markOverdueOnly) {
+              amountFcfa = computeOverdueBalance(aging, new Date());
+              if (amountFcfa <= 0) {
+                return {
+                  ok: false as const,
+                  response: NextResponse.json(
+                    { error: 'NOTHING_OVERDUE', message: 'No overdue balance left to settle.' },
+                    { status: 422, headers: { 'x-request-id': ctx.requestId } },
+                  ),
+                };
+              }
+            }
+
+            const currentBalance = computeClientBalance(aging);
+            if (amountFcfa > currentBalance) {
+              return {
+                ok: false as const,
+                response: NextResponse.json(
+                  {
+                    error: 'PAYMENT_EXCEEDS_BALANCE',
+                    message: `Payment (${amountFcfa}) exceeds the client's balance (${currentBalance}).`,
+                  },
+                  { status: 422, headers: { 'x-request-id': ctx.requestId } },
+                ),
+              };
+            }
+          }
+
+          const transaction = await tx.transaction.create({
+            data: {
+              clientId,
+              ownerId: auth.user.sub,
+              type,
+              amountFcfa,
+              ...(note ? { note } : {}),
+            },
+            select: {
+              id: true,
+              clientId: true,
+              type: true,
+              amountFcfa: true,
+              note: true,
+              createdAt: true,
+            },
+          });
+
+          return { ok: true as const, transaction };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+
+      if (!result.ok) return result.response;
+
+      return NextResponse.json(result.transaction, {
+        status: 201,
+        headers: { 'x-request-id': ctx.requestId },
+      });
+    } catch (err) {
+      if (isTransientConflict(err)) {
         return NextResponse.json(
-          {
-            error: 'PAYMENT_EXCEEDS_BALANCE',
-            message: `Payment (${amountFcfa}) exceeds the client's balance (${currentBalance}).`,
-          },
-          { status: 422, headers: { 'x-request-id': ctx.requestId } },
+          { error: 'TRANSIENT_CONFLICT', message: 'Please retry' },
+          { status: 409, headers: { 'x-request-id': ctx.requestId } },
         );
       }
+      throw err;
     }
-
-    const transaction = await prisma.transaction.create({
-      data: {
-        clientId,
-        ownerId: auth.user.sub,
-        type,
-        amountFcfa,
-        ...(note ? { note } : {}),
-      },
-      select: {
-        id: true,
-        clientId: true,
-        type: true,
-        amountFcfa: true,
-        note: true,
-        createdAt: true,
-      },
-    });
-
-    return NextResponse.json(transaction, {
-      status: 201,
-      headers: { 'x-request-id': ctx.requestId },
-    });
   });
 }
