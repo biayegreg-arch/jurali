@@ -1,40 +1,21 @@
 // Real Premium-payment history for the admin console (/admin dashboard's
-// "Paiements récents" + /admin/revenue), built from data that already
-// exists — WebhookLog (every Bictorys webhook delivery, kept for
-// idempotency) — instead of inventing figures the way Banani's mockup does
-// (its "2023 vs 2024" comparison has no backing data in this app).
+// "Paiements récents" + /admin/revenue), backed by the SubscriptionPayment
+// ledger (see prisma/schema.prisma doc comment) — a permanent row per
+// webhook-confirmed event, written inside the webhook's own Serializable
+// tx (api/webhooks/bictorys/route.ts onPaid/onFailed/onRefunded).
 //
-// KNOWN LIMITATION: `Subscription` is ONE row reused across renewals (see
-// subscriptions/guards.ts) — `providerChargeId` is overwritten on every new
-// checkout. Correlating a WebhookLog row to a Subscription via
-// `providerChargeId` therefore only works for that subscriber's MOST
-// RECENT checkout attempt; once they renew, their earlier payment's
-// WebhookLog row becomes uncorrelated (the Subscription's providerChargeId
-// has moved on) and silently drops out of this history. Acceptable for a
-// "recent activity" widget on a young product with few renewals yet; would
-// need a dedicated payment-ledger table to stay accurate long-term.
+// Previously this scanned WebhookLog and correlated rows to a Subscription
+// via providerChargeId — since that column is overwritten on every renewal
+// (Subscription is one row reused across billing cycles, see
+// subscriptions/guards.ts), a subscriber's earlier payments silently
+// dropped out of the history once they renewed. The ledger table fixes
+// this by recording every event permanently, independent of what the
+// Subscription row currently points at. Rows written before this ledger
+// existed are not backfilled — history starts from the migration date.
 import 'server-only';
 import type { PrismaClient } from '@prisma/client';
 
-const SCAN_LIMIT = 200; // over-fetch: not every webhook (e.g. Order charges) correlates to a Subscription
-
-function classifyPayloadStatus(payload: unknown): 'PAID' | 'FAILED' | null {
-  const status = String(
-    (payload as Record<string, unknown> | null)?.['status'] ?? '',
-  ).toLowerCase();
-  if (['succeeded', 'paid', 'success', 'completed'].includes(status)) return 'PAID';
-  if (
-    ['failed', 'cancelled', 'canceled', 'rejected', 'error', 'refunded', 'refund'].includes(status)
-  ) {
-    return 'FAILED';
-  }
-  return null; // pending / unknown — not a terminal payment event
-}
-
-function extractChargeId(payload: unknown): string {
-  const p = payload as Record<string, unknown> | null;
-  return String(p?.['charge_id'] ?? p?.['chargeId'] ?? p?.['id'] ?? '');
-}
+const SCAN_LIMIT = 200;
 
 export interface SubscriptionPaymentEvent {
   id: string;
@@ -46,66 +27,32 @@ export interface SubscriptionPaymentEvent {
 }
 
 /**
- * Scans the most recent Bictorys webhook deliveries and returns the ones
- * that correlate to a Subscription charge, newest first, capped at `limit`.
+ * Most recent Premium payment events, newest first, capped at `limit`.
  */
 export async function getRecentSubscriptionPayments(
   prisma: PrismaClient,
   limit = 10,
 ): Promise<SubscriptionPaymentEvent[]> {
-  const logs = await prisma.webhookLog.findMany({
-    where: { provider: 'bictorys' },
+  const rows = await prisma.subscriptionPayment.findMany({
     orderBy: { createdAt: 'desc' },
-    take: SCAN_LIMIT,
-    select: { id: true, createdAt: true, payload: true },
+    take: limit,
+    select: {
+      id: true,
+      createdAt: true,
+      status: true,
+      amountFcfa: true,
+      owner: { select: { email: true, shopName: true } },
+    },
   });
 
-  const candidates: Array<{
-    id: string;
-    createdAt: Date;
-    status: 'PAID' | 'FAILED';
-    externalId: string;
-  }> = [];
-  for (const log of logs) {
-    const status = classifyPayloadStatus(log.payload);
-    if (!status) continue;
-    const externalId = extractChargeId(log.payload);
-    if (!externalId) continue;
-    candidates.push({ id: log.id, createdAt: log.createdAt, status, externalId });
-  }
-
-  // Batch the Subscription correlation into a single query instead of one
-  // `findFirst` per webhook log (up to SCAN_LIMIT=200 sequential round
-  // trips) — this endpoint backs an admin dashboard that can be reloaded
-  // often, so 200 serial DB calls per hit was a real latency/load problem.
-  const subs = candidates.length
-    ? await prisma.subscription.findMany({
-        where: { providerChargeId: { in: candidates.map((c) => c.externalId) } },
-        select: {
-          providerChargeId: true,
-          planAmountFcfa: true,
-          owner: { select: { email: true, shopName: true } },
-        },
-      })
-    : [];
-  const subByChargeId = new Map(subs.map((s) => [s.providerChargeId, s]));
-
-  const events: SubscriptionPaymentEvent[] = [];
-  for (const c of candidates) {
-    if (events.length >= limit) break;
-    const sub = subByChargeId.get(c.externalId);
-    if (!sub) continue; // an Order charge, or a renewal whose row has since moved on
-
-    events.push({
-      id: c.id,
-      createdAt: c.createdAt,
-      status: c.status,
-      amountFcfa: sub.planAmountFcfa,
-      ownerEmail: sub.owner.email,
-      ownerShopName: sub.owner.shopName,
-    });
-  }
-  return events;
+  return rows.map((r) => ({
+    id: r.id,
+    createdAt: r.createdAt,
+    status: r.status as 'PAID' | 'FAILED',
+    amountFcfa: r.amountFcfa,
+    ownerEmail: r.owner.email,
+    ownerShopName: r.owner.shopName,
+  }));
 }
 
 export interface MonthlyRevenuePoint {
@@ -114,12 +61,12 @@ export interface MonthlyRevenuePoint {
 }
 
 /**
- * Pure — sums PAID events (see limitation above) into monthly buckets
- * covering the last `months` calendar months, oldest first, zero-filled for
- * months with no activity. Callers that need both the bucketed chart AND
- * the raw recent-events list should fetch events ONCE via
- * `getRecentSubscriptionPayments(prisma, SCAN_LIMIT)` and pass them to both
- * this function and their own slicing — do not call the async fetch twice.
+ * Pure — sums PAID events into monthly buckets covering the last `months`
+ * calendar months, oldest first, zero-filled for months with no activity.
+ * Callers that need both the bucketed chart AND the raw recent-events list
+ * should fetch events ONCE via `getRecentSubscriptionPayments(prisma,
+ * SCAN_LIMIT)` and pass them to both this function and their own slicing —
+ * do not call the async fetch twice.
  */
 export function bucketMonthlyRevenue(
   events: readonly SubscriptionPaymentEvent[],

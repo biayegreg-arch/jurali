@@ -1,7 +1,7 @@
 // GET /api/admin/revenue — "Revenus" admin page: MRR, monthly history, and
 // a fuller recent-payments list than the dashboard widget. See
-// lib/server/jurali/admin-revenue.ts for the WebhookLog-correlation
-// approach and its documented limitation.
+// lib/server/jurali/admin-revenue.ts — backed by the SubscriptionPayment
+// ledger (prisma/schema.prisma).
 export const runtime = 'nodejs';
 
 import 'server-only';

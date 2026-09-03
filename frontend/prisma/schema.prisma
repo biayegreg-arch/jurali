@@ -85,6 +85,7 @@ model User {
   clients           Client[]
   transactions      Transaction[]
   subscription      Subscription?
+  subscriptionPayments SubscriptionPayment[]
   couponsCreated    Coupon[]
 
   // Multi-tenancy is opt-in per project: by default no resource is org-scoped.
@@ -488,10 +489,39 @@ model Subscription {
   reminderStage         String?
   reminderStageRenewsAt DateTime?
 
+  payments SubscriptionPayment[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([ownerId])
+}
+
+// Append-only payment ledger for Premium subscription charges. Each
+// webhook-confirmed event (paid/failed, refunds recorded as failed) gets
+// its own permanent row — unlike Subscription.providerChargeId, which is
+// overwritten on every renewal (this row is reused across billing cycles,
+// see subscriptions/guards.ts). Without this table, the admin "Revenus"
+// page could only correlate a subscriber's MOST RECENT checkout attempt
+// (WebhookLog scan joined on the current providerChargeId); once they
+// renewed, their earlier payments silently dropped out of the history.
+// Written inside the same Serializable webhook tx as the Subscription
+// update (see api/webhooks/bictorys/route.ts onPaid/onFailed/onRefunded).
+model SubscriptionPayment {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  ownerId        String
+  owner          User         @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  status           String // "PAID" | "FAILED"
+  amountFcfa       Int // snapshot of Subscription.planAmountFcfa at the time of this event
+  providerChargeId String
+
+  createdAt DateTime @default(now())
+
+  @@index([ownerId, createdAt])
+  @@index([createdAt])
 }
 
 // Admin-editable platform settings. Single row (fixed id "singleton") —

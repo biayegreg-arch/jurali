@@ -36,7 +36,7 @@ function defaultMocks(): void {
   } as never);
   prismaMock.platformConfig.findUnique.mockResolvedValue(null);
   prismaMock.user.findMany.mockResolvedValue([] as never);
-  prismaMock.webhookLog.findMany.mockResolvedValue([] as never);
+  prismaMock.subscriptionPayment.findMany.mockResolvedValue([] as never);
   prismaMock.subscription.findUnique.mockResolvedValue(null);
   prismaMock.client.count.mockResolvedValue(0);
   prismaMock.transaction.aggregate.mockResolvedValue({ _sum: { amountFcfa: null } } as never);

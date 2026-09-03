@@ -11,6 +11,7 @@ const subscriptionFindFirst = vi.fn();
 const subscriptionFindUnique = vi.fn();
 const subscriptionUpdate = vi.fn();
 const couponUpdate = vi.fn();
+const subscriptionPaymentCreate = vi.fn();
 
 const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?: unknown) =>
   fn({
@@ -23,6 +24,7 @@ const $transaction = vi.fn(async (fn: (tx: unknown) => Promise<unknown>, _opts?:
       update: subscriptionUpdate,
     },
     coupon: { update: couponUpdate },
+    subscriptionPayment: { create: subscriptionPaymentCreate },
   }),
 );
 
@@ -45,6 +47,7 @@ beforeEach(() => {
   subscriptionFindUnique.mockReset();
   subscriptionUpdate.mockReset();
   couponUpdate.mockReset();
+  subscriptionPaymentCreate.mockReset();
 });
 
 afterEach(() => {
@@ -135,7 +138,11 @@ describe('POST /api/webhooks/bictorys', () => {
     it('onPaid activates a Subscription found by providerChargeId', async () => {
       findUnique.mockResolvedValueOnce(null);
       orderFindFirst.mockResolvedValueOnce(null);
-      subscriptionFindFirst.mockResolvedValueOnce({ id: 'sub_1' });
+      subscriptionFindFirst.mockResolvedValueOnce({
+        id: 'sub_1',
+        ownerId: 'user_1',
+        planAmountFcfa: 2500,
+      });
       const { POST } = await import('./route');
       const { req } = bictorysFixtureRequest({ status: 'succeeded' });
       const res = await POST(req);
@@ -146,6 +153,16 @@ describe('POST /api/webhooks/bictorys', () => {
           data: expect.objectContaining({ status: 'ACTIVE' }),
         }),
       );
+      // Permanent ledger row, independent of Subscription.providerChargeId
+      // (which the NEXT renewal will overwrite) — see admin-revenue.ts.
+      expect(subscriptionPaymentCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          subscriptionId: 'sub_1',
+          ownerId: 'user_1',
+          status: 'PAID',
+          amountFcfa: 2500,
+        }),
+      });
       // No outbox emit for subscription events (see route.ts comment).
       expect(outboxCreate).not.toHaveBeenCalled();
       // No coupon on this subscription — nothing to increment.
@@ -173,7 +190,12 @@ describe('POST /api/webhooks/bictorys', () => {
       // since overwritten it — but the paymentReference embeds the stable
       // subscription id, so the late success must still land.
       subscriptionFindFirst.mockResolvedValueOnce(null);
-      subscriptionFindUnique.mockResolvedValueOnce({ id: 'clstalecuid1', couponId: null });
+      subscriptionFindUnique.mockResolvedValueOnce({
+        id: 'clstalecuid1',
+        couponId: null,
+        ownerId: 'user_stale',
+        planAmountFcfa: 2500,
+      });
       const { POST } = await import('./route');
       const { req } = bictorysFixtureRequest({
         status: 'succeeded',
@@ -197,7 +219,11 @@ describe('POST /api/webhooks/bictorys', () => {
     it('onFailed marks a Subscription FAILED found by providerChargeId', async () => {
       findUnique.mockResolvedValueOnce(null);
       orderFindFirst.mockResolvedValueOnce(null);
-      subscriptionFindFirst.mockResolvedValueOnce({ id: 'sub_2' });
+      subscriptionFindFirst.mockResolvedValueOnce({
+        id: 'sub_2',
+        ownerId: 'user_2',
+        planAmountFcfa: 2500,
+      });
       const { POST } = await import('./route');
       const { req } = bictorysFixtureRequest({ status: 'failed' });
       const res = await POST(req);
@@ -205,12 +231,24 @@ describe('POST /api/webhooks/bictorys', () => {
       expect(subscriptionUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'sub_2' }, data: { status: 'FAILED' } }),
       );
+      expect(subscriptionPaymentCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          subscriptionId: 'sub_2',
+          ownerId: 'user_2',
+          status: 'FAILED',
+        }),
+      });
     });
 
     it('onRefunded marks a Subscription CANCELED found by providerChargeId', async () => {
       findUnique.mockResolvedValueOnce(null);
       orderFindFirst.mockResolvedValueOnce(null);
-      subscriptionFindFirst.mockResolvedValueOnce({ id: 'sub_3' });
+      subscriptionFindFirst.mockResolvedValueOnce({
+        id: 'sub_3',
+        ownerId: 'user_3',
+        planAmountFcfa: 2500,
+        owner: { email: 'shop3@example.com' },
+      });
       const { POST } = await import('./route');
       const { req } = bictorysFixtureRequest({ status: 'refunded' });
       const res = await POST(req);
@@ -218,6 +256,43 @@ describe('POST /api/webhooks/bictorys', () => {
       expect(subscriptionUpdate).toHaveBeenCalledWith(
         expect.objectContaining({ where: { id: 'sub_3' }, data: { status: 'CANCELED' } }),
       );
+      // Refunds ledger as FAILED — see onRefunded's comment in route.ts.
+      expect(subscriptionPaymentCreate).toHaveBeenCalledWith({
+        data: expect.objectContaining({
+          subscriptionId: 'sub_3',
+          ownerId: 'user_3',
+          status: 'FAILED',
+        }),
+      });
+      // Audit fix — refund confirmation email so the subscriber isn't just
+      // silently dropped to the free tier.
+      expect(outboxCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            kind: 'email.refund_confirmation',
+            payload: expect.objectContaining({
+              to: 'shop3@example.com',
+              planAmountFcfa: 2500,
+            }),
+          }),
+        }),
+      );
+    });
+
+    it('onRefunded skips the confirmation email for a synthetic phone-signup placeholder', async () => {
+      findUnique.mockResolvedValueOnce(null);
+      orderFindFirst.mockResolvedValueOnce(null);
+      subscriptionFindFirst.mockResolvedValueOnce({
+        id: 'sub_4',
+        ownerId: 'user_4',
+        planAmountFcfa: 2500,
+        owner: { email: '221771234567@phone.jurali.local' },
+      });
+      const { POST } = await import('./route');
+      const { req } = bictorysFixtureRequest({ status: 'refunded' });
+      const res = await POST(req);
+      expect(res.status).toBe(200);
+      expect(outboxCreate).not.toHaveBeenCalled();
     });
 
     it('unknown charge (neither Order nor Subscription) drops silently — 200', async () => {
@@ -229,6 +304,7 @@ describe('POST /api/webhooks/bictorys', () => {
       const res = await POST(req);
       expect(res.status).toBe(200);
       expect(subscriptionUpdate).not.toHaveBeenCalled();
+      expect(subscriptionPaymentCreate).not.toHaveBeenCalled();
     });
   });
 });

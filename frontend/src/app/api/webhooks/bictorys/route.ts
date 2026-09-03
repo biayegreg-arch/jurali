@@ -24,12 +24,18 @@
  *
  * Phase 7 — also correlates `Subscription.providerChargeId` when no Order
  * matches (Premium checkout reuses the same PaymentProvider.charge() flow,
- * see /api/subscriptions). No new outbox `kind` is emitted for subscription
- * events — same reasoning as onRefunded below: the kind→handler switch
- * lives inside the PROTECTED outbox/dispatcher.ts, so a new kind would
- * require editing it. Subscription "active" is a live renewsAt computation
- * (lib/server/subscriptions/guards.ts) — the frontend polls GET
- * /api/subscriptions rather than needing a push notification here.
+ * see /api/subscriptions). onPaid/onFailed emit no outbox event — Subscription
+ * "active" is a live renewsAt computation (lib/server/subscriptions/guards.ts)
+ * the frontend polls via GET /api/subscriptions, no push needed. onRefunded
+ * DOES emit one (`email.refund_confirmation`, added to the PROTECTED
+ * outbox/dispatcher.ts with explicit user sign-off — see its doc comment):
+ * a refunded subscriber otherwise loses Premium access with zero signal.
+ *
+ * Every subscription-branch handler also writes a permanent
+ * `SubscriptionPayment` ledger row alongside the Subscription update — see
+ * that model's doc comment in schema.prisma for why (Subscription.
+ * providerChargeId is overwritten on renewal, so it can't back a payment
+ * history by itself).
  */
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -40,6 +46,7 @@ import { bictorysWebhookProvider } from '@/lib/server/webhook/bictorys';
 import { enqueueOutbox } from '@/lib/server/outbox';
 import { prisma } from '@/lib/server/prisma';
 import { SUBSCRIPTION_PERIOD_DAYS } from '@/lib/server/subscriptions/guards';
+import { isSyntheticEmail } from '@/lib/server/auth/synthetic-email';
 
 export const POST = createWebhookHandler({
   prisma,
@@ -83,6 +90,19 @@ export const POST = createWebhookHandler({
           // Keep providerChargeId in sync with whichever charge actually
           // succeeded, so a later refund/failed webhook for this same
           // charge still correlates via the normal exact-match path.
+          providerChargeId: externalRef,
+        },
+      });
+      // Permanent ledger row — Subscription.providerChargeId above gets
+      // overwritten on the NEXT renewal, so without this the admin
+      // "Revenus" page could only ever see each subscriber's most recent
+      // checkout attempt (see SubscriptionPayment doc comment).
+      await tx.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id,
+          ownerId: subscription.ownerId,
+          status: 'PAID',
+          amountFcfa: subscription.planAmountFcfa,
           providerChargeId: externalRef,
         },
       });
@@ -150,12 +170,38 @@ export const POST = createWebhookHandler({
       // it was reversed after the fact).
       const subscription = await tx.subscription.findFirst({
         where: { providerChargeId: externalRef },
+        include: { owner: { select: { email: true } } },
       });
       if (!subscription) return {};
       await tx.subscription.update({
         where: { id: subscription.id },
         data: { status: 'CANCELED' },
       });
+      // Ledger this as FAILED — the charge that funded the current billing
+      // period was reversed, same terminal disposition as classifyPayloadStatus
+      // in admin-revenue.ts (which maps refunded/refund → FAILED).
+      await tx.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id,
+          ownerId: subscription.ownerId,
+          status: 'FAILED',
+          amountFcfa: subscription.planAmountFcfa,
+          providerChargeId: externalRef,
+        },
+      });
+      // Audit fix — without this the subscriber just silently drops to
+      // free tier. Skip phone-signup synthetic placeholders (undeliverable).
+      if (!isSyntheticEmail(subscription.owner.email)) {
+        const publicUrl = process.env.PUBLIC_URL ?? '';
+        await enqueueOutbox(tx, {
+          kind: 'email.refund_confirmation',
+          payload: {
+            to: subscription.owner.email,
+            planAmountFcfa: subscription.planAmountFcfa,
+            manageUrl: `${publicUrl}/premium`,
+          },
+        });
+      }
       return {};
     }
     await tx.order.update({
@@ -183,6 +229,15 @@ export const POST = createWebhookHandler({
       await tx.subscription.update({
         where: { id: subscription.id },
         data: { status: 'FAILED' },
+      });
+      await tx.subscriptionPayment.create({
+        data: {
+          subscriptionId: subscription.id,
+          ownerId: subscription.ownerId,
+          status: 'FAILED',
+          amountFcfa: subscription.planAmountFcfa,
+          providerChargeId: externalRef,
+        },
       });
       return {};
     }

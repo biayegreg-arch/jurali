@@ -166,6 +166,17 @@ async function dispatchEvent(deps: OutboxDispatcherDeps, event: OutboxEvent): Pr
       await deps.emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html });
       return;
     }
+    case 'email.refund_confirmation': {
+      // Audit fix — emitted by webhooks/bictorys/route.ts's onRefunded.
+      // Without this, a refunded Premium subscriber loses access with no
+      // signal at all (the Subscription just silently flips to CANCELED).
+      if (!deps.emailQueue) throw new Error('email queue not configured');
+      const { subscriptionRefundedEmail } = await import('../subscriptions/email-templates');
+      const { to, planAmountFcfa, manageUrl } = event.payload;
+      const tpl = subscriptionRefundedEmail({ planAmountFcfa, manageUrl });
+      await deps.emailQueue.enqueue({ to, subject: tpl.subject, html: tpl.html, text: tpl.text });
+      return;
+    }
     default: {
       // Exhaustive check — TS will yell if we add a new variant and forget it.
       const _exhaustive: never = event;

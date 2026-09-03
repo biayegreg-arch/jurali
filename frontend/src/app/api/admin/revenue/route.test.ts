@@ -36,7 +36,7 @@ beforeEach(() => {
     _count: { _all: 10 },
     _sum: { planAmountFcfa: 25_000 },
   } as never);
-  prismaMock.webhookLog.findMany.mockResolvedValue([] as never);
+  prismaMock.subscriptionPayment.findMany.mockResolvedValue([] as never);
 });
 
 describe('GET /api/admin/revenue', () => {
@@ -49,27 +49,19 @@ describe('GET /api/admin/revenue', () => {
   });
 
   it('splits payments into paidCount/failedCount', async () => {
-    prismaMock.webhookLog.findMany.mockResolvedValueOnce([
+    prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([
       {
-        id: 'wh_1',
+        id: 'pay_1',
         createdAt: new Date('2026-08-10T00:00:00Z'),
-        payload: { status: 'succeeded', charge_id: 'ch_1' },
-      },
-      {
-        id: 'wh_2',
-        createdAt: new Date('2026-08-11T00:00:00Z'),
-        payload: { status: 'failed', charge_id: 'ch_2' },
-      },
-    ] as never);
-    prismaMock.subscription.findMany.mockResolvedValueOnce([
-      {
-        providerChargeId: 'ch_1',
-        planAmountFcfa: 2500,
+        status: 'PAID',
+        amountFcfa: 2500,
         owner: { email: 'a@test.local', shopName: null },
       },
       {
-        providerChargeId: 'ch_2',
-        planAmountFcfa: 2500,
+        id: 'pay_2',
+        createdAt: new Date('2026-08-11T00:00:00Z'),
+        status: 'FAILED',
+        amountFcfa: 2500,
         owner: { email: 'a@test.local', shopName: null },
       },
     ] as never);

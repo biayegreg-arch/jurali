@@ -11,9 +11,10 @@
 //   4. on dispatch failure with attempts >= MAX_ATTEMPTS, marks the row DEAD.
 //   5. concurrent claim losing the race (claimed.count === 0) is skipped
 //      without further work.
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockDeep, mockReset, type DeepMockProxy } from 'vitest-mock-extended';
 import type { PrismaClient } from '@prisma/client';
+import type { EmailQueue } from '../queues/email-queue';
 import { drainOutbox } from './dispatcher';
 
 const prismaMock = mockDeep<PrismaClient>() as unknown as DeepMockProxy<PrismaClient>;
@@ -141,5 +142,28 @@ describe('drainOutbox (TEST-02)', () => {
 
     expect(stats).toEqual({ processed: 0, succeeded: 0, failed: 0, dead: 0 });
     expect(prismaMock.outboxEvent.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('renders and enqueues an email.refund_confirmation event (audit fix)', async () => {
+    const row = makeRow({
+      kind: 'email.refund_confirmation',
+      payload: {
+        to: 'shop@example.com',
+        planAmountFcfa: 2500,
+        manageUrl: 'https://jurali.app/premium',
+      },
+    });
+    prismaMock.outboxEvent.findMany.mockResolvedValue([{ id: 'oe_1' }] as never);
+    prismaMock.outboxEvent.updateMany.mockResolvedValue({ count: 1 } as never);
+    prismaMock.outboxEvent.findUnique.mockResolvedValue(row as never);
+    prismaMock.outboxEvent.update.mockResolvedValue({} as never);
+    const emailQueue = { enqueue: vi.fn().mockResolvedValue('job-1') } as unknown as EmailQueue;
+
+    const stats = await drainOutbox({ prisma: prismaMock, emailQueue });
+
+    expect(stats.succeeded).toBe(1);
+    expect(emailQueue.enqueue).toHaveBeenCalledWith(
+      expect.objectContaining({ to: 'shop@example.com' }),
+    );
   });
 });

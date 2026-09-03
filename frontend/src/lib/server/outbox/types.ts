@@ -13,7 +13,8 @@ export type OutboxEvent =
   | NotificationPaymentReceivedEvent
   | EmailPaymentConfirmationEvent
   | EmailVerificationCodeEvent
-  | EmailPasswordResetEvent;
+  | EmailPasswordResetEvent
+  | EmailRefundConfirmationEvent;
 
 export interface NotificationPaymentReceivedEvent {
   kind: 'notification.payment_received';
@@ -58,6 +59,20 @@ export interface EmailPasswordResetEvent {
     to: string;
     code: string;
     expiresAt: string;
+  };
+}
+
+/**
+ * Emitted by webhooks/bictorys/route.ts's onRefunded — a Premium subscriber
+ * whose confirmed charge was reversed loses access silently otherwise (the
+ * subscription flips to CANCELED with no user-facing signal).
+ */
+export interface EmailRefundConfirmationEvent {
+  kind: 'email.refund_confirmation';
+  payload: {
+    to: string;
+    planAmountFcfa: number;
+    manageUrl: string;
   };
 }
 

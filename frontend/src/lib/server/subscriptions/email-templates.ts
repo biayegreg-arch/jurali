@@ -53,3 +53,24 @@ export function subscriptionExpiredEmail(args: SubscriptionExpiredEmailArgs): Em
     text: `Bonjour,\n\nTon abonnement Jurali Premium vient d'expirer et ton compte est repassé en offre Gratuite (limité à ${CLIENT_FREE_TIER_LIMIT} clients, sans rappels WhatsApp ni statistiques).\n\nRéabonne-toi à tout moment pour ${formatPrice(args.planAmountFcfa, 'FCFA')}/mois : ${args.manageUrl}`,
   };
 }
+
+export interface SubscriptionRefundedEmailArgs {
+  planAmountFcfa: number;
+  manageUrl: string;
+}
+
+/**
+ * Sent when Bictorys reverses a confirmed Premium charge (onRefunded) — the
+ * subscription flips to CANCELED with no other user-facing signal, so
+ * without this email the subscriber just silently loses access.
+ */
+export function subscriptionRefundedEmail(args: SubscriptionRefundedEmailArgs): EmailTemplate {
+  const price = htmlEscape(formatPrice(args.planAmountFcfa, 'FCFA'));
+  const url = htmlEscape(args.manageUrl);
+
+  return {
+    subject: 'Ton paiement Jurali Premium a été remboursé',
+    html: `<p>Bonjour,</p><p>Ton paiement de <strong>${price}</strong> pour Jurali Premium a été remboursé. Ton compte est repassé en offre <strong>Gratuite</strong> (limité à ${CLIENT_FREE_TIER_LIMIT} clients, sans rappels WhatsApp ni statistiques).</p><p>Si ce remboursement ne vient pas de toi, contacte le support. Sinon, tu peux te réabonner à tout moment : <a href="${url}">${url}</a></p>`,
+    text: `Bonjour,\n\nTon paiement de ${formatPrice(args.planAmountFcfa, 'FCFA')} pour Jurali Premium a été remboursé. Ton compte est repassé en offre Gratuite (limité à ${CLIENT_FREE_TIER_LIMIT} clients, sans rappels WhatsApp ni statistiques).\n\nSi ce remboursement ne vient pas de toi, contacte le support. Sinon, tu peux te réabonner à tout moment : ${args.manageUrl}`,
+  };
+}

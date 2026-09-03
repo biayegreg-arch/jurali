@@ -6,16 +6,23 @@ import {
   bucketMonthlyRevenue,
 } from './admin-revenue';
 
-function webhookLog(overrides: {
+function payment(overrides: {
   id?: string;
   createdAt?: Date;
-  status?: string;
-  chargeId?: string;
+  status?: 'PAID' | 'FAILED';
+  amountFcfa?: number;
+  ownerEmail?: string;
+  ownerShopName?: string | null;
 }) {
   return {
-    id: overrides.id ?? 'wh_1',
+    id: overrides.id ?? 'pay_1',
     createdAt: overrides.createdAt ?? new Date('2026-08-15T00:00:00Z'),
-    payload: { status: overrides.status ?? 'succeeded', charge_id: overrides.chargeId ?? 'ch_1' },
+    status: overrides.status ?? 'PAID',
+    amountFcfa: overrides.amountFcfa ?? 2500,
+    owner: {
+      email: overrides.ownerEmail ?? 'a@test.local',
+      shopName: overrides.ownerShopName ?? null,
+    },
   };
 }
 
@@ -24,22 +31,15 @@ beforeEach(() => {
 });
 
 describe('getRecentSubscriptionPayments', () => {
-  it('correlates a paid webhook to its Subscription via providerChargeId', async () => {
-    prismaMock.webhookLog.findMany.mockResolvedValueOnce([
-      webhookLog({ id: 'wh_1', chargeId: 'ch_1', status: 'succeeded' }),
-    ] as never);
-    prismaMock.subscription.findMany.mockResolvedValueOnce([
-      {
-        providerChargeId: 'ch_1',
-        planAmountFcfa: 2500,
-        owner: { email: 'a@test.local', shopName: 'Boutique A' },
-      },
+  it('reads the SubscriptionPayment ledger, newest first', async () => {
+    prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([
+      payment({ id: 'pay_1', status: 'PAID', ownerShopName: 'Boutique A' }),
     ] as never);
 
     const events = await getRecentSubscriptionPayments(prismaMock, 10);
     expect(events).toEqual([
       {
-        id: 'wh_1',
+        id: 'pay_1',
         createdAt: new Date('2026-08-15T00:00:00Z'),
         status: 'PAID',
         amountFcfa: 2500,
@@ -47,69 +47,30 @@ describe('getRecentSubscriptionPayments', () => {
         ownerShopName: 'Boutique A',
       },
     ]);
+    expect(prismaMock.subscriptionPayment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ orderBy: { createdAt: 'desc' }, take: 10 }),
+    );
   });
 
-  it('classifies failed/cancelled/refunded statuses as FAILED', async () => {
-    for (const status of ['failed', 'cancelled', 'refunded']) {
-      prismaMock.webhookLog.findMany.mockResolvedValueOnce([
-        webhookLog({ status, chargeId: 'ch_x' }),
-      ] as never);
-      prismaMock.subscription.findMany.mockResolvedValueOnce([
-        {
-          providerChargeId: 'ch_x',
-          planAmountFcfa: 2500,
-          owner: { email: 'x@test.local', shopName: null },
-        },
-      ] as never);
-      const events = await getRecentSubscriptionPayments(prismaMock, 10);
-      expect(events[0]?.status).toBe('FAILED');
-    }
-  });
-
-  it('drops pending/unknown-status webhooks (not a terminal event)', async () => {
-    prismaMock.webhookLog.findMany.mockResolvedValueOnce([
-      webhookLog({ status: 'pending' }),
+  it('preserves every ledger row across renewals — no most-recent-charge-only gap', async () => {
+    // Two payments for the SAME subscriber, from two different billing
+    // cycles — this is exactly the case the old WebhookLog-correlation
+    // approach dropped once Subscription.providerChargeId moved on to the
+    // newer checkout. The ledger has one permanent row per event, so both
+    // survive.
+    prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([
+      payment({ id: 'pay_2', createdAt: new Date('2026-08-20T00:00:00Z') }),
+      payment({ id: 'pay_1', createdAt: new Date('2026-07-15T00:00:00Z') }),
     ] as never);
+
+    const events = await getRecentSubscriptionPayments(prismaMock, 10);
+    expect(events.map((e) => e.id)).toEqual(['pay_2', 'pay_1']);
+  });
+
+  it('returns an empty list when the ledger has no rows', async () => {
+    prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([]);
     const events = await getRecentSubscriptionPayments(prismaMock, 10);
     expect(events).toEqual([]);
-    expect(prismaMock.subscription.findMany).not.toHaveBeenCalled();
-  });
-
-  it('skips a webhook with no matching Subscription (e.g. an Order charge)', async () => {
-    prismaMock.webhookLog.findMany.mockResolvedValueOnce([
-      webhookLog({ status: 'succeeded', chargeId: 'ch_order' }),
-    ] as never);
-    prismaMock.subscription.findMany.mockResolvedValueOnce([]);
-    const events = await getRecentSubscriptionPayments(prismaMock, 10);
-    expect(events).toEqual([]);
-  });
-
-  it('stops once `limit` correlated events are collected, via a single batched Subscription query', async () => {
-    prismaMock.webhookLog.findMany.mockResolvedValueOnce([
-      webhookLog({ id: 'wh_1', chargeId: 'ch_1' }),
-      webhookLog({ id: 'wh_2', chargeId: 'ch_2' }),
-      webhookLog({ id: 'wh_3', chargeId: 'ch_3' }),
-    ] as never);
-    prismaMock.subscription.findMany.mockResolvedValueOnce([
-      {
-        providerChargeId: 'ch_1',
-        planAmountFcfa: 2500,
-        owner: { email: 'a@test.local', shopName: null },
-      },
-      {
-        providerChargeId: 'ch_2',
-        planAmountFcfa: 2500,
-        owner: { email: 'a@test.local', shopName: null },
-      },
-      {
-        providerChargeId: 'ch_3',
-        planAmountFcfa: 2500,
-        owner: { email: 'a@test.local', shopName: null },
-      },
-    ] as never);
-    const events = await getRecentSubscriptionPayments(prismaMock, 2);
-    expect(events).toHaveLength(2);
-    expect(prismaMock.subscription.findMany).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -118,42 +79,10 @@ describe('getMonthlyRevenue', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-08-29T12:00:00Z'));
 
-    prismaMock.webhookLog.findMany.mockResolvedValueOnce([
-      webhookLog({
-        id: 'wh_1',
-        chargeId: 'ch_1',
-        status: 'succeeded',
-        createdAt: new Date('2026-08-10T00:00:00Z'),
-      }),
-      webhookLog({
-        id: 'wh_2',
-        chargeId: 'ch_2',
-        status: 'succeeded',
-        createdAt: new Date('2026-08-20T00:00:00Z'),
-      }),
-      webhookLog({
-        id: 'wh_3',
-        chargeId: 'ch_3',
-        status: 'failed',
-        createdAt: new Date('2026-07-05T00:00:00Z'),
-      }),
-    ] as never);
-    prismaMock.subscription.findMany.mockResolvedValueOnce([
-      {
-        providerChargeId: 'ch_1',
-        planAmountFcfa: 2500,
-        owner: { email: 'a@test.local', shopName: null },
-      },
-      {
-        providerChargeId: 'ch_2',
-        planAmountFcfa: 2500,
-        owner: { email: 'a@test.local', shopName: null },
-      },
-      {
-        providerChargeId: 'ch_3',
-        planAmountFcfa: 2500,
-        owner: { email: 'a@test.local', shopName: null },
-      },
+    prismaMock.subscriptionPayment.findMany.mockResolvedValueOnce([
+      payment({ id: 'pay_1', status: 'PAID', createdAt: new Date('2026-08-10T00:00:00Z') }),
+      payment({ id: 'pay_2', status: 'PAID', createdAt: new Date('2026-08-20T00:00:00Z') }),
+      payment({ id: 'pay_3', status: 'FAILED', createdAt: new Date('2026-07-05T00:00:00Z') }),
     ] as never);
 
     const points = await getMonthlyRevenue(prismaMock, 3);
@@ -173,7 +102,7 @@ describe('bucketMonthlyRevenue (pure)', () => {
 
     const events = [
       {
-        id: 'wh_1',
+        id: 'pay_1',
         createdAt: new Date('2026-08-10T00:00:00Z'),
         status: 'PAID' as const,
         amountFcfa: 2500,
