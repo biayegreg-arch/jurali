@@ -15,7 +15,6 @@ import { prisma } from '@/lib/server/prisma';
 import { makeRequestContext, withRequestContext } from '@/lib/server/observability/request-context';
 import { computeClientBalance, isOverdue as computeIsOverdue } from '@/lib/server/jurali/balance';
 import { requireOwnedClient } from '@/lib/server/jurali/clients';
-import { isRecordNotFound } from '@/lib/server/prisma-errors';
 import { zPhone, zEmail } from '@/lib/server/zod-helpers';
 
 // Phase 9 — desktop "Fiche client"'s "Modifier" button. All fields
@@ -111,13 +110,6 @@ export async function PATCH(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = await routeCtx.params;
-    const found = await prisma.client.findUnique({
-      where: { id },
-      select: { id: true, ownerId: true },
-    });
-    const existing = requireOwnedClient(found, auth.user.sub, ctx.requestId);
-    if (existing instanceof NextResponse) return existing;
-
     const parsed = PatchBody.safeParse(await req.json().catch(() => null));
     if (!parsed.success) {
       return NextResponse.json(
@@ -145,9 +137,24 @@ export async function PATCH(
       data.overdueAlertThresholdDays = parsed.data.overdueAlertThresholdDays;
     }
 
-    const updated = await prisma.client.update({
-      where: { id },
+    // `updateMany` with `ownerId` in the where-clause is an atomic
+    // ownership check + mutation in one round trip — no separate
+    // check-then-update TOCTOU window. `count === 0` covers both "doesn't
+    // exist" and "belongs to someone else" identically, same existence-leak
+    // principle as the GET handler above.
+    const result = await prisma.client.updateMany({
+      where: { id, ownerId: auth.user.sub },
       data,
+    });
+    if (result.count === 0) {
+      return NextResponse.json(
+        { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
+        { status: 404, headers: { 'x-request-id': ctx.requestId } },
+      );
+    }
+
+    const updated = await prisma.client.findUnique({
+      where: { id },
       select: {
         id: true,
         firstName: true,
@@ -180,28 +187,19 @@ export async function DELETE(
     if (auth instanceof NextResponse) return auth;
 
     const { id } = await routeCtx.params;
-    const found = await prisma.client.findUnique({
-      where: { id },
-      select: { id: true, ownerId: true },
-    });
-    const existing = requireOwnedClient(found, auth.user.sub, ctx.requestId);
-    if (existing instanceof NextResponse) return existing;
 
-    try {
-      await prisma.client.delete({ where: { id } });
-    } catch (err) {
-      // The ownership lookup above and this delete aren't in one
-      // transaction — a second concurrent DELETE for the same client
-      // (double-click, or two tabs) can see the row vanish in between and
-      // hit Prisma's P2025 here. Same 404 shape as "never existed", not a
-      // 500 — the end state (client gone) is identical either way.
-      if (isRecordNotFound(err)) {
-        return NextResponse.json(
-          { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
-          { status: 404, headers: { 'x-request-id': ctx.requestId } },
-        );
-      }
-      throw err;
+    // `deleteMany` with `ownerId` in the where-clause is an atomic
+    // ownership check + delete in one round trip — no separate
+    // check-then-delete TOCTOU window, and as a bonus it naturally covers
+    // the double-click/two-tabs race a try/catch used to handle by hand: a
+    // row that vanished between two concurrent DELETEs just yields count 0,
+    // same 404 shape as "never existed" — no P2025 to catch.
+    const result = await prisma.client.deleteMany({ where: { id, ownerId: auth.user.sub } });
+    if (result.count === 0) {
+      return NextResponse.json(
+        { error: 'CLIENT_NOT_FOUND', message: 'Client not found' },
+        { status: 404, headers: { 'x-request-id': ctx.requestId } },
+      );
     }
 
     return NextResponse.json(

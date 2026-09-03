@@ -166,7 +166,8 @@ describe('PATCH /api/clients/[id]', () => {
       id: 'client-1',
       ownerId: 'user-1',
     } as never);
-    prismaMock.client.update.mockResolvedValue({
+    prismaMock.client.updateMany.mockResolvedValue({ count: 1 } as never);
+    prismaMock.client.findUnique.mockResolvedValue({
       id: 'client-1',
       firstName: 'Fatou Updated',
       phone: '+221771234567',
@@ -191,17 +192,17 @@ describe('PATCH /api/clients/[id]', () => {
   });
 
   it('returns 404 CLIENT_NOT_FOUND when the client does not exist', async () => {
-    prismaMock.client.findUnique.mockResolvedValue(null);
+    prismaMock.client.updateMany.mockResolvedValueOnce({ count: 0 } as never);
     const { req, routeCtx } = makePatch('missing', { firstName: 'X' });
     const res = await PATCH(req, routeCtx);
     expect(res.status).toBe(404);
   });
 
   it('returns 404 (not 403) when the client belongs to a different owner', async () => {
-    prismaMock.client.findUnique.mockResolvedValue({
-      id: 'client-1',
-      ownerId: 'someone-else',
-    } as never);
+    // The atomic `updateMany({ where: { id, ownerId } })` matches zero rows
+    // for someone else's client — same 404 shape as "doesn't exist" at all,
+    // never a 403 that would leak the row's existence.
+    prismaMock.client.updateMany.mockResolvedValueOnce({ count: 0 } as never);
     const { req, routeCtx } = makePatch('client-1', { firstName: 'X' });
     const res = await PATCH(req, routeCtx);
     expect(res.status).toBe(404);
@@ -232,9 +233,9 @@ describe('PATCH /api/clients/[id]', () => {
     expect(json.firstName).toBe('Fatou Updated');
     expect(json.email).toBe('fatou@example.com');
     expect(json.address).toBe('Médina, Dakar');
-    expect(prismaMock.client.update).toHaveBeenCalledWith(
+    expect(prismaMock.client.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { id: 'client-1' },
+        where: { id: 'client-1', ownerId: 'user-1' },
         data: expect.objectContaining({
           firstName: 'Fatou Updated',
           phone: '+221771234567',
@@ -248,7 +249,7 @@ describe('PATCH /api/clients/[id]', () => {
   it('allows clearing email/address by sending an empty string', async () => {
     const { req, routeCtx } = makePatch('client-1', { email: '', address: '' });
     await PATCH(req, routeCtx);
-    expect(prismaMock.client.update).toHaveBeenCalledWith(
+    expect(prismaMock.client.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({ email: null, address: null }),
       }),
@@ -258,7 +259,7 @@ describe('PATCH /api/clients/[id]', () => {
   it('only updates the fields provided (partial update)', async () => {
     const { req, routeCtx } = makePatch('client-1', { address: 'Plateau, Dakar' });
     await PATCH(req, routeCtx);
-    expect(prismaMock.client.update).toHaveBeenCalledWith(
+    expect(prismaMock.client.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { address: 'Plateau, Dakar' },
       }),
@@ -272,7 +273,7 @@ describe('PATCH /api/clients/[id]', () => {
       overdueAlertThresholdDays: 21,
     });
     await PATCH(req, routeCtx);
-    expect(prismaMock.client.update).toHaveBeenCalledWith(
+    expect(prismaMock.client.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: {
           autoReminderEnabled: false,
@@ -289,7 +290,7 @@ describe('PATCH /api/clients/[id]', () => {
       overdueAlertThresholdDays: null,
     });
     await PATCH(req, routeCtx);
-    expect(prismaMock.client.update).toHaveBeenCalledWith(
+    expect(prismaMock.client.updateMany).toHaveBeenCalledWith(
       expect.objectContaining({
         data: { autoReminderThresholdDays: null, overdueAlertThresholdDays: null },
       }),
@@ -305,11 +306,7 @@ describe('PATCH /api/clients/[id]', () => {
 
 describe('DELETE /api/clients/[id]', () => {
   beforeEach(() => {
-    prismaMock.client.findUnique.mockResolvedValue({
-      id: 'client-1',
-      ownerId: 'user-1',
-    } as never);
-    prismaMock.client.delete.mockResolvedValue({ id: 'client-1' } as never);
+    prismaMock.client.deleteMany.mockResolvedValue({ count: 1 } as never);
   });
 
   it('returns 401 when not authenticated', async () => {
@@ -319,33 +316,31 @@ describe('DELETE /api/clients/[id]', () => {
     const { req, routeCtx } = makeDelete('client-1');
     const res = await DELETE(req, routeCtx);
     expect(res.status).toBe(401);
-    expect(prismaMock.client.delete).not.toHaveBeenCalled();
+    expect(prismaMock.client.deleteMany).not.toHaveBeenCalled();
   });
 
   it('returns 403 when CSRF token is missing', async () => {
     const { req, routeCtx } = makeDelete('client-1', { csrf: 'missing' });
     const res = await DELETE(req, routeCtx);
     expect(res.status).toBe(403);
-    expect(prismaMock.client.delete).not.toHaveBeenCalled();
+    expect(prismaMock.client.deleteMany).not.toHaveBeenCalled();
   });
 
   it('returns 404 CLIENT_NOT_FOUND when the client does not exist', async () => {
-    prismaMock.client.findUnique.mockResolvedValue(null);
+    prismaMock.client.deleteMany.mockResolvedValueOnce({ count: 0 } as never);
     const { req, routeCtx } = makeDelete('missing');
     const res = await DELETE(req, routeCtx);
     expect(res.status).toBe(404);
-    expect(prismaMock.client.delete).not.toHaveBeenCalled();
   });
 
   it('returns 404 (not 403) when the client belongs to a different owner', async () => {
-    prismaMock.client.findUnique.mockResolvedValue({
-      id: 'client-1',
-      ownerId: 'someone-else',
-    } as never);
+    // The atomic `deleteMany({ where: { id, ownerId } })` matches zero rows
+    // for someone else's client — same 404 shape as "doesn't exist", never
+    // a 403 that would leak the row's existence.
+    prismaMock.client.deleteMany.mockResolvedValueOnce({ count: 0 } as never);
     const { req, routeCtx } = makeDelete('client-1');
     const res = await DELETE(req, routeCtx);
     expect(res.status).toBe(404);
-    expect(prismaMock.client.delete).not.toHaveBeenCalled();
   });
 
   it('deletes the client and returns 200 { ok: true }', async () => {
@@ -354,23 +349,16 @@ describe('DELETE /api/clients/[id]', () => {
     expect(res.status).toBe(200);
     const json = (await res.json()) as { ok: boolean };
     expect(json.ok).toBe(true);
-    expect(prismaMock.client.delete).toHaveBeenCalledWith({ where: { id: 'client-1' } });
+    expect(prismaMock.client.deleteMany).toHaveBeenCalledWith({
+      where: { id: 'client-1', ownerId: 'user-1' },
+    });
   });
 
-  it('returns 404 CLIENT_NOT_FOUND (not a 500) when the row vanishes between the ownership check and delete', async () => {
-    // Race: two concurrent DELETEs (double-click, or two tabs) both pass
-    // the ownership findUnique before either delete commits — the second
-    // delete then hits Prisma's P2025 "record not found".
-    prismaMock.client.delete.mockRejectedValue(
-      Object.assign(
-        new Error(
-          'An operation failed because it depends on one or more records that were required but not found.',
-        ),
-        {
-          code: 'P2025',
-        },
-      ),
-    );
+  it('returns 404 CLIENT_NOT_FOUND (not a 500) when the row vanishes between two concurrent DELETEs', async () => {
+    // Race: two concurrent DELETEs (double-click, or two tabs) — the
+    // atomic ownerId-filtered deleteMany for the second one just matches
+    // zero rows once the first has already committed. No P2025 to catch.
+    prismaMock.client.deleteMany.mockResolvedValueOnce({ count: 0 } as never);
     const { req, routeCtx } = makeDelete('client-1');
     const res = await DELETE(req, routeCtx);
     expect(res.status).toBe(404);
