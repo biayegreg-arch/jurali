@@ -26,6 +26,7 @@ export default function robots(): MetadataRoute.Robots {
         '/premium/failed',
         '/auth',
         '/api',
+        '/admin',
       ],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
