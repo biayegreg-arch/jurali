@@ -5,7 +5,7 @@
 // (see Phase 1 balance.ts), not stored columns, so sorting/filtering happens
 // in application code after a single findMany with transactions included.
 // This is deliberately not cursor-paginated like the admin listings — a
-// single shopkeeper's client list is bounded (free tier caps at 10; even
+// single shopkeeper's client list is bounded (free tier caps at 5; even
 // Premium is realistically tens to a couple hundred rows per PRD §2/§6),
 // so an in-memory sort avoids building computed-column SQL for no real
 // scale benefit (YAGNI).

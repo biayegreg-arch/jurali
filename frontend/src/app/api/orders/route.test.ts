@@ -191,6 +191,37 @@ describe('POST /api/orders [Wave 1] — happy path', () => {
       paymentUrl: 'https://checkout.test/bictorys/pay/test',
     });
   });
+
+  it('defaults expiresAt to a 24h PENDING window when ORDER_EXPIRATION_MINUTES is unset', async () => {
+    delete process.env.ORDER_EXPIRATION_MINUTES;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-08T12:00:00Z'));
+    prismaMock.order.findUnique.mockResolvedValue(null as never);
+    prismaMock.order.create.mockResolvedValue(seededOrder() as never);
+    prismaMock.order.update.mockResolvedValue(seededOrder() as never);
+
+    await POST(makePost({ amount: 1000, currency: 'XOF' }, { idempotencyKey: 'idem-key-2' }));
+
+    const createArgs = prismaMock.order.create.mock.calls[0]?.[0];
+    expect(createArgs?.data.expiresAt).toEqual(new Date('2026-05-09T12:00:00Z'));
+    vi.useRealTimers();
+  });
+
+  it('honors ORDER_EXPIRATION_MINUTES as a fork-customizable expiry window', async () => {
+    process.env.ORDER_EXPIRATION_MINUTES = '30';
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-08T12:00:00Z'));
+    prismaMock.order.findUnique.mockResolvedValue(null as never);
+    prismaMock.order.create.mockResolvedValue(seededOrder() as never);
+    prismaMock.order.update.mockResolvedValue(seededOrder() as never);
+
+    await POST(makePost({ amount: 1000, currency: 'XOF' }, { idempotencyKey: 'idem-key-3' }));
+
+    const createArgs = prismaMock.order.create.mock.calls[0]?.[0];
+    expect(createArgs?.data.expiresAt).toEqual(new Date('2026-05-08T12:30:00Z'));
+    vi.useRealTimers();
+    delete process.env.ORDER_EXPIRATION_MINUTES;
+  });
 });
 
 describe('POST /api/orders [Wave 1] — idempotency', () => {

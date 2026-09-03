@@ -57,6 +57,7 @@ Pour obtenir `DATABASE_URL` + `DIRECT_URL` : crée un projet gratuit sur https:/
 | `ENCRYPTION_KEY` | 32 bytes base64, générer avec `openssl rand -base64 32` |
 | `CRON_SECRET` | Bearer token requis par les handlers `/api/cron/*` ; `openssl rand -base64 32` |
 | `APP_URL` | Utilisé pour la génération des liens email et la base de redirect OAuth ; défaut `http://localhost:3000` |
+| `PUBLIC_URL` | Base des URLs de succès/échec passées au provider de paiement (`POST /api/orders`, `POST /api/subscriptions`) et du lien "gérer mon abonnement" dans les emails de rappel cron. Distincte d'`APP_URL` (lue directement par ces routes, hors `env.ts`) — mets généralement la même valeur. **Obligatoire en production** : absente en prod → 503 `PAYMENT_PROVIDER_UNCONFIGURED` (fail-closed, plutôt que de rediriger un client qui vient de payer vers `localhost`) ; en dev/test, fallback silencieux sur `http://localhost:3000`. |
 
 Groupes optionnels (set les vars pour activer ; absent = inerte) :
 
@@ -73,41 +74,67 @@ Référence env complète avec toutes les flags : voir [`.env.example`](.env.exa
 
 ## Inventaire des routes
 
-40 routes sous `frontend/src/app/api/`. Toutes déclarent `export const runtime = 'nodejs'` (enforced par [`frontend/src/lib/server/observability/runtime-enforcement.test.ts`](frontend/src/lib/server/observability/runtime-enforcement.test.ts)).
+69 routes sous `frontend/src/app/api/`. Toutes déclarent `export const runtime = 'nodejs'` (enforced par [`frontend/src/lib/server/observability/runtime-enforcement.test.ts`](frontend/src/lib/server/observability/runtime-enforcement.test.ts)).
 
-### Auth (`/api/auth/*`) — 10 routes
+### Auth (`/api/auth/*`) — 19 routes
 | Méthode | Path | Auth |
 |---|---|---|
-| POST | `/signup` | aucune |
+| POST | `/signup` | aucune + CSRF |
+| POST | `/phone-signup` | aucune |
 | POST | `/login` | aucune |
-| POST | `/logout` | cookies |
+| POST | `/phone-login` | aucune |
+| POST | `/logout` | CSRF |
 | POST | `/refresh` | cookie refresh (scope `/api/auth`) |
-| GET | `/me` | cookie access |
-| POST | `/verify-email` | aucune |
+| GET | `/refresh-and-return` | cookie refresh (redirect silencieux depuis `middleware.ts`) |
+| GET/PATCH | `/me` | access (+CSRF sur PATCH) |
+| POST | `/verify-email` | aucune + CSRF |
+| POST | `/verify-pending-email` | access + CSRF |
+| POST | `/resend-verification` | aucune |
+| POST | `/resend-pending-email` | access + CSRF |
 | POST | `/forgot-password` | aucune |
 | POST | `/reset-password` | aucune |
+| POST | `/set-password` | access + CSRF |
 | PUT | `/change-password` | access + CSRF |
 | GET/POST/DELETE | `/withdrawal-pin` | access + CSRF |
+| GET | `/oauth/google/start` | optionnelle (lie un compte existant si connecté) |
+| GET | `/oauth/google/callback` | cookie state + PKCE |
 
-### OAuth — 2 routes
+### Clients — 4 routes
 | Méthode | Path | Auth |
 |---|---|---|
-| GET | `/api/auth/oauth/google/start` | aucune |
-| GET | `/api/auth/oauth/google/callback` | cookie state |
+| GET/POST | `/api/clients` | access (+CSRF sur POST) |
+| GET/PATCH/DELETE | `/api/clients/:id` | access + CSRF (sauf GET) |
+| POST | `/api/clients/:id/remind` | access + CSRF |
+| GET | `/api/clients/export` | access |
+
+### Dettes, transactions, paiements, abonnements, coupons — 6 routes
+| Méthode | Path | Auth |
+|---|---|---|
+| GET | `/api/debts/overdue` | access |
+| POST | `/api/transactions` | access + CSRF |
+| POST | `/api/orders` | access + CSRF (pas de checkout invité) |
+| POST/GET | `/api/withdrawals` | access (+CSRF sur POST) |
+| GET/POST/DELETE | `/api/subscriptions` | access + CSRF (sauf GET) |
+| POST | `/api/coupons/validate` | access + CSRF (preview only — re-validé côté `/api/subscriptions`) |
+
+### Dashboard + Stats — 2 routes
+| Méthode | Path | Auth |
+|---|---|---|
+| GET | `/api/dashboard` | access |
+| GET | `/api/stats` | access |
 
 ### Notifications — 3 routes
 | Méthode | Path | Auth |
 |---|---|---|
-| GET | `/api/notifications` (liste) | access |
-| POST | `/api/notifications` (mark-read) | access + CSRF |
+| GET/PATCH | `/api/notifications` (liste / mark-read) | access + CSRF sur PATCH |
 | GET | `/api/notifications/count` | access |
 | GET/PATCH | `/api/notifications/prefs` | access (+CSRF sur PATCH) |
 
-### Orders + Withdrawals — 2 routes
+### Réglages — 2 routes
 | Méthode | Path | Auth |
 |---|---|---|
-| POST | `/api/orders` | optionnelle |
-| POST/GET | `/api/withdrawals` | access (+CSRF sur POST) |
+| GET/PATCH | `/api/settings/auto-reminders` | access (+CSRF sur PATCH) |
+| GET/PATCH | `/api/settings/overdue-alerts` | access (+CSRF sur PATCH) |
 
 ### Uploads — 1 route
 | Méthode | Path | Auth |
@@ -116,29 +143,45 @@ Référence env complète avec toutes les flags : voir [`.env.example`](.env.exa
 
 Les fichiers uploadés renvoient un `secure_url` Cloudinary servi directement par leur CDN — pas de route proxy côté Next.
 
+### Redirect paiement mobile — 1 route
+| Méthode | Path | Auth |
+|---|---|---|
+| GET | `/api/pay-redirect` | aucune (proxy same-origin allow-list, contourne le scanner d'URL des webviews TikTok/Instagram/Facebook) |
+
 ### Webhooks — 1 route
 | Méthode | Path | Auth |
 |---|---|---|
 | POST | `/api/webhooks/bictorys` | HMAC provider + replay window 60s |
 
-### Handlers cron — 5 routes (toutes `Authorization: Bearer ${CRON_SECRET}`)
+### Handlers cron — 9 routes (toutes `Authorization: Bearer ${CRON_SECRET}`)
 | Path | Schedule (`vercel.json`) |
 |---|---|
 | `/api/cron/outbox-drain` | toutes les minutes |
 | `/api/cron/email-queue-drain` | toutes les minutes |
+| `/api/cron/auto-reminders` | quotidien |
+| `/api/cron/overdue-alerts` | quotidien |
+| `/api/cron/subscription-renewal-reminders` | quotidien |
 | `/api/cron/verification-cleanup` | toutes les heures |
 | `/api/cron/order-expiration` | toutes les 5 min |
 | `/api/cron/webhook-log-purge` | quotidien |
+| `/api/cron/email-job-purge` | quotidien |
 
-### Admin (`/api/admin/*`) — 12 routes
+### Admin (`/api/admin/*`) — 19 routes
 | Méthode | Path | Auth |
 |---|---|---|
 | GET | `/me` | ADMIN |
+| GET | `/overview` | ADMIN |
 | GET | `/users` (liste) | ADMIN |
 | GET | `/users/:id` | ADMIN |
 | PATCH | `/users/:id/role` | SUPERADMIN + CSRF |
 | PATCH | `/users/:id/status` | ADMIN/SUPERADMIN + CSRF |
+| POST | `/users/:id/subscription/cancel` | SUPERADMIN + CSRF |
 | GET | `/orders` | ADMIN |
+| GET | `/revenue` | ADMIN |
+| GET | `/subscriptions` | ADMIN |
+| GET/PATCH | `/config` | ADMIN (+SUPERADMIN + CSRF sur PATCH) — pilote entre autres `PREMIUM_MONTHLY_PRICE_FCFA` |
+| GET/POST | `/coupons` | ADMIN (+SUPERADMIN + CSRF sur POST) |
+| PATCH | `/coupons/:id` | SUPERADMIN + CSRF |
 | GET | `/withdrawals` | ADMIN |
 | POST | `/withdrawals/:id/cancel` | SUPERADMIN + CSRF |
 | GET | `/audit-log` | ADMIN |

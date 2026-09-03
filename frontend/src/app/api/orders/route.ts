@@ -79,7 +79,18 @@ const Body = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-const ORDER_EXPIRY_MS = 24 * 60 * 60 * 1000; // 24h PENDING window
+const DEFAULT_ORDER_EXPIRY_MINUTES = 24 * 60; // 24h PENDING window (unchanged default)
+
+// Read at call-time, not module load, so `vi.stubEnv` works in tests
+// (same pattern as withdrawals.ts's WITHDRAWAL_BALANCE_CHECK). Fork-
+// customizable via ORDER_EXPIRATION_MINUTES (.env.example) — previously
+// documented there but never actually wired up, so the knob had no effect.
+function getOrderExpiryMs(): number {
+  const minutes = Number(process.env.ORDER_EXPIRATION_MINUTES ?? DEFAULT_ORDER_EXPIRY_MINUTES);
+  return (
+    (Number.isFinite(minutes) && minutes > 0 ? minutes : DEFAULT_ORDER_EXPIRY_MINUTES) * 60_000
+  );
+}
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
@@ -265,7 +276,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         currency: parsed.data.currency,
         provider: 'bictorys',
         status: 'PENDING',
-        expiresAt: new Date(Date.now() + ORDER_EXPIRY_MS),
+        expiresAt: new Date(Date.now() + getOrderExpiryMs()),
         idempotencyKey: idemKey,
         customerEmail: parsed.data.customerEmail ?? auth.user.email,
         ...(parsed.data.customerPhone ? { customerPhone: parsed.data.customerPhone } : {}),

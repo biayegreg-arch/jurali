@@ -94,6 +94,6 @@ describe('.env.example phase 5 additions (CRON-05 + Phase 5 ENV)', () => {
 
   it('contains WEBHOOK_LOG_RETENTION_DAYS and ORDER_EXPIRATION_MINUTES with defaults', () => {
     expect(src).toContain('WEBHOOK_LOG_RETENTION_DAYS="90"');
-    expect(src).toContain('ORDER_EXPIRATION_MINUTES="30"');
+    expect(src).toContain('ORDER_EXPIRATION_MINUTES="1440"');
   });
 });
