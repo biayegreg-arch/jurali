@@ -344,6 +344,13 @@ describe('POST /api/subscriptions — happy path', () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe('VALIDATION_FAILED');
   });
+
+  it('400 VALIDATION_FAILED when MOBILE_MONEY is chosen without a phone', async () => {
+    const res = await POST(makePost('match', { paymentMethod: 'MOBILE_MONEY' }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('VALIDATION_FAILED');
+    expect(mockGetProvider).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/subscriptions — coupon application', () => {

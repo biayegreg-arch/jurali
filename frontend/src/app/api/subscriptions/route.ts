@@ -49,11 +49,22 @@ import { zPhone } from '@/lib/server/zod-helpers';
 // phone number at all. Historical Subscription rows may still carry the
 // old WAVE/ORANGE_MONEY/FREE_MONEY values (read-only display via GET,
 // never re-validated against this schema).
-const CheckoutBody = z.object({
-  paymentMethod: z.enum(['MOBILE_MONEY', 'CARD']).optional(),
-  phone: zPhone.optional(),
-  couponCode: z.string().trim().min(1).max(32).optional(),
-});
+const CheckoutBody = z
+  .object({
+    paymentMethod: z.enum(['MOBILE_MONEY', 'CARD']).optional(),
+    phone: zPhone.optional(),
+    couponCode: z.string().trim().min(1).max(32).optional(),
+  })
+  // MOBILE_MONEY needs a phone to route the charge to the customer's
+  // operator — the checkout page's `PAYMENT_ERROR_MESSAGES.VALIDATION_FAILED`
+  // ("Vérifie ton numéro de téléphone.") already anticipates this failing,
+  // but nothing server-side previously enforced it: `phone` was optional
+  // even for this branch, so a request with it omitted reached
+  // `provider.charge()` with no customer phone at all.
+  .refine((data) => data.paymentMethod !== 'MOBILE_MONEY' || !!data.phone, {
+    message: 'phone is required for MOBILE_MONEY',
+    path: ['phone'],
+  });
 
 export async function GET(req: NextRequest): Promise<NextResponse> {
   const ctx = makeRequestContext(req.headers);
