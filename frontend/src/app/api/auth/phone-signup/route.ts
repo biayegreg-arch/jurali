@@ -16,7 +16,7 @@ export const runtime = 'nodejs';
 
 import { NextResponse, type NextRequest } from 'next/server';
 import { z } from 'zod';
-import { zPhone } from '@/lib/server/zod-helpers';
+import { zPhone, zEmail } from '@/lib/server/zod-helpers';
 import { prisma } from '@/lib/server/prisma';
 import { redis } from '@/lib/server/redis';
 import { createEmailLimiter } from '@/lib/server/middleware/rate-limit-by-email';
@@ -28,19 +28,26 @@ import {
   createRefreshToken,
   setAuthCookies,
   setCsrfCookie,
+  generateVerificationCode,
 } from '@/lib/server/auth';
 import { isBanned } from '@/lib/server/auth/banned-passwords';
 import { isPwned } from '@/lib/server/auth/hibp';
 import { syntheticEmail } from '@/lib/server/auth/synthetic-email';
 import { isUniqueConstraintViolation } from '@/lib/server/prisma-errors';
+import { enqueueOutbox } from '@/lib/server/outbox';
 
 const PASSWORD_MIN = Number(process.env.AUTH_PASSWORD_MIN_LENGTH ?? 10);
+const VERIFICATION_TTL_MS = Number(process.env.AUTH_VERIFICATION_TTL_MIN ?? 15) * 60 * 1000;
 
 const Body = z.object({
   name: z.string().trim().min(1, 'Name is required'),
   phone: zPhone,
   shopName: z.string().trim().min(1, 'Shop name is required'),
   password: z.string().min(1),
+  // Optional — 2026-09-03. Phone-only accounts otherwise never prove they
+  // own a real address. Stored as `pendingEmail` (never `email` directly)
+  // until confirmed via POST /api/auth/verify-pending-email.
+  email: z.union([zEmail, z.literal('')]).optional(),
 });
 
 const limiter = createEmailLimiter(redis ? { redis } : {}, {
@@ -68,7 +75,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       res.headers.set('x-request-id', ctx.requestId);
       return res;
     }
-    const { name, phone, shopName, password } = parsed.data;
+    const { name, phone, shopName, password, email } = parsed.data;
+    const pendingEmail = email?.trim() || null;
 
     if (isBanned(password)) {
       const res = NextResponse.json(
@@ -112,11 +120,41 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const passwordHash = await hashPassword(password);
+    const verificationCode = pendingEmail ? generateVerificationCode() : null;
+    const verificationExpiresAt = new Date(Date.now() + VERIFICATION_TTL_MS);
     let user;
     try {
-      user = await prisma.user.create({
-        data: { email: syntheticEmail(phone), phone, name, shopName, passwordHash },
-        select: { id: true, tokenVersion: true },
+      user = await prisma.$transaction(async (tx) => {
+        const created = await tx.user.create({
+          data: {
+            email: syntheticEmail(phone),
+            phone,
+            name,
+            shopName,
+            passwordHash,
+            pendingEmail,
+          },
+          select: { id: true, tokenVersion: true },
+        });
+        if (pendingEmail && verificationCode) {
+          await tx.verificationCode.create({
+            data: {
+              userId: created.id,
+              code: verificationCode,
+              type: 'EMAIL_VERIFY',
+              expiresAt: verificationExpiresAt,
+            },
+          });
+          await enqueueOutbox(tx, {
+            kind: 'email.verification_code',
+            payload: {
+              to: pendingEmail,
+              code: verificationCode,
+              expiresAt: verificationExpiresAt.toISOString(),
+            },
+          });
+        }
+        return created;
       });
     } catch (err) {
       // TOCTOU: two concurrent signups for the same phone can both pass the
@@ -144,7 +182,10 @@ export async function POST(req: NextRequest): Promise<Response> {
     await setCsrfCookie();
 
     log.info('phone-signup new user');
-    const res = NextResponse.json({ ok: true, user: { sub: user.id, phone } }, { status: 201 });
+    const res = NextResponse.json(
+      { ok: true, user: { sub: user.id, phone }, emailPending: !!pendingEmail },
+      { status: 201 },
+    );
     res.headers.set('x-request-id', ctx.requestId);
     return res;
   });

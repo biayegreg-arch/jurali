@@ -40,6 +40,12 @@ const validBody = {
 beforeEach(() => {
   __cookieStore.clear();
   vi.clearAllMocks();
+  prismaMock.$transaction.mockImplementation((cb: unknown) => {
+    if (typeof cb === 'function') {
+      return (cb as (tx: typeof prismaMock) => unknown)(prismaMock) as Promise<unknown>;
+    }
+    return Promise.resolve(cb);
+  });
 });
 
 describe('POST /api/auth/phone-signup', () => {
@@ -112,6 +118,47 @@ describe('POST /api/auth/phone-signup', () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error).toBe('PASSWORD_TOO_SHORT');
     expect(prismaMock.user.findUnique).not.toHaveBeenCalled();
+  });
+
+  it('optional email creates a VerificationCode and enqueues an outbox event, response has emailPending:true', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({
+      id: 'u-new',
+      email: '221771234567@phone.jurali.local',
+      tokenVersion: 0,
+    } as never);
+
+    const res = await POST(makeReq({ ...validBody, email: 'shop@example.com' }));
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, emailPending: true });
+    expect(prismaMock.user.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ pendingEmail: 'shop@example.com' }),
+      }),
+    );
+    expect(prismaMock.verificationCode.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ userId: 'u-new', type: 'EMAIL_VERIFY' }),
+      }),
+    );
+  });
+
+  it('omitted email skips VerificationCode creation, response has emailPending:false', async () => {
+    prismaMock.user.findUnique.mockResolvedValue(null);
+    prismaMock.user.create.mockResolvedValue({
+      id: 'u-new',
+      email: '221771234567@phone.jurali.local',
+      tokenVersion: 0,
+    } as never);
+
+    const res = await POST(makeReq(validBody));
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body).toMatchObject({ ok: true, emailPending: false });
+    expect(prismaMock.verificationCode.create).not.toHaveBeenCalled();
   });
 
   it('per-phone rate limit — 6th attempt in the signup window returns 429', async () => {

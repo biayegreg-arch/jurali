@@ -6,6 +6,7 @@ import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/contexts/ToastContext';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { GoogleSignInButton } from '@/components/jurali/GoogleSignInButton';
@@ -24,10 +25,12 @@ const ERROR_MESSAGES: Record<string, string> = {
 export default function SignupPage() {
   const router = useRouter();
   const { refresh } = useAuth();
+  const { toast } = useToast();
 
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [shopName, setShopName] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -48,16 +51,21 @@ export default function SignupPage() {
     setSubmitting(true);
     setError(null);
     try {
-      await api('/api/auth/phone-signup', {
+      const trimmedEmail = email.trim();
+      const res = await api<{ emailPending?: boolean }>('/api/auth/phone-signup', {
         method: 'POST',
         body: {
           name: name.trim(),
           phone,
           shopName: shopName.trim(),
           password,
+          ...(trimmedEmail ? { email: trimmedEmail } : {}),
         },
       });
       await refresh();
+      if (res.emailPending) {
+        toast('Compte créé. Code de vérification envoyé à ton email.', 'success');
+      }
       router.push('/dashboard');
     } catch (err) {
       if (err instanceof ApiError) {
@@ -204,6 +212,27 @@ export default function SignupPage() {
                   className="flex-1 bg-transparent text-base text-foreground placeholder-muted-foreground outline-none"
                 />
               </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-headings font-bold uppercase tracking-wide text-foreground mb-2 block">
+                Email{' '}
+                <span className="normal-case font-normal text-muted-foreground">(recommandé)</span>
+              </label>
+              <div className="flex items-center gap-3 bg-input border border-border rounded-xl px-4 py-3.5">
+                <Icon i="mail" size={18} className="text-muted-foreground flex-shrink-0" />
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="mamadou@exemple.com"
+                  autoComplete="email"
+                  className="flex-1 bg-transparent text-base text-foreground placeholder-muted-foreground outline-none"
+                />
+              </div>
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Pour récupérer ton compte si tu perds ton téléphone
+              </p>
             </div>
 
             <div>

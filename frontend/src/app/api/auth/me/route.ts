@@ -60,6 +60,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
         id: true,
         email: true,
         emailVerifiedAt: true,
+        pendingEmail: true,
         createdAt: true,
         updatedAt: true,
         passwordHash: true,
@@ -95,6 +96,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
           : dbUser.updatedAt
         : null,
       hasPassword: !!dbUser?.passwordHash,
+      pendingEmail: dbUser?.pendingEmail ?? null,
       linkedProviders: (dbUser?.oauthAccounts ?? []).map((a) => a.provider),
       shopName: dbUser?.shopName ?? null,
       name: dbUser?.name ?? null,

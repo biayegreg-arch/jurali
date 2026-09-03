@@ -10,6 +10,10 @@ export interface User {
   id: string;
   email: string;
   emailVerifiedAt: string | null;
+  /** Set when a phone-signup account adds an email awaiting confirmation via
+   * /api/auth/verify-pending-email; null once confirmed (promoted to `email`)
+   * or if none was ever added. */
+  pendingEmail: string | null;
   createdAt: string;
   updatedAt: string;
   /** false when the account was created via OAuth and never set a password. */

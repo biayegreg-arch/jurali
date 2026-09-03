@@ -191,6 +191,8 @@ function SettingsPageContent() {
 
 interface User {
   email: string;
+  emailVerifiedAt: string | null;
+  pendingEmail: string | null;
   name: string | null;
   shopName: string | null;
   phone: string | null;
@@ -391,6 +393,10 @@ function SecuritySection({
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
   const [googleLinkClicked, setGoogleLinkClicked] = useState(false);
+  const [emailCode, setEmailCode] = useState('');
+  const [verifyingEmail, setVerifyingEmail] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
 
   const hasPassword = user.hasPassword;
   const googleLinked = user.linkedProviders.includes('google');
@@ -457,6 +463,44 @@ function SecuritySection({
       }
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function onSubmitEmailCode(e: FormEvent) {
+    e.preventDefault();
+    setEmailError(null);
+    setVerifyingEmail(true);
+    try {
+      await api('/api/auth/verify-pending-email', { method: 'POST', body: { code: emailCode } });
+      toast('Email vérifié.', 'success');
+      setEmailCode('');
+      await refresh();
+    } catch (err) {
+      if (err instanceof ApiError) {
+        const map: Record<string, string> = {
+          VERIFICATION_CODE_INVALID: 'Code invalide.',
+          VERIFICATION_CODE_EXPIRED: 'Code expiré — demande-en un nouveau.',
+          EMAIL_ALREADY_REGISTERED: 'Cet email est déjà utilisé par un autre compte.',
+          NO_PENDING_EMAIL: 'Aucun email en attente.',
+        };
+        setEmailError(map[err.code] ?? err.message);
+      } else {
+        setEmailError('Erreur réseau. Réessaie.');
+      }
+    } finally {
+      setVerifyingEmail(false);
+    }
+  }
+
+  async function onResendEmailCode() {
+    setResendingEmail(true);
+    try {
+      await api('/api/auth/resend-pending-email', { method: 'POST' });
+      toast('Code renvoyé.', 'success');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'Erreur réseau. Réessaie.', 'error');
+    } finally {
+      setResendingEmail(false);
     }
   }
 
@@ -530,6 +574,46 @@ function SecuritySection({
           </form>
         )}
       </div>
+
+      <SettingsRow
+        icon="mail"
+        label="Email"
+        description={
+          user.pendingEmail
+            ? 'En attente de confirmation'
+            : user.emailVerifiedAt
+              ? 'Vérifié'
+              : 'Non renseigné'
+        }
+      />
+      {user.pendingEmail && (
+        <div className="px-5 pb-4 -mt-2 flex flex-col gap-2">
+          <form onSubmit={onSubmitEmailCode} className="flex items-center gap-2">
+            <input
+              value={emailCode}
+              onChange={(e) => setEmailCode(e.target.value.toUpperCase())}
+              placeholder="Code à 8 caractères"
+              className="flex-1 bg-input border border-border rounded-lg px-3 py-2 text-sm text-foreground outline-none"
+            />
+            <button
+              type="submit"
+              disabled={verifyingEmail || emailCode.length === 0}
+              className="bg-primary text-primary-foreground font-headings font-bold text-xs px-3 py-2 rounded-lg disabled:opacity-50"
+            >
+              {verifyingEmail ? '…' : 'Valider'}
+            </button>
+          </form>
+          {emailError && <div className="text-xs text-danger">{emailError}</div>}
+          <button
+            type="button"
+            onClick={onResendEmailCode}
+            disabled={resendingEmail}
+            className="text-xs text-primary font-bold text-left disabled:opacity-60"
+          >
+            {resendingEmail ? 'Envoi…' : 'Renvoyer le code'}
+          </button>
+        </div>
+      )}
 
       <SettingsRow
         icon="link"

@@ -34,6 +34,15 @@ model User {
   // Shop name collected at phone signup (Inscription.jsx); null for
   // email/OAuth accounts that never went through that flow.
   shopName          String?
+  // Phone-signup accounts get a synthetic `email` (see comment above) and
+  // never prove they own a real address — 2026-09-03 fix. This holds an
+  // optional real email collected at signup, awaiting confirmation via a
+  // VerificationCode(type: EMAIL_VERIFY). On success it REPLACES `email`
+  // (which stops being synthetic) and this column is cleared back to null.
+  // No @unique here: the swap into `email` is where the real uniqueness
+  // constraint bites, so two people typing the same still-unverified
+  // address just race for who confirms first.
+  pendingEmail      String?
   // Shop address — Phase 9 desktop /settings (Parametres.jsx's "Profil &
   // Boutique"), editable via PATCH /api/auth/me. Optional, display-only
   // (no feature currently depends on it, unlike Client.address's "pour tes
