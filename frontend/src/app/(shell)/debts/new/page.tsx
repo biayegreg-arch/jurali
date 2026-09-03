@@ -25,8 +25,6 @@ import { api, ApiError } from '@/lib/api';
 import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
-import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
-import { PageTransition } from '@/components/jurali/PageTransition';
 import { ClientPicker, type PickedClient } from '@/components/jurali/ClientPicker';
 import { AmountField } from '@/components/jurali/AmountField';
 import { formatPrice } from '@/lib/utils';
@@ -45,14 +43,6 @@ interface PresetClientDetail {
   id: string;
   firstName: string;
   balanceFcfa: number;
-}
-
-interface DashboardData {
-  totalDueFcfa: number;
-  debtorCount: number;
-  overdueDueFcfa: number;
-  overdueDebtorCount: number;
-  totalClientCount: number;
 }
 
 interface SubscriptionData {
@@ -77,11 +67,6 @@ function NewDebtPageContent() {
     clientIdParam ? `/api/clients/${clientIdParam}` : '',
     { skip: !clientIdParam },
   );
-  // Sidebar KPI tiles + reminder-toggle gating — same "always fetch, CSS
-  // hides the sidebar on mobile" pattern as /clients, /dashboard, /stats.
-  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
-    skip: !user,
-  });
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
   const { data: notifData } = useApi<{ count: number }>('/api/notifications/count', {
     skip: !user,
@@ -145,148 +130,129 @@ function NewDebtPageContent() {
   }
 
   const canSubmit = !!client && !!amount && amount > 0 && !submitting;
-  const displayName = user.shopName || user.email;
   const isPremium = subscription?.isActive ?? false;
 
   return (
-    <PageTransition>
-      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-        <DesktopSidebar
-          displayName={displayName}
-          fullName={user.name}
-          totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-          debtorCount={dashboard?.debtorCount ?? 0}
-          overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-          overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-          loading={dashboardLoading}
-          totalClientCount={dashboard?.totalClientCount ?? 0}
-          isPremium={isPremium}
-        />
-
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Mobile top bar (< lg) — unchanged */}
-          <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
-            <div className="flex items-center gap-3 mb-2">
-              <Link
-                href="/dashboard"
-                className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-              >
-                <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-              </Link>
-              <div className="font-headings font-bold text-lg text-primary-foreground">
-                Nouvelle dette
-              </div>
-            </div>
-            <div className="text-xs text-secondary font-body ml-11 opacity-90">
-              Remplis les infos rapidement
-            </div>
+    <div className="flex-1 flex flex-col min-w-0">
+      {/* Mobile top bar (< lg) — unchanged */}
+      <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
+        <div className="flex items-center gap-3 mb-2">
+          <Link
+            href="/dashboard"
+            className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+          >
+            <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+          </Link>
+          <div className="font-headings font-bold text-lg text-primary-foreground">
+            Nouvelle dette
           </div>
+        </div>
+        <div className="text-xs text-secondary font-body ml-11 opacity-90">
+          Remplis les infos rapidement
+        </div>
+      </div>
 
-          {/* Desktop top bar (lg+) */}
-          <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/dashboard"
-                className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
-              >
-                <Icon i="chevron-left" size={20} className="text-foreground" />
-              </Link>
-              <div>
-                <div className="font-headings font-bold text-2xl text-foreground">
-                  Nouvelle dette
-                </div>
-                <div className="text-sm text-muted-foreground mt-0.5">
-                  Enregistre une dette en moins de 5 secondes
-                </div>
-              </div>
-            </div>
-            <NotificationBell count={notifData?.count} />
-          </div>
-
-          <div className="flex-1 px-4 lg:px-8 pt-5 lg:pt-8 pb-8 flex flex-col lg:flex-row gap-6 lg:gap-8">
-            {/* Form column */}
-            <div className="flex-1 flex flex-col max-w-lg lg:max-w-none w-full mx-auto lg:mx-0">
-              <Link
-                href="/clients/new?next=/debts/new"
-                className="lg:hidden flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-headings font-bold text-sm py-3 rounded-xl mb-4"
-              >
-                <Icon i="plus" size={18} />
-                Créer client
-              </Link>
-
-              <ClientPicker value={client} onChange={setClient} inputId={CLIENT_PICKER_INPUT_ID} />
-
-              <AmountField label="Montant dû" value={amount} onChange={setAmount} />
-
-              <div className="mb-6">
-                <ArticlesList articles={articles} onChange={setArticles} />
-              </div>
-
-              {/* Desktop: Premium reminder-toggle shortcut */}
-              <div className="hidden lg:block mb-6">
-                <ReminderToggle isPremium={isPremium} />
-              </div>
-
-              {error && <div className="mb-4 text-sm text-danger">{error}</div>}
-
-              <div className="flex-1 lg:hidden" />
-
-              <div className="flex flex-col lg:flex-row gap-3 pt-0 lg:pt-2">
-                <motion.button
-                  type="button"
-                  onClick={submit}
-                  disabled={!canSubmit}
-                  whileTap={tapScale}
-                  className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-4 rounded-xl disabled:opacity-50"
-                >
-                  <Icon i="check" size={20} />
-                  {submitting ? 'Enregistrement…' : 'Enregistrer la dette'}
-                </motion.button>
-                <Link
-                  href="/dashboard"
-                  className="flex items-center justify-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-base py-3 lg:py-4 lg:px-6 rounded-xl"
-                >
-                  <Icon i="x" size={18} />
-                  Annuler
-                </Link>
-              </div>
-            </div>
-
-            {/* Right column (lg+) */}
-            <div className="hidden lg:flex flex-col gap-5 w-[340px] flex-shrink-0">
-              <Link
-                href="/clients/new?next=/debts/new"
-                className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-headings font-bold text-base py-3.5 rounded-xl"
-              >
-                <Icon i="plus" size={20} />
-                Créer client
-              </Link>
-
-              <RecentClientsPanel onSelect={setClient} />
-
-              <div className="flex items-center gap-2 px-4 py-3 bg-input border border-border rounded-xl">
-                <div className="w-3 h-3 rounded-full bg-accent flex-shrink-0" />
-                <div>
-                  <div className="text-xs font-headings font-bold text-foreground">Statut</div>
-                  <div className="text-sm font-body text-muted-foreground">Impayé</div>
-                </div>
-              </div>
-
-              <div className="bg-secondary border border-border rounded-xl p-5">
-                <div className="flex items-center gap-2 mb-3">
-                  <Icon i="zap" size={16} className="text-primary" />
-                  <span className="font-headings font-bold text-sm text-foreground">Astuce</span>
-                </div>
-                <p className="text-sm text-muted-foreground leading-relaxed">
-                  Tu peux enregistrer une dette en moins de 5 secondes : choisis le client, tape le
-                  montant, appuie sur Enregistrer.
-                </p>
-              </div>
+      {/* Desktop top bar (lg+) */}
+      <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/dashboard"
+            className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
+          >
+            <Icon i="chevron-left" size={20} className="text-foreground" />
+          </Link>
+          <div>
+            <div className="font-headings font-bold text-2xl text-foreground">Nouvelle dette</div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              Enregistre une dette en moins de 5 secondes
             </div>
           </div>
         </div>
+        <NotificationBell count={notifData?.count} />
       </div>
-    </PageTransition>
+
+      <div className="flex-1 px-4 lg:px-8 pt-5 lg:pt-8 pb-8 flex flex-col lg:flex-row gap-6 lg:gap-8">
+        {/* Form column */}
+        <div className="flex-1 flex flex-col max-w-lg lg:max-w-none w-full mx-auto lg:mx-0">
+          <Link
+            href="/clients/new?next=/debts/new"
+            className="lg:hidden flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-headings font-bold text-sm py-3 rounded-xl mb-4"
+          >
+            <Icon i="plus" size={18} />
+            Créer client
+          </Link>
+
+          <ClientPicker value={client} onChange={setClient} inputId={CLIENT_PICKER_INPUT_ID} />
+
+          <AmountField label="Montant dû" value={amount} onChange={setAmount} />
+
+          <div className="mb-6">
+            <ArticlesList articles={articles} onChange={setArticles} />
+          </div>
+
+          {/* Desktop: Premium reminder-toggle shortcut */}
+          <div className="hidden lg:block mb-6">
+            <ReminderToggle isPremium={isPremium} />
+          </div>
+
+          {error && <div className="mb-4 text-sm text-danger">{error}</div>}
+
+          <div className="flex-1 lg:hidden" />
+
+          <div className="flex flex-col lg:flex-row gap-3 pt-0 lg:pt-2">
+            <motion.button
+              type="button"
+              onClick={submit}
+              disabled={!canSubmit}
+              whileTap={tapScale}
+              className="flex-1 flex items-center justify-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-base py-4 rounded-xl disabled:opacity-50"
+            >
+              <Icon i="check" size={20} />
+              {submitting ? 'Enregistrement…' : 'Enregistrer la dette'}
+            </motion.button>
+            <Link
+              href="/dashboard"
+              className="flex items-center justify-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-base py-3 lg:py-4 lg:px-6 rounded-xl"
+            >
+              <Icon i="x" size={18} />
+              Annuler
+            </Link>
+          </div>
+        </div>
+
+        {/* Right column (lg+) */}
+        <div className="hidden lg:flex flex-col gap-5 w-[340px] flex-shrink-0">
+          <Link
+            href="/clients/new?next=/debts/new"
+            className="flex items-center justify-center gap-2 w-full bg-primary text-primary-foreground font-headings font-bold text-base py-3.5 rounded-xl"
+          >
+            <Icon i="plus" size={20} />
+            Créer client
+          </Link>
+
+          <RecentClientsPanel onSelect={setClient} />
+
+          <div className="flex items-center gap-2 px-4 py-3 bg-input border border-border rounded-xl">
+            <div className="w-3 h-3 rounded-full bg-accent flex-shrink-0" />
+            <div>
+              <div className="text-xs font-headings font-bold text-foreground">Statut</div>
+              <div className="text-sm font-body text-muted-foreground">Impayé</div>
+            </div>
+          </div>
+
+          <div className="bg-secondary border border-border rounded-xl p-5">
+            <div className="flex items-center gap-2 mb-3">
+              <Icon i="zap" size={16} className="text-primary" />
+              <span className="font-headings font-bold text-sm text-foreground">Astuce</span>
+            </div>
+            <p className="text-sm text-muted-foreground leading-relaxed">
+              Tu peux enregistrer une dette en moins de 5 secondes : choisis le client, tape le
+              montant, appuie sur Enregistrer.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

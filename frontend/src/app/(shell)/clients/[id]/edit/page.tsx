@@ -12,8 +12,6 @@ import { api, ApiError } from '@/lib/api';
 import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
-import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
-import { PageTransition } from '@/components/jurali/PageTransition';
 import {
   ClientForm,
   ClientFormInfoPanel,
@@ -23,14 +21,6 @@ import {
 const ERROR_MESSAGES: Record<string, string> = {
   VALIDATION_FAILED: 'Vérifie les champs du formulaire (numéro de téléphone ou email invalide).',
 };
-
-interface DashboardData {
-  totalDueFcfa: number;
-  debtorCount: number;
-  overdueDueFcfa: number;
-  overdueDebtorCount: number;
-  totalClientCount: number;
-}
 
 interface SubscriptionData {
   isActive: boolean;
@@ -69,9 +59,6 @@ export default function EditClientPage() {
     loading: clientLoading,
     error: clientError,
   } = useApi<ClientDetail>(`/api/clients/${params.id}`);
-  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
-    skip: !user,
-  });
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
   const { data: notifData } = useApi<{ count: number }>('/api/notifications/count', {
     skip: !user,
@@ -134,8 +121,6 @@ export default function EditClientPage() {
     }
   }
 
-  const displayName = user.shopName || user.email;
-
   if (clientLoading) {
     return (
       <div className="min-h-dvh bg-background font-body flex items-center justify-center">
@@ -156,70 +141,54 @@ export default function EditClientPage() {
   }
 
   return (
-    <PageTransition>
-      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-        <DesktopSidebar
-          displayName={displayName}
-          fullName={user.name}
-          totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-          debtorCount={dashboard?.debtorCount ?? 0}
-          overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-          overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-          loading={dashboardLoading}
-          totalClientCount={dashboard?.totalClientCount ?? 0}
-          isPremium={subscription?.isActive ?? false}
-        />
-
-        <div className="flex-1 flex flex-col min-w-0">
-          <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
-            <div className="flex items-center gap-3">
-              <Link
-                href={cancelHref}
-                className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-              >
-                <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-              </Link>
-              <div className="font-headings font-bold text-lg text-primary-foreground">
-                Modifier {client.firstName}
-              </div>
-            </div>
-          </div>
-
-          <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-            <div className="flex items-center gap-3">
-              <Link
-                href={cancelHref}
-                className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
-              >
-                <Icon i="chevron-left" size={20} className="text-foreground" />
-              </Link>
-              <div>
-                <div className="font-headings font-bold text-2xl text-foreground">
-                  Modifier {client.firstName}
-                </div>
-                <div className="text-sm text-muted-foreground mt-0.5">
-                  Mets à jour les informations du client
-                </div>
-              </div>
-            </div>
-            <NotificationBell count={notifData?.count} />
-          </div>
-
-          <div className="flex-1 px-4 lg:px-8 pt-5 lg:pt-8 pb-8 flex flex-col lg:flex-row gap-6 lg:gap-8 max-w-lg lg:max-w-none w-full mx-auto lg:mx-0">
-            <ClientForm
-              mode="edit"
-              values={values}
-              onChange={setValues}
-              onSubmit={submit}
-              submitting={submitting}
-              error={error}
-              cancelHref={cancelHref}
-              isPremium={subscription?.isActive ?? false}
-            />
-            <ClientFormInfoPanel />
+    <div className="flex-1 flex flex-col min-w-0">
+      <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
+        <div className="flex items-center gap-3">
+          <Link
+            href={cancelHref}
+            className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+          >
+            <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+          </Link>
+          <div className="font-headings font-bold text-lg text-primary-foreground">
+            Modifier {client.firstName}
           </div>
         </div>
       </div>
-    </PageTransition>
+
+      <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+        <div className="flex items-center gap-3">
+          <Link
+            href={cancelHref}
+            className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
+          >
+            <Icon i="chevron-left" size={20} className="text-foreground" />
+          </Link>
+          <div>
+            <div className="font-headings font-bold text-2xl text-foreground">
+              Modifier {client.firstName}
+            </div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              Mets à jour les informations du client
+            </div>
+          </div>
+        </div>
+        <NotificationBell count={notifData?.count} />
+      </div>
+
+      <div className="flex-1 px-4 lg:px-8 pt-5 lg:pt-8 pb-8 flex flex-col lg:flex-row gap-6 lg:gap-8 max-w-lg lg:max-w-none w-full mx-auto lg:mx-0">
+        <ClientForm
+          mode="edit"
+          values={values}
+          onChange={setValues}
+          onSubmit={submit}
+          submitting={submitting}
+          error={error}
+          cancelHref={cancelHref}
+          isPremium={subscription?.isActive ?? false}
+        />
+        <ClientFormInfoPanel />
+      </div>
+    </div>
   );
 }

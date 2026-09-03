@@ -12,9 +12,7 @@ import { useUser } from '@/contexts/AuthContext';
 import { useApi } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { TopBar, NotificationBell } from '@/components/jurali/TopBar';
-import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { StatCard } from '@/components/jurali/StatCard';
-import { PageTransition } from '@/components/jurali/PageTransition';
 import { AnimatedNumber } from '@/components/jurali/AnimatedNumber';
 import { formatPrice } from '@/lib/utils';
 
@@ -70,78 +68,64 @@ export default function StatsPage() {
   const displayName = user.shopName || user.email;
 
   return (
-    <PageTransition>
-      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-        <DesktopSidebar
+    <>
+      {/* Mobile/tablet (< lg) */}
+      <div className="flex-1 flex flex-col lg:hidden">
+        <TopBar
           displayName={displayName}
-          fullName={user.name}
           totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
           debtorCount={dashboard?.debtorCount ?? 0}
           overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
           overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
           loading={dashboardLoading}
+          notificationCount={notificationCount}
           totalClientCount={dashboard?.totalClientCount ?? 0}
           isPremium={isPremium}
         />
-
-        {/* Mobile/tablet (< lg) */}
-        <div className="flex-1 flex flex-col lg:hidden">
-          <TopBar
-            displayName={displayName}
-            totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-            debtorCount={dashboard?.debtorCount ?? 0}
-            overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-            overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-            loading={dashboardLoading}
-            notificationCount={notificationCount}
-            totalClientCount={dashboard?.totalClientCount ?? 0}
-            isPremium={isPremium}
-          />
-          <div className="max-w-2xl w-full mx-auto flex flex-col px-4 pt-5 pb-8">
-            <div className="flex items-center gap-3 mb-4">
-              <Link
-                href="/clients"
-                className="w-10 h-10 flex items-center justify-center bg-input border border-border rounded-lg flex-shrink-0"
-              >
-                <Icon i="chevron-left" size={20} className="text-foreground" />
-              </Link>
-              <div className="font-headings font-bold text-xl text-foreground">Statistiques</div>
-            </div>
-            {subLoading ? (
-              <div className="text-sm text-muted-foreground">Chargement…</div>
-            ) : isPremium ? (
-              <StatsBody />
-            ) : (
-              <StatsUpsell />
-            )}
+        <div className="max-w-2xl w-full mx-auto flex flex-col px-4 pt-5 pb-8">
+          <div className="flex items-center gap-3 mb-4">
+            <Link
+              href="/clients"
+              className="w-10 h-10 flex items-center justify-center bg-input border border-border rounded-lg flex-shrink-0"
+            >
+              <Icon i="chevron-left" size={20} className="text-foreground" />
+            </Link>
+            <div className="font-headings font-bold text-xl text-foreground">Statistiques</div>
           </div>
-        </div>
-
-        {/* Desktop (lg+) */}
-        <div className="hidden lg:flex flex-1 flex-col">
-          <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-            <div>
-              <div className="font-headings font-bold text-2xl text-foreground">Statistiques</div>
-              <div className="text-sm text-muted-foreground mt-0.5">
-                {new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(
-                  new Date(),
-                )}
-              </div>
-            </div>
-            <NotificationBell count={notificationCount} />
-          </div>
-          <div className="px-8 pt-8 pb-8 flex-1">
-            {subLoading ? (
-              <div className="text-sm text-muted-foreground">Chargement…</div>
-            ) : isPremium ? (
-              <StatsBody />
-            ) : (
-              <StatsUpsell />
-            )}
-          </div>
+          {subLoading ? (
+            <div className="text-sm text-muted-foreground">Chargement…</div>
+          ) : isPremium ? (
+            <StatsBody />
+          ) : (
+            <StatsUpsell />
+          )}
         </div>
       </div>
-    </PageTransition>
+
+      {/* Desktop (lg+) */}
+      <div className="hidden lg:flex flex-1 flex-col">
+        <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+          <div>
+            <div className="font-headings font-bold text-2xl text-foreground">Statistiques</div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              {new Intl.DateTimeFormat('fr-FR', { month: 'long', year: 'numeric' }).format(
+                new Date(),
+              )}
+            </div>
+          </div>
+          <NotificationBell count={notificationCount} />
+        </div>
+        <div className="px-8 pt-8 pb-8 flex-1">
+          {subLoading ? (
+            <div className="text-sm text-muted-foreground">Chargement…</div>
+          ) : isPremium ? (
+            <StatsBody />
+          ) : (
+            <StatsUpsell />
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 

@@ -14,9 +14,7 @@ import { useAsyncAction } from '@/lib/useAsyncAction';
 import { api, ApiError } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
-import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
 import { DebtHistoryRow } from '@/components/jurali/DebtHistoryRow';
-import { PageTransition } from '@/components/jurali/PageTransition';
 import { AnimatedNumber } from '@/components/jurali/AnimatedNumber';
 import { formatDateFr } from '@/lib/jurali-format';
 import { formatPrice } from '@/lib/utils';
@@ -77,11 +75,9 @@ export default function ClientFichePage() {
     refresh,
   } = useApi<ClientDetail>(`/api/clients/${params.id}`);
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
-  const {
-    data: dashboard,
-    loading: dashboardLoading,
-    refresh: refreshDashboard,
-  } = useApi<DashboardData>('/api/dashboard', {
+  // Only `refresh` is used here — the sidebar's own /api/dashboard fetch
+  // (shared via (shell)/layout.tsx) is what renders the KPI numbers now.
+  const { refresh: refreshDashboard } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
   const { data: notifData } = useApi<{ count: number }>('/api/notifications/count', {
@@ -100,102 +96,84 @@ export default function ClientFichePage() {
 
   if (!user) return null;
 
-  const displayName = user.shopName || user.email;
-
   return (
-    <PageTransition>
-      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-        <DesktopSidebar
-          displayName={displayName}
-          fullName={user.name}
-          totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-          debtorCount={dashboard?.debtorCount ?? 0}
-          overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-          overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-          loading={dashboardLoading}
-          totalClientCount={dashboard?.totalClientCount ?? 0}
-          isPremium={isPremium}
-        />
+    <div className="flex-1 flex flex-col min-w-0">
+      {/* Mobile top bar (< lg) — unchanged */}
+      <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/clients"
+            className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+          >
+            <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+          </Link>
+          <div>
+            <div className="font-headings font-bold text-lg text-primary-foreground">
+              Fiche client
+            </div>
+            <div className="text-xs text-secondary">Historique complet des dettes</div>
+          </div>
+        </div>
+      </div>
 
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Mobile top bar (< lg) — unchanged */}
-          <div className="bg-primary px-4 pt-10 pb-6 lg:hidden">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/clients"
-                className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-              >
-                <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-              </Link>
-              <div>
-                <div className="font-headings font-bold text-lg text-primary-foreground">
-                  Fiche client
-                </div>
-                <div className="text-xs text-secondary">Historique complet des dettes</div>
-              </div>
+      {/* Desktop top bar (lg+) */}
+      <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+        <div className="flex items-center gap-3">
+          <Link
+            href="/clients"
+            className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
+          >
+            <Icon i="chevron-left" size={20} className="text-foreground" />
+          </Link>
+          <div>
+            <div className="font-headings font-bold text-2xl text-foreground">Fiche client</div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              Historique complet des dettes
             </div>
           </div>
-
-          {/* Desktop top bar (lg+) */}
-          <div className="hidden lg:flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/clients"
-                className="w-9 h-9 rounded-lg bg-input border border-border flex items-center justify-center"
-              >
-                <Icon i="chevron-left" size={20} className="text-foreground" />
-              </Link>
-              <div>
-                <div className="font-headings font-bold text-2xl text-foreground">Fiche client</div>
-                <div className="text-sm text-muted-foreground mt-0.5">
-                  Historique complet des dettes
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <NotificationBell count={notifData?.count} />
-              {client && client.phone && client.balanceFcfa > 0 && (
-                <Link
-                  href={isPremium ? '#reminder-card' : '/premium'}
-                  className="flex items-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
-                >
-                  <Icon i="message-circle" size={16} />
-                  Envoyer WhatsApp
-                </Link>
-              )}
-              {client && (
-                <Link
-                  href={`/debts/new?clientId=${client.id}`}
-                  className="flex items-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
-                >
-                  <Icon i="plus" size={16} />
-                  Ajouter dette
-                </Link>
-              )}
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="px-4 lg:px-8 py-8 text-sm text-muted-foreground">Chargement…</div>
-          ) : error || !client ? (
-            <div className="px-4 lg:px-8 py-8 flex flex-col items-center gap-3 text-center">
-              <div className="text-sm text-muted-foreground">Client introuvable.</div>
-              <Link href="/clients" className="text-sm text-primary font-bold">
-                Retour à la liste
-              </Link>
-            </div>
-          ) : (
-            <ClientFicheContent
-              client={client}
-              isPremium={isPremium}
-              autoReminderEnabled={autoReminderSettings?.enabled ?? false}
-              shopName={user.shopName}
-              onRefresh={refreshAll}
-            />
+        </div>
+        <div className="flex items-center gap-2">
+          <NotificationBell count={notifData?.count} />
+          {client && client.phone && client.balanceFcfa > 0 && (
+            <Link
+              href={isPremium ? '#reminder-card' : '/premium'}
+              className="flex items-center gap-2 bg-surface border border-border text-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
+            >
+              <Icon i="message-circle" size={16} />
+              Envoyer WhatsApp
+            </Link>
+          )}
+          {client && (
+            <Link
+              href={`/debts/new?clientId=${client.id}`}
+              className="flex items-center gap-2 bg-accent text-accent-foreground font-headings font-bold text-sm px-4 py-2 rounded-lg"
+            >
+              <Icon i="plus" size={16} />
+              Ajouter dette
+            </Link>
           )}
         </div>
       </div>
-    </PageTransition>
+
+      {loading ? (
+        <div className="px-4 lg:px-8 py-8 text-sm text-muted-foreground">Chargement…</div>
+      ) : error || !client ? (
+        <div className="px-4 lg:px-8 py-8 flex flex-col items-center gap-3 text-center">
+          <div className="text-sm text-muted-foreground">Client introuvable.</div>
+          <Link href="/clients" className="text-sm text-primary font-bold">
+            Retour à la liste
+          </Link>
+        </div>
+      ) : (
+        <ClientFicheContent
+          client={client}
+          isPremium={isPremium}
+          autoReminderEnabled={autoReminderSettings?.enabled ?? false}
+          shopName={user.shopName}
+          onRefresh={refreshAll}
+        />
+      )}
+    </div>
   );
 }
 

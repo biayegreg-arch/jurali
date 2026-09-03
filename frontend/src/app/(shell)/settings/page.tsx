@@ -15,8 +15,6 @@ import { useToast } from '@/contexts/ToastContext';
 import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
-import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
-import { PageTransition } from '@/components/jurali/PageTransition';
 import { SettingsSection, SettingsRow } from '@/components/jurali/SettingsSection';
 import { PhoneField } from '@/components/jurali/PhoneField';
 import { ConfirmDialog } from '@/components/jurali/ConfirmDialog';
@@ -30,14 +28,6 @@ import { OVERDUE_ALERT_THRESHOLD_DAYS } from '@/lib/server/jurali/overdue-alert'
 
 interface SubscriptionData {
   isActive: boolean;
-}
-
-interface DashboardData {
-  totalDueFcfa: number;
-  debtorCount: number;
-  overdueDueFcfa: number;
-  overdueDebtorCount: number;
-  totalClientCount: number;
 }
 
 function usePremiumToggle(endpoint: string, skip: boolean) {
@@ -80,9 +70,6 @@ function SettingsPageContent() {
     { skip: !user },
   );
   const isPremium = subscription?.isActive ?? false;
-  const { data: dashboard, loading: dashboardLoading } = useApi<DashboardData>('/api/dashboard', {
-    skip: !user,
-  });
   const { data: notifData } = useApi<{ count: number }>('/api/notifications/count', {
     skip: !user,
   });
@@ -92,100 +79,83 @@ function SettingsPageContent() {
 
   if (!user) return null;
 
-  const displayName = user.shopName || user.email;
   const sharedProps = { user, isPremium, subLoading, autoReminder, overdueAlert, refresh, logout };
 
   return (
-    <PageTransition>
-      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-        <DesktopSidebar
-          displayName={displayName}
-          fullName={user.name}
-          totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-          debtorCount={dashboard?.debtorCount ?? 0}
-          overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-          overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-          loading={dashboardLoading}
-          totalClientCount={dashboard?.totalClientCount ?? 0}
-          isPremium={isPremium}
-        />
-
-        {/* Mobile/tablet (< lg) — single column, unchanged structure */}
-        <div className="flex-1 flex flex-col lg:hidden">
-          <div className="bg-primary px-4 pt-10 pb-6">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/dashboard"
-                className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-              >
-                <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-              </Link>
-              <div>
-                <div className="font-headings font-bold text-lg text-primary-foreground">
-                  Paramètres
-                </div>
-                <div className="text-xs text-secondary">Gérer ton compte</div>
+    <>
+      {/* Mobile/tablet (< lg) — single column, unchanged structure */}
+      <div className="flex-1 flex flex-col lg:hidden">
+        <div className="bg-primary px-4 pt-10 pb-6">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+            >
+              <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+            </Link>
+            <div>
+              <div className="font-headings font-bold text-lg text-primary-foreground">
+                Paramètres
               </div>
+              <div className="text-xs text-secondary">Gérer ton compte</div>
             </div>
           </div>
+        </div>
 
-          <div className="px-4 pt-5 pb-8 flex flex-col gap-6 max-w-lg w-full mx-auto">
+        <div className="px-4 pt-5 pb-8 flex flex-col gap-6 max-w-lg w-full mx-auto">
+          <ProfileSection {...sharedProps} />
+          <SecuritySection {...sharedProps} />
+          <NotificationsSection {...sharedProps} />
+          {isPremium && <SubscriptionSection />}
+          <SettingsSection title="Analyse">
+            <MotionLink
+              href="/stats"
+              whileTap={tapScale}
+              className="w-full flex items-center gap-4 px-5 py-4"
+            >
+              <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
+                <Icon i="bar-chart-2" size={18} className="text-primary" />
+              </div>
+              <div className="flex-1 min-w-0 text-left">
+                <div className="font-headings font-bold text-sm text-foreground">Statistiques</div>
+                <div className="text-xs text-muted-foreground mt-0.5">
+                  Taux de recouvrement, tendances sur 6 mois
+                </div>
+              </div>
+              <Icon i="chevron-right" size={16} className="text-muted-foreground flex-shrink-0" />
+            </MotionLink>
+          </SettingsSection>
+          <DataSection isPremium={isPremium} loading={subLoading} />
+          <AppInfoBlock />
+        </div>
+      </div>
+
+      {/* Desktop (lg+) — Parametres.jsx 2-column layout */}
+      <div className="hidden lg:flex flex-1 flex-col">
+        <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+          <div>
+            <div className="font-headings font-bold text-2xl text-foreground">Paramètres</div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              Gérer ton compte et tes préférences
+            </div>
+          </div>
+          <NotificationBell count={notifData?.count} />
+        </div>
+
+        <div className="flex gap-8 px-8 pt-8 pb-8">
+          <div className="flex-1 flex flex-col gap-6">
             <ProfileSection {...sharedProps} />
-            <SecuritySection {...sharedProps} />
             <NotificationsSection {...sharedProps} />
+          </div>
+          <div className="flex flex-col gap-6 w-[400px] flex-shrink-0">
+            <SecuritySection {...sharedProps} />
             {isPremium && <SubscriptionSection />}
-            <SettingsSection title="Analyse">
-              <MotionLink
-                href="/stats"
-                whileTap={tapScale}
-                className="w-full flex items-center gap-4 px-5 py-4"
-              >
-                <div className="w-9 h-9 rounded-lg bg-secondary flex items-center justify-center flex-shrink-0">
-                  <Icon i="bar-chart-2" size={18} className="text-primary" />
-                </div>
-                <div className="flex-1 min-w-0 text-left">
-                  <div className="font-headings font-bold text-sm text-foreground">
-                    Statistiques
-                  </div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    Taux de recouvrement, tendances sur 6 mois
-                  </div>
-                </div>
-                <Icon i="chevron-right" size={16} className="text-muted-foreground flex-shrink-0" />
-              </MotionLink>
-            </SettingsSection>
             <DataSection isPremium={isPremium} loading={subLoading} />
             <AppInfoBlock />
           </div>
         </div>
-
-        {/* Desktop (lg+) — Parametres.jsx 2-column layout */}
-        <div className="hidden lg:flex flex-1 flex-col">
-          <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
-            <div>
-              <div className="font-headings font-bold text-2xl text-foreground">Paramètres</div>
-              <div className="text-sm text-muted-foreground mt-0.5">
-                Gérer ton compte et tes préférences
-              </div>
-            </div>
-            <NotificationBell count={notifData?.count} />
-          </div>
-
-          <div className="flex gap-8 px-8 pt-8 pb-8">
-            <div className="flex-1 flex flex-col gap-6">
-              <ProfileSection {...sharedProps} />
-              <NotificationsSection {...sharedProps} />
-            </div>
-            <div className="flex flex-col gap-6 w-[400px] flex-shrink-0">
-              <SecuritySection {...sharedProps} />
-              {isPremium && <SubscriptionSection />}
-              <DataSection isPremium={isPremium} loading={subLoading} />
-              <AppInfoBlock />
-            </div>
-          </div>
-        </div>
       </div>
-    </PageTransition>
+    </>
   );
 }
 

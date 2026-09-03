@@ -17,8 +17,6 @@ import { useApi, invalidateAllCache } from '@/lib/useApi';
 import { api } from '@/lib/api';
 import { Icon } from '@/components/jurali/Icon';
 import { NotificationBell } from '@/components/jurali/TopBar';
-import { DesktopSidebar } from '@/components/jurali/DesktopSidebar';
-import { PageTransition } from '@/components/jurali/PageTransition';
 import { AnimatedNumber } from '@/components/jurali/AnimatedNumber';
 import { useExportDebtsCsv } from '@/lib/useExportDebtsCsv';
 import { formatPrice } from '@/lib/utils';
@@ -59,11 +57,9 @@ interface OverdueData {
 export default function OverdueDebtsPage() {
   const user = useUser();
   const { toast } = useToast();
-  const {
-    data: dashboard,
-    loading: dashboardLoading,
-    refresh: refreshDashboard,
-  } = useApi<DashboardData>('/api/dashboard', {
+  // Only `refresh` is used here — the sidebar's own /api/dashboard fetch
+  // (shared via (shell)/layout.tsx) is what renders the KPI numbers now.
+  const { refresh: refreshDashboard } = useApi<DashboardData>('/api/dashboard', {
     skip: !user,
   });
   const { data: subscription } = useApi<SubscriptionData>('/api/subscriptions', { skip: !user });
@@ -113,135 +109,118 @@ export default function OverdueDebtsPage() {
     }
   }
 
-  const displayName = user.shopName || user.email;
   const sharedProps = { items, isPremium, markingPaid, onMarkAllPaid: markAllPaid };
 
   return (
-    <PageTransition>
-      <div className="min-h-dvh bg-background font-body flex flex-col lg:flex-row">
-        <DesktopSidebar
-          displayName={displayName}
-          fullName={user.name}
-          totalDueFcfa={dashboard?.totalDueFcfa ?? 0}
-          debtorCount={dashboard?.debtorCount ?? 0}
-          overdueDueFcfa={dashboard?.overdueDueFcfa ?? 0}
-          overdueDebtorCount={dashboard?.overdueDebtorCount ?? 0}
-          loading={dashboardLoading}
-          totalClientCount={dashboard?.totalClientCount ?? 0}
-          isPremium={isPremium}
-        />
-
-        {/* Mobile/tablet (< lg) */}
-        <div className="flex-1 flex flex-col lg:hidden">
-          <div className="bg-primary px-4 pt-10 pb-6">
-            <div className="flex items-center gap-3">
-              <Link
-                href="/dashboard"
-                className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
-              >
-                <Icon i="chevron-left" size={20} className="text-primary-foreground" />
-              </Link>
-              <div>
-                <div className="font-headings font-bold text-lg text-primary-foreground">
-                  Dettes en retard
-                </div>
-                <div className="text-xs text-secondary">
-                  {overdue
-                    ? `${overdue.affectedClientCount} client${overdue.affectedClientCount === 1 ? '' : 's'} avec paiements en retard`
-                    : ''}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-4 pt-5 pb-8 flex flex-col gap-4 max-w-lg w-full mx-auto">
-            {loading || !overdue ? (
-              <div className="text-sm text-muted-foreground">Chargement…</div>
-            ) : (
-              <>
-                <SummaryStats overdue={overdue} />
-                <OverdueList {...sharedProps} />
-                <BottomActions {...sharedProps} />
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Desktop (lg+) */}
-        <div className="hidden lg:flex flex-1 flex-col">
-          <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+    <>
+      {/* Mobile/tablet (< lg) */}
+      <div className="flex-1 flex flex-col lg:hidden">
+        <div className="bg-primary px-4 pt-10 pb-6">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/dashboard"
+              className="w-10 h-10 flex items-center justify-center bg-primary-foreground/15 rounded-lg"
+            >
+              <Icon i="chevron-left" size={20} className="text-primary-foreground" />
+            </Link>
             <div>
-              <div className="font-headings font-bold text-2xl text-foreground">
+              <div className="font-headings font-bold text-lg text-primary-foreground">
                 Dettes en retard
               </div>
-              <div className="text-sm text-muted-foreground mt-0.5">
+              <div className="text-xs text-secondary">
                 {overdue
                   ? `${overdue.affectedClientCount} client${overdue.affectedClientCount === 1 ? '' : 's'} avec paiements en retard`
                   : ''}
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <ExportButton isPremium={isPremium} />
-              <NotificationBell count={notifData?.count} />
-            </div>
-          </div>
-
-          <div className="flex-1 px-8 pt-8 pb-8 flex flex-col">
-            {loading || !overdue ? (
-              <div className="text-sm text-muted-foreground">Chargement…</div>
-            ) : (
-              <>
-                <div className="grid grid-cols-3 gap-6 mb-8">
-                  <StatCardBlock
-                    label="Total en retard"
-                    value={<AnimatedNumber value={overdue.totalOverdueFcfa} />}
-                    unit="FCFA"
-                    sub={`${overdue.items.length} dette${overdue.items.length === 1 ? '' : 's'} urgente${overdue.items.length === 1 ? '' : 's'}`}
-                    icon="alert-circle"
-                    tone="danger"
-                  />
-                  <StatCardBlock
-                    label="Jours en retard (moy)"
-                    value={
-                      <AnimatedNumber
-                        value={overdue.averageDaysOverdue}
-                        format={(n) => String(Math.round(n))}
-                      />
-                    }
-                    unit="jours"
-                    sub="Ancienneté moyenne des dettes en retard"
-                    icon="clock"
-                  />
-                  <StatCardBlock
-                    label="Clients affectés"
-                    value={
-                      <AnimatedNumber
-                        value={overdue.affectedClientCount}
-                        format={(n) => String(Math.round(n))}
-                      />
-                    }
-                    unit={`sur ${overdue.totalClientCount}`}
-                    sub={
-                      overdue.totalClientCount > 0
-                        ? `${Math.round((overdue.affectedClientCount / overdue.totalClientCount) * 1000) / 10}% des clients`
-                        : '—'
-                    }
-                    icon="users"
-                    tone="primary"
-                  />
-                </div>
-
-                <OverdueTable {...sharedProps} />
-
-                <div className="flex gap-3 mt-6">
-                  <MarkAllPaidButton {...sharedProps} />
-                </div>
-              </>
-            )}
           </div>
         </div>
+
+        <div className="px-4 pt-5 pb-8 flex flex-col gap-4 max-w-lg w-full mx-auto">
+          {loading || !overdue ? (
+            <div className="text-sm text-muted-foreground">Chargement…</div>
+          ) : (
+            <>
+              <SummaryStats overdue={overdue} />
+              <OverdueList {...sharedProps} />
+              <BottomActions {...sharedProps} />
+            </>
+          )}
+        </div>
       </div>
-    </PageTransition>
+
+      {/* Desktop (lg+) */}
+      <div className="hidden lg:flex flex-1 flex-col">
+        <div className="flex items-center justify-between px-8 pt-8 pb-5 border-b border-border">
+          <div>
+            <div className="font-headings font-bold text-2xl text-foreground">Dettes en retard</div>
+            <div className="text-sm text-muted-foreground mt-0.5">
+              {overdue
+                ? `${overdue.affectedClientCount} client${overdue.affectedClientCount === 1 ? '' : 's'} avec paiements en retard`
+                : ''}
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <ExportButton isPremium={isPremium} />
+            <NotificationBell count={notifData?.count} />
+          </div>
+        </div>
+
+        <div className="flex-1 px-8 pt-8 pb-8 flex flex-col">
+          {loading || !overdue ? (
+            <div className="text-sm text-muted-foreground">Chargement…</div>
+          ) : (
+            <>
+              <div className="grid grid-cols-3 gap-6 mb-8">
+                <StatCardBlock
+                  label="Total en retard"
+                  value={<AnimatedNumber value={overdue.totalOverdueFcfa} />}
+                  unit="FCFA"
+                  sub={`${overdue.items.length} dette${overdue.items.length === 1 ? '' : 's'} urgente${overdue.items.length === 1 ? '' : 's'}`}
+                  icon="alert-circle"
+                  tone="danger"
+                />
+                <StatCardBlock
+                  label="Jours en retard (moy)"
+                  value={
+                    <AnimatedNumber
+                      value={overdue.averageDaysOverdue}
+                      format={(n) => String(Math.round(n))}
+                    />
+                  }
+                  unit="jours"
+                  sub="Ancienneté moyenne des dettes en retard"
+                  icon="clock"
+                />
+                <StatCardBlock
+                  label="Clients affectés"
+                  value={
+                    <AnimatedNumber
+                      value={overdue.affectedClientCount}
+                      format={(n) => String(Math.round(n))}
+                    />
+                  }
+                  unit={`sur ${overdue.totalClientCount}`}
+                  sub={
+                    overdue.totalClientCount > 0
+                      ? `${Math.round((overdue.affectedClientCount / overdue.totalClientCount) * 1000) / 10}% des clients`
+                      : '—'
+                  }
+                  icon="users"
+                  tone="primary"
+                />
+              </div>
+
+              <OverdueTable {...sharedProps} />
+
+              <div className="flex gap-3 mt-6">
+                <MarkAllPaidButton {...sharedProps} />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </>
   );
 }
 
