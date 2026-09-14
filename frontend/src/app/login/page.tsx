@@ -12,6 +12,7 @@ import { Icon } from '@/components/jurali/Icon';
 import { GoogleSignInButton } from '@/components/jurali/GoogleSignInButton';
 import { PhoneField } from '@/components/jurali/PhoneField';
 import { JuraliMark } from '@/components/jurali/JuraliMark';
+import { ForgotPasswordModal } from '@/components/jurali/ForgotPasswordModal';
 
 const ERROR_MESSAGES: Record<string, string> = {
   INVALID_CREDENTIALS: 'Numéro ou mot de passe incorrect.',
@@ -30,6 +31,7 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
 
   const canSubmit = phone.length > 0 && password.length > 0 && !submitting;
 
@@ -78,9 +80,18 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="text-xs font-headings font-bold uppercase tracking-wide text-foreground mb-2 block">
-              Mot de passe
-            </label>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-xs font-headings font-bold uppercase tracking-wide text-foreground block">
+                Mot de passe
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowForgotPassword(true)}
+                className="text-xs text-primary font-bold"
+              >
+                Mot de passe oublié ?
+              </button>
+            </div>
             <div className="flex items-center gap-3 bg-input border-2 border-primary rounded-xl px-4 py-3.5">
               <Icon i="lock" size={18} className="text-muted-foreground flex-shrink-0" />
               <input
@@ -132,6 +143,8 @@ export default function LoginPage() {
           </Link>
         </div>
       </div>
+
+      {showForgotPassword && <ForgotPasswordModal onClose={() => setShowForgotPassword(false)} />}
     </div>
   );
 }
