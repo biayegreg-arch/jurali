@@ -774,11 +774,38 @@ function PaymentTrackingCard({
 }) {
   const [amount, setAmount] = useState<number | null>(null);
   const { pending: submitting, error, run } = useAsyncAction();
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState<number | null>(null);
+  const { pending: savingEdit, error: editError, run: runEdit } = useAsyncAction();
 
   if (!progress) return null;
 
   const percent = Math.round(
     ((progress.originalAmountFcfa - progress.remainingFcfa) / progress.originalAmountFcfa) * 100,
+  );
+
+  // A single PAYMENT can FIFO-split across several debts (one `events` entry
+  // per debt it touched), all sharing the same `paymentId` and `createdAt` —
+  // group back to one row per real Transaction so "Modifier" edits the whole
+  // payment, not just the fragment applied to one debt.
+  const groupedEvents = Array.from(
+    progress.events
+      .reduce((map, e) => {
+        const row = map.get(e.paymentId);
+        if (row) {
+          row.amountFcfa += e.amountAppliedFcfa;
+          row.remainingAfterFcfa = e.remainingAfterFcfa;
+        } else {
+          map.set(e.paymentId, {
+            paymentId: e.paymentId,
+            amountFcfa: e.amountAppliedFcfa,
+            remainingAfterFcfa: e.remainingAfterFcfa,
+            createdAt: e.createdAt,
+          });
+        }
+        return map;
+      }, new Map<string, { paymentId: string; amountFcfa: number; remainingAfterFcfa: number; createdAt: Date }>())
+      .values(),
   );
 
   async function addPayment() {
@@ -789,6 +816,29 @@ function PaymentTrackingCard({
         body: { clientId, type: 'PAYMENT', amountFcfa: amount },
       });
       setAmount(null);
+      onRefresh();
+    });
+  }
+
+  function startEditPayment(paymentId: string, currentAmount: number) {
+    setEditingId(paymentId);
+    setEditAmount(currentAmount);
+  }
+
+  function cancelEditPayment() {
+    setEditingId(null);
+    setEditAmount(null);
+  }
+
+  async function saveEditPayment(paymentId: string) {
+    if (!editAmount || editAmount <= 0) return;
+    await runEdit(async () => {
+      await api(`/api/transactions/${paymentId}`, {
+        method: 'PATCH',
+        body: { amountFcfa: editAmount },
+      });
+      setEditingId(null);
+      setEditAmount(null);
       onRefresh();
     });
   }
@@ -836,35 +886,81 @@ function PaymentTrackingCard({
         <div className="text-xs font-headings font-bold text-muted-foreground mb-3">
           Historique des versements
         </div>
-        {progress.events.length === 0 ? (
+        {groupedEvents.length === 0 ? (
           <div className="text-xs text-muted-foreground mb-4">
             Aucun versement pour l&rsquo;instant.
           </div>
         ) : (
           <div className="flex flex-col gap-2 mb-4">
-            {[...progress.events].reverse().map((e) => (
-              <div
-                key={e.paymentId}
-                className="flex flex-wrap items-center justify-between gap-y-1 text-sm"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <Icon i="arrow-down" size={12} className="text-primary flex-shrink-0" />
-                  <span className="text-muted-foreground truncate">
-                    {formatDateFr(e.createdAt.toISOString())}
-                  </span>
+            {[...groupedEvents].reverse().map((e) =>
+              editingId === e.paymentId ? (
+                <div
+                  key={e.paymentId}
+                  className="flex flex-wrap items-center gap-2 text-sm bg-input border border-border rounded-lg px-3 py-2"
+                >
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoFocus
+                    value={editAmount === null ? '' : String(editAmount)}
+                    onChange={(ev) => {
+                      const digits = ev.target.value.replace(/\D/g, '');
+                      setEditAmount(digits === '' ? null : Number(digits));
+                    }}
+                    className="flex-1 min-w-0 bg-transparent text-sm text-foreground outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => saveEditPayment(e.paymentId)}
+                    disabled={savingEdit || !editAmount || editAmount <= 0}
+                    className="flex items-center justify-center bg-primary text-primary-foreground rounded-lg p-1.5 disabled:opacity-50"
+                    aria-label="Enregistrer"
+                  >
+                    <Icon i="check" size={14} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={cancelEditPayment}
+                    disabled={savingEdit}
+                    className="flex items-center justify-center bg-surface border border-border rounded-lg p-1.5 disabled:opacity-50"
+                    aria-label="Annuler"
+                  >
+                    <Icon i="x" size={14} />
+                  </button>
                 </div>
-                <div className="flex items-center gap-3 min-w-0">
-                  <span className="font-headings font-bold text-foreground truncate">
-                    {formatPrice(e.amountAppliedFcfa)} FCFA
-                  </span>
-                  <span className="text-xs text-muted-foreground truncate">
-                    → {formatPrice(e.remainingAfterFcfa)} FCFA restant
-                  </span>
+              ) : (
+                <div
+                  key={e.paymentId}
+                  className="flex flex-wrap items-center justify-between gap-y-1 text-sm"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Icon i="arrow-down" size={12} className="text-primary flex-shrink-0" />
+                    <span className="text-muted-foreground truncate">
+                      {formatDateFr(e.createdAt.toISOString())}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="font-headings font-bold text-foreground truncate">
+                      {formatPrice(e.amountFcfa)} FCFA
+                    </span>
+                    <span className="text-xs text-muted-foreground truncate">
+                      → {formatPrice(e.remainingAfterFcfa)} FCFA restant
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => startEditPayment(e.paymentId, e.amountFcfa)}
+                      className="flex items-center justify-center text-muted-foreground flex-shrink-0"
+                      aria-label="Modifier ce versement"
+                    >
+                      <Icon i="pencil" size={13} />
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
           </div>
         )}
+        {editError && <div className="text-xs text-danger mb-3">{editError}</div>}
 
         <div className="border-t border-border pt-3">
           <div className="text-xs font-headings font-bold text-muted-foreground mb-2">
