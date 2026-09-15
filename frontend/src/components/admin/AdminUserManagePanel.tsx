@@ -148,6 +148,15 @@ export function AdminUserManagePanel({
     }, reportError);
   }
 
+  async function grantSubscription() {
+    await subAction.run(async () => {
+      await api(`/api/admin/users/${user.id}/subscription/grant`, { method: 'POST' });
+      setSub({ status: 'ACTIVE', isActive: true, planAmountFcfa: 0 });
+      toast('Accès Premium accordé.', 'success');
+      onChanged();
+    }, reportError);
+  }
+
   return (
     <>
       <AnimatePresence>
@@ -282,8 +291,32 @@ export function AdminUserManagePanel({
                 </div>
                 {sub === undefined ? (
                   <Skeleton className="h-9 w-full" />
-                ) : sub === null ? (
-                  <div className="text-sm text-muted-foreground">Aucun abonnement.</div>
+                ) : sub === null || (sub.status !== 'ACTIVE' && sub.status !== 'PENDING') ? (
+                  <div className="flex items-center justify-between gap-3 bg-input rounded-lg px-4 py-2.5">
+                    <div className="flex items-center gap-2">
+                      {sub && <AdminStatusPill label={sub.status} tone="neutral" />}
+                      <span className="text-sm text-muted-foreground">
+                        {sub ? '' : 'Aucun abonnement.'}
+                      </span>
+                    </div>
+                    {isSuperadmin && (
+                      <button
+                        type="button"
+                        disabled={subAction.pending}
+                        onClick={() =>
+                          setConfirm({
+                            title: 'Donner l’accès Premium ?',
+                            message: `${user.email} obtient l'accès Premium immédiatement (clients illimités, rappels WhatsApp, statistiques avancées) pour 30 jours, sans paiement.`,
+                            confirmLabel: 'Donner Premium',
+                            run: grantSubscription,
+                          })
+                        }
+                        className="text-xs font-headings font-bold text-primary flex-shrink-0"
+                      >
+                        Donner Premium
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <div className="flex items-center justify-between gap-3 bg-input rounded-lg px-4 py-2.5">
                     <div className="flex items-center gap-2">
@@ -295,7 +328,7 @@ export function AdminUserManagePanel({
                         {formatPrice(sub.planAmountFcfa)} FCFA/mois
                       </span>
                     </div>
-                    {isSuperadmin && (sub.status === 'ACTIVE' || sub.status === 'PENDING') && (
+                    {isSuperadmin && (
                       <button
                         type="button"
                         disabled={subAction.pending}
